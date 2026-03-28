@@ -19,6 +19,7 @@ The project is built as a monorepo containing four main services:
 - **Frontend**: React (Vite) with vanilla CSS (dark mode theme)
 - **Real-Time Engine**: Socket.io (for live chat & online status)
 - **Payments**: Stripe Checkout Integration
+- **Emails**: Nodemailer with SMTP Integration (HTML templates, order confirmation, access code recovery)
 - **File Storage**: Local Multer Disk Storage (`backend/uploads/`)
 - **Authentication**: JWT (JSON Web Tokens) with role-based access control (RBAC)
 
@@ -28,15 +29,17 @@ The project is built as a monorepo containing four main services:
 
 ### 👤 User Panel
 - **Multi-Step Checkout**: Browse services, select subjects/education levels, choose pricing plans (Essential, Priority, VIP), and upload requirement files.
-- **Stripe Integration**: Secure payment processing with discount coupon support and urgent delivery fees.
+- **Stripe Integration**: Secure payment processing with discount coupon support, urgent delivery fees, and seamless cancellation recovery.
 - **Order Tracking**: View active, completed, and pending orders.
-- **Real-Time Chat**: Direct, secure 1-to-1 messaging with assigned tutors specifically for each order.
+- **Real-Time Chat**: Direct, secure 1-to-1 messaging with assigned tutors specifically for each order, complete with live unread counts, audio notifications, and per-order chat badges.
+- **Seamless Authentication**: Login via unique numeric Access Code with a built-in automated "Forgot Access Code" email recovery system.
+- **Automated Emails**: Receive beautiful HTML email confirmations upon order draft creation and successful payment.
 
 ### 🎓 Tutor Panel
 - **Task Management**: View assigned tasks, deadlines (Start/End dates), and instructions.
 - **File Delivery**: Upload completed project files for the user to review.
 - **Status Updates**: Mark orders as completed.
-- **Direct Messaging**: Chat with the client securely via Socket.io.
+- **Direct Messaging**: Chat with the client securely via Socket.io with live, per-task unread notification badges.
 
 ### 🛡️ Admin Panel
 - **Dashboard**: High-level overview of revenue, active orders, and user metrics.
@@ -80,6 +83,14 @@ STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_SUCCESS_URL=http://localhost:5173/payment-success
 STRIPE_CANCEL_URL=http://localhost:5173/new-order
+
+# Email & SMTP Settings
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_USER=support@yourdomain.com
+SMTP_PASS=your_email_password
+EMAIL_FROM="EduPro Support" <support@yourdomain.com>
+ADMIN_EMAIL=admin@yourdomain.com
 ```
 Start the server:
 ```bash
