@@ -8,6 +8,8 @@ router.get('/subjects', orderController.getSubjects);
 router.get('/education-levels', orderController.getEducationLevels);
 router.get('/plans', orderController.getPlans);
 router.post('/validate-coupon', verifyToken, orderController.validateCoupon);
+router.post('/draft', verifyToken, orderController.createDraftOrder);
+router.put('/draft/:id', verifyToken, orderController.updateDraftOrder);
 router.post('/', verifyToken, validateOrder, orderController.createOrder);
 router.get('/', verifyToken, orderController.getUserOrders);
 router.get('/:id', verifyToken, orderController.getOrderDetail);

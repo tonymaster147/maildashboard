@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { sendNewOrderAdmin, sendOrderConfirmationUser } = require('../services/emailService');
 
 /**
  * Get all order types
@@ -255,6 +256,138 @@ exports.validateCoupon = async (req, res) => {
     });
   } catch (error) {
     console.error('Validate coupon error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
+ * Create draft order (Step 1)
+ */
+exports.createDraftOrder = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { order_type_id, course_name, subject_id, education_level_id, source_url } = req.body;
+
+    const [result] = await db.query(
+      `INSERT INTO orders 
+       (user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, price, total_price, start_date, end_date, status, source_url)
+       VALUES (?, ?, ?, ?, ?, 1, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?)`,
+      [userId, order_type_id, course_name, subject_id, education_level_id, source_url || null]
+    );
+
+    // Fetch enriched data for email
+    const [userData] = await db.query('SELECT username, email FROM users WHERE id = ?', [userId]);
+    const [typeData] = await db.query('SELECT name FROM order_types WHERE id = ?', [order_type_id]);
+    const [subjectData] = await db.query('SELECT name FROM subjects WHERE id = ?', [subject_id]);
+    const [levelData] = await db.query('SELECT name FROM education_levels WHERE id = ?', [education_level_id]);
+
+    const orderDetails = {
+      orderId: result.insertId,
+      courseName: course_name,
+      username: userData[0]?.username,
+      orderType: typeData[0]?.name,
+      subject: subjectData[0]?.name,
+      educationLevel: levelData[0]?.name,
+      status: 'incomplete',
+      sourceUrl: source_url
+    };
+
+    // Send emails (non-blocking)
+    sendNewOrderAdmin(orderDetails).catch(e => console.error('Admin email error:', e));
+    if (userData[0]?.email) {
+      sendOrderConfirmationUser(userData[0].email, orderDetails).catch(e => console.error('User email error:', e));
+    }
+
+    res.status(201).json({ order_id: result.insertId, message: 'Draft order created' });
+  } catch (error) {
+    console.error('Create draft order error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
+ * Update draft order (Subsequent steps)
+ */
+exports.updateDraftOrder = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Build dynamic update query
+    let query = 'UPDATE orders SET ';
+    const params = [];
+    
+    // Whitelist fields
+    const validFields = ['start_date', 'end_date', 'num_weeks', 'plan_id', 'urgent_fee', 'additional_instructions', 'school_url', 'school_username', 'school_password', 'source_url', 'price', 'total_price', 'coupon_id', 'discount_amount'];
+
+    validFields.forEach(field => {
+      if (updateData[field] !== undefined) {
+        let val = updateData[field] === '' ? null : updateData[field];
+        if (field === 'plan_id' && val === null) {
+          // Skip updating plan_id to null to avoid foreign key constraint errors
+          return;
+        }
+        query += `${field} = ?, `;
+        params.push(val);
+      }
+    });
+
+    if (params.length > 0) {
+      // Remove last comma and space
+      query = query.slice(0, -2);
+      
+      query += ' WHERE id = ? AND user_id = ? AND status = "incomplete"';
+      params.push(id, userId);
+
+      const [result] = await db.query(query, params);
+      
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Draft order not found or unauthorized' });
+      }
+    }
+
+    // Handle file associations if any
+    if (updateData.temp_file_ids && updateData.temp_file_ids.length > 0) {
+      for (const fileId of updateData.temp_file_ids) {
+        await db.query('UPDATE files SET order_id = ? WHERE id = ?', [id, fileId]);
+      }
+    }
+
+    // Send admin notification on each update (non-blocking)
+    try {
+      const [orderData] = await db.query(
+        `SELECT o.*, u.username, ot.name as order_type_name, s.name as subject_name, el.name as education_level_name, p.name as plan_name
+         FROM orders o
+         LEFT JOIN users u ON o.user_id = u.id
+         LEFT JOIN order_types ot ON o.order_type_id = ot.id
+         LEFT JOIN subjects s ON o.subject_id = s.id
+         LEFT JOIN education_levels el ON o.education_level_id = el.id
+         LEFT JOIN plans p ON o.plan_id = p.id
+         WHERE o.id = ?`, [id]
+      );
+      if (orderData.length > 0) {
+        const od = orderData[0];
+        sendNewOrderAdmin({
+          orderId: id,
+          courseName: od.course_name,
+          username: od.username,
+          orderType: od.order_type_name,
+          subject: od.subject_name,
+          educationLevel: od.education_level_name,
+          planName: od.plan_name,
+          totalPrice: od.total_price,
+          sourceUrl: od.source_url,
+          status: od.status
+        }).catch(e => console.error('Admin update email error:', e));
+      }
+    } catch (emailErr) {
+      console.error('Update email error:', emailErr);
+    }
+
+    res.json({ message: 'Draft order updated' });
+  } catch (error) {
+    console.error('Update draft order error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };

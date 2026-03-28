@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Tasks from './pages/Tasks';
 import TaskDetail from './pages/TaskDetail';
+import Chats from './pages/Chats';
 import Chat from './pages/Chat';
 import './index.css';
 
@@ -20,6 +21,7 @@ function AppRoutes() {
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<Tasks />} />
         <Route path="tasks/:id" element={<TaskDetail />} />
+        <Route path="chats" element={<Chats />} />
         <Route path="chat/:orderId" element={<Chat />} />
       </Route>
     </Routes>

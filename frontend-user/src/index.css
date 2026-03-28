@@ -1,29 +1,29 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --primary: #0C2D64;
-  --primary-light: #1a4a8a;
-  --primary-dark: #081d42;
+  --primary: #ffffff;
+  --primary-light: #f8fafc;
+  --primary-dark: #f1f5f9;
   --accent: #84C225;
   --accent-hover: #6fa31d;
   --accent-light: #a5d95c;
-  --bg-dark: #0a1628;
-  --bg-card: #111d33;
-  --bg-card-hover: #162540;
-  --bg-input: #0d1a2e;
-  --text-primary: #ffffff;
-  --text-secondary: #8ba3c7;
-  --text-muted: #5a7194;
-  --border: #1e3456;
-  --border-light: #2a4470;
+  --bg-dark: #f4f7f6;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f9fbfb;
+  --bg-input: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --border-light: #cbd5e1;
   --success: #22c55e;
   --warning: #f59e0b;
   --error: #ef4444;
   --info: #3b82f6;
-  --glass: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.4);
+  --glass: rgba(0, 0, 0, 0.03);
+  --glass-border: rgba(0, 0, 0, 0.05);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 16px;
@@ -574,8 +574,14 @@ tr:hover td {
 /* ============= PLAN CARDS ============= */
 .plans-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .plan-card {
@@ -871,3 +877,8 @@ tr:hover td {
 .gap-1 { gap: 8px; }
 .gap-2 { gap: 16px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+}

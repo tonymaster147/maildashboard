@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getOrderTypes, getSubjects, getEducationLevels, getPlans, validateCoupon, createPaymentSession, uploadFiles } from '../services/api';
+import { getOrderTypes, getSubjects, getEducationLevels, getPlans, validateCoupon, createPaymentSession, uploadFiles, createDraftOrder, updateDraftOrder } from '../services/api';
 import { FiUpload, FiX, FiCheck, FiArrowRight, FiArrowLeft, FiTag } from 'react-icons/fi';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 const STEPS = ['Service Details', 'Schedule', 'Plan Selection', 'Review & Pay'];
 
@@ -11,6 +13,8 @@ export default function NewOrder() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [draftOrderId, setDraftOrderId] = useState(null);
+  const [isUrgent, setIsUrgent] = useState(false);
 
   // Lookup data
   const [orderTypes, setOrderTypes] = useState([]);
@@ -70,6 +74,19 @@ export default function NewOrder() {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const formatDate = (date) => {
+    if (!date) return '';
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    return new Date(dateStr + 'T00:00:00');
+  };
+
   const calcWeeks = () => {
     if (formData.start_date && formData.end_date) {
       const start = new Date(formData.start_date);
@@ -95,7 +112,7 @@ export default function NewOrder() {
 
   const selectedPlan = plans.find(p => p.id === Number(formData.plan_id));
   const basePrice = selectedPlan ? parseFloat(selectedPlan.price) : 0;
-  const urgentFee = parseFloat(formData.urgent_fee || 0);
+  const urgentFee = isUrgent ? 75 : 0;
   const discount = couponValid ? (basePrice * couponDiscount / 100) : 0;
   const totalPrice = basePrice + urgentFee - discount;
 
@@ -106,6 +123,37 @@ export default function NewOrder() {
       case 2: return formData.plan_id;
       case 3: return true;
       default: return false;
+    }
+  };
+
+  const handleNext = async () => {
+    try {
+      setSubmitting(true);
+      setError('');
+      
+      const payload = { 
+        ...formData, 
+        urgent_fee: isUrgent ? 75 : 0,
+        source_url: window.location.origin
+      };
+
+      if (currentStep === 0) {
+        if (!draftOrderId) {
+          const res = await createDraftOrder(payload);
+          setDraftOrderId(res.data.order_id);
+        } else {
+          await updateDraftOrder(draftOrderId, payload);
+        }
+      } else {
+        await updateDraftOrder(draftOrderId, payload);
+      }
+      
+      setCurrentStep(prev => prev + 1);
+      setSubmitting(false);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || 'Failed to save progress');
+      setSubmitting(false);
     }
   };
 
@@ -126,15 +174,20 @@ export default function NewOrder() {
         }
       }
 
-      // 2. Proceed to Stripe Checkout with temp_file_ids
-      const orderTypeName = orderTypes.find(t => t.id === Number(formData.order_type_id))?.name;
+      // Update draft with files, final price, discount
+      await updateDraftOrder(draftOrderId, {
+        ...formData,
+        urgent_fee: isUrgent ? 75 : 0,
+        source_url: window.location.origin,
+        price: basePrice,
+        total_price: totalPrice,
+        discount_amount: discount,
+        temp_file_ids: tempFileIds
+      });
+
+      // 2. Proceed to Stripe Checkout with order_id
       const res = await createPaymentSession({
-        order_data: { 
-          ...formData, 
-          order_type_name: orderTypeName, 
-          urgent_fee: urgentFee,
-          temp_file_ids: tempFileIds 
-        }
+        order_id: draftOrderId
       });
       
       window.location.href = res.data.url;
@@ -235,13 +288,27 @@ export default function NewOrder() {
           <div className="step-content card">
             <h3 style={{ marginBottom: 24 }}>Schedule</h3>
             <div className="grid-2">
-              <div className="form-group">
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
                 <label className="form-label">Start Date *</label>
-                <input type="date" className="form-input" value={formData.start_date} onChange={e => update('start_date', e.target.value)} />
+                <DatePicker 
+                  selected={parseDate(formData.start_date)} 
+                  onChange={date => update('start_date', formatDate(date))} 
+                  className="form-input" 
+                  dateFormat="dd-MM-yyyy"
+                  placeholderText="DD-MM-YYYY"
+                  minDate={new Date()}
+                />
               </div>
-              <div className="form-group">
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
                 <label className="form-label">End Date *</label>
-                <input type="date" className="form-input" value={formData.end_date} onChange={e => update('end_date', e.target.value)} min={formData.start_date} />
+                <DatePicker 
+                  selected={parseDate(formData.end_date)} 
+                  onChange={date => update('end_date', formatDate(date))} 
+                  className="form-input" 
+                  dateFormat="dd-MM-yyyy"
+                  placeholderText="DD-MM-YYYY"
+                  minDate={parseDate(formData.start_date) || new Date()}
+                />
               </div>
             </div>
             <div className="form-group">
@@ -278,9 +345,17 @@ export default function NewOrder() {
             <div className="card">
               <h4 style={{ marginBottom: 16 }}>Extra Options</h4>
               <div className="grid-2">
-                <div className="form-group">
-                  <label className="form-label">Urgent Fee (USD)</label>
-                  <input type="number" className="form-input" placeholder="0.00" value={formData.urgent_fee} onChange={e => update('urgent_fee', e.target.value)} min="0" step="0.01" />
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>Are any of the items due before midnight today? (includes an extra fee of $75)</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isUrgent} 
+                      onChange={e => setIsUrgent(e.target.checked)} 
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--accent)' }}
+                    />
+                    Yes
+                  </label>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Coupon Code</label>
@@ -344,8 +419,8 @@ export default function NewOrder() {
             <FiArrowLeft size={16} /> Previous
           </button>
           {currentStep < STEPS.length - 1 ? (
-            <button className="btn btn-primary" onClick={() => setCurrentStep(prev => prev + 1)} disabled={!canProceed()}>
-              Next <FiArrowRight size={16} />
+            <button className="btn btn-primary" onClick={handleNext} disabled={!canProceed() || submitting}>
+              {submitting ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div> : <>Next <FiArrowRight size={16} /></>}
             </button>
           ) : (
             <button className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={submitting}>

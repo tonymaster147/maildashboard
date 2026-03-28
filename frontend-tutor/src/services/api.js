@@ -25,5 +25,7 @@ export const completeTask = (id) => api.put(`/tutor/tasks/${id}/complete`);
 export const uploadWorkFiles = (id, formData) => api.post(`/tutor/tasks/${id}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const getChatMessages = (orderId) => api.get(`/chat/messages/${orderId}`);
 export const getNotifications = () => api.get('/tutor/notifications');
+export const getUnreadCount = () => api.get('/chat/unread');
+export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');
 
 export default api;

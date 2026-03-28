@@ -1,5 +1,6 @@
 const stripe = require('../config/stripe');
 const db = require('../config/db');
+const { sendNewOrderAdmin, sendOrderConfirmationUser } = require('../services/emailService');
 require('dotenv').config();
 
 /**
@@ -8,7 +9,15 @@ require('dotenv').config();
 exports.createCheckoutSession = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { order_data } = req.body;
+    const { order_id } = req.body;
+
+    // Fetch the draft order
+    const [orders] = await db.query('SELECT * FROM orders WHERE id = ? AND user_id = ? AND status = "incomplete"', [order_id, userId]);
+    if (orders.length === 0) {
+      return res.status(404).json({ error: 'Order not found or not in draft state' });
+    }
+
+    const order_data = orders[0];
 
     // Validate plan
     const [plans] = await db.query('SELECT * FROM plans WHERE id = ?', [order_data.plan_id]);
@@ -18,22 +27,14 @@ exports.createCheckoutSession = async (req, res) => {
 
     let price = parseFloat(plans[0].price);
     let urgentFee = parseFloat(order_data.urgent_fee || 0);
-    let discountAmount = 0;
-
-    // Apply coupon if provided
-    if (order_data.coupon_code) {
-      const [coupons] = await db.query(
-        'SELECT * FROM coupons WHERE code = ? AND is_active = 1 AND (expires_at IS NULL OR expires_at > NOW()) AND (max_uses IS NULL OR used_count < max_uses)',
-        [order_data.coupon_code]
-      );
-      if (coupons.length > 0) {
-        discountAmount = (price * coupons[0].discount_percent) / 100;
-      }
-    }
+    let discountAmount = parseFloat(order_data.discount_amount || 0);
 
     const totalAmount = Math.round((price + urgentFee - discountAmount) * 100); // Stripe uses cents
 
-    const session = await stripe.checkout.sessions.create({
+    const [users] = await db.query('SELECT email FROM users WHERE id = ?', [userId]);
+    const userEmail = users.length > 0 ? users[0].email : null;
+
+    const sessionParams = {
       payment_method_types: ['card'],
       line_items: [
         {
@@ -41,7 +42,7 @@ exports.createCheckoutSession = async (req, res) => {
             currency: 'usd',
             product_data: {
               name: `${plans[0].name} Plan - ${order_data.course_name}`,
-              description: `Order Type: ${order_data.order_type_name || 'Service'}`
+              description: `Draft Order #${order_id}`
             },
             unit_amount: totalAmount
           },
@@ -50,17 +51,23 @@ exports.createCheckoutSession = async (req, res) => {
       ],
       mode: 'payment',
       success_url: `${process.env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: process.env.STRIPE_CANCEL_URL,
+      cancel_url: `${process.env.STRIPE_CANCEL_URL}?order_id=${order_id}`,
       metadata: {
         user_id: userId.toString(),
-        order_data: JSON.stringify(order_data)
+        order_id: order_id.toString()
       }
-    });
+    };
+
+    if (userEmail) {
+      sessionParams.customer_email = userEmail;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     // Store pending payment
     await db.query(
-      'INSERT INTO payments (user_id, stripe_session_id, amount, status) VALUES (?, ?, ?, ?)',
-      [userId, session.id, totalAmount / 100, 'pending']
+      'INSERT INTO payments (order_id, user_id, stripe_session_id, amount, status) VALUES (?, ?, ?, ?, ?)',
+      [order_id, userId, session.id, totalAmount / 100, 'pending']
     );
 
     res.json({ sessionId: session.id, url: session.url });
@@ -80,54 +87,56 @@ const fulfillOrder = async (session) => {
     [session.payment_intent, session.id]
   );
 
-  // Create order from metadata
-  const orderData = JSON.parse(session.metadata.order_data);
-  const userId = parseInt(session.metadata.user_id);
+  const orderId = parseInt(session.metadata.order_id);
 
-  // Get plan price
-  const [plans] = await db.query('SELECT price FROM plans WHERE id = ?', [orderData.plan_id]);
-  const price = parseFloat(plans[0].price);
-  const urgentFee = parseFloat(orderData.urgent_fee || 0);
-  let discountAmount = 0;
-  let couponId = null;
-
-  if (orderData.coupon_code) {
-    const [coupons] = await db.query(
-      'SELECT * FROM coupons WHERE code = ? AND is_active = 1',
-      [orderData.coupon_code]
-    );
-    if (coupons.length > 0) {
-      couponId = coupons[0].id;
-      discountAmount = (price * coupons[0].discount_percent) / 100;
-      await db.query('UPDATE coupons SET used_count = used_count + 1 WHERE id = ?', [couponId]);
-    }
-  }
-
-  const totalPrice = price + urgentFee - discountAmount;
-
-  const [orderResult] = await db.query(
-    `INSERT INTO orders (user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, price, urgent_fee, total_price, additional_instructions, school_url, school_username, school_password, start_date, end_date, num_weeks, coupon_id, discount_amount, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-    [userId, orderData.order_type_id, orderData.course_name, orderData.subject_id, orderData.education_level_id, orderData.plan_id, price, urgentFee, totalPrice, orderData.additional_instructions || null, orderData.school_url || null, orderData.school_username || null, orderData.school_password || null, orderData.start_date, orderData.end_date, orderData.num_weeks || 0, couponId, discountAmount]
+  // Mark order as active
+  await db.query(
+    'UPDATE orders SET status = "active" WHERE id = ?',
+    [orderId]
   );
-
-  // Link payment to order
-  await db.query('UPDATE payments SET order_id = ? WHERE stripe_session_id = ?', [orderResult.insertId, session.id]);
 
   // Create notification
   await db.query(
     'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-    ['admin', 'new_order', `New paid order #${orderResult.insertId}`, orderResult.insertId, 'order']
+    ['admin', 'new_order', `New paid order #${orderId}`, orderId, 'order']
   );
 
-  // Handle file associations if any
-  if (orderData.temp_file_ids && orderData.temp_file_ids.length > 0) {
-    for (const fileId of orderData.temp_file_ids) {
-      await db.query('UPDATE files SET order_id = ? WHERE id = ?', [orderResult.insertId, fileId]);
+  // Send payment confirmation emails
+  try {
+    const [orderData] = await db.query(
+      `SELECT o.*, u.username, u.email, ot.name as order_type_name, s.name as subject_name, el.name as education_level_name, p.name as plan_name
+       FROM orders o
+       LEFT JOIN users u ON o.user_id = u.id
+       LEFT JOIN order_types ot ON o.order_type_id = ot.id
+       LEFT JOIN subjects s ON o.subject_id = s.id
+       LEFT JOIN education_levels el ON o.education_level_id = el.id
+       LEFT JOIN plans p ON o.plan_id = p.id
+       WHERE o.id = ?`, [orderId]
+    );
+    if (orderData.length > 0) {
+      const od = orderData[0];
+      const details = {
+        orderId,
+        courseName: od.course_name,
+        username: od.username,
+        orderType: od.order_type_name,
+        subject: od.subject_name,
+        educationLevel: od.education_level_name,
+        planName: od.plan_name,
+        totalPrice: od.total_price,
+        sourceUrl: od.source_url,
+        status: 'active'
+      };
+      sendNewOrderAdmin(details).catch(e => console.error('Admin payment email error:', e));
+      if (od.email) {
+        sendOrderConfirmationUser(od.email, details).catch(e => console.error('User payment email error:', e));
+      }
     }
+  } catch (emailErr) {
+    console.error('Payment email error:', emailErr);
   }
   
-  return orderResult.insertId;
+  return orderId;
 };
 
 /**

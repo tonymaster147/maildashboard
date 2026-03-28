@@ -136,3 +136,41 @@ exports.getUnreadCount = async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+/**
+ * Get unread message count per order
+ */
+exports.getUnreadPerOrder = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    let query;
+    if (role === 'user') {
+      query = `
+        SELECT c.order_id, COUNT(*) as count FROM chats c
+        JOIN orders o ON c.order_id = o.id
+        WHERE o.user_id = ? AND c.sender_role != 'user' AND c.is_read = 0
+        GROUP BY c.order_id
+      `;
+    } else if (role === 'tutor') {
+      query = `
+        SELECT c.order_id, COUNT(*) as count FROM chats c
+        JOIN order_tutors ot ON c.order_id = ot.order_id
+        WHERE ot.tutor_id = ? AND c.sender_role != 'tutor' AND c.is_read = 0
+        GROUP BY c.order_id
+      `;
+    } else {
+      query = `SELECT order_id, COUNT(*) as count FROM chats WHERE is_read = 0 AND sender_role != 'admin' GROUP BY order_id`;
+    }
+
+    const [results] = await db.query(query, role !== 'admin' ? [userId] : []);
+    // Convert to { orderId: count } map
+    const unreadMap = {};
+    results.forEach(r => { unreadMap[r.order_id] = r.count; });
+    res.json(unreadMap);
+  } catch (error) {
+    console.error('Get unread per order error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};

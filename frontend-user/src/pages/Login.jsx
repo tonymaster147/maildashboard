@@ -59,6 +59,10 @@ export default function Login() {
           </button>
         </form>
 
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <Link to="/forgot-access-code" style={{ color: 'var(--accent)', fontSize: 14, textDecoration: 'none', fontWeight: 500 }}>Forgot Access Code?</Link>
+        </div>
+
         <div className="auth-divider">Don't have an account?</div>
         <Link to="/signup" className="btn btn-secondary btn-lg" style={{ width: '100%' }}>Create Account</Link>
       </div>

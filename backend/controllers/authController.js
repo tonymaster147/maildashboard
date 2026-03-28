@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../config/db');
-const { sendAccessCode } = require('../services/emailService');
+const { sendAccessCode, sendForgotAccessCode } = require('../services/emailService');
 require('dotenv').config();
 
 /**
@@ -209,6 +209,35 @@ exports.getProfile = async (req, res) => {
     res.json(users[0]);
   } catch (error) {
     console.error('Get profile error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
+ * Forgot Access Code - send new access code to user's email
+ */
+exports.forgotAccessCode = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const [users] = await db.query('SELECT id, username, email FROM users WHERE email = ? AND is_active = 1', [email]);
+    if (users.length === 0) {
+      return res.json({ message: 'If an account with that email exists, a new access code has been sent.' });
+    }
+
+    const user = users[0];
+    const newAccessCode = uuidv4().slice(0, 8).toUpperCase();
+    const hashedCode = await bcrypt.hash(newAccessCode, 10);
+
+    await db.query('UPDATE users SET access_code = ? WHERE id = ?', [hashedCode, user.id]);
+    await sendForgotAccessCode(user.email, user.username, newAccessCode);
+
+    res.json({ message: 'If an account with that email exists, a new access code has been sent.' });
+  } catch (error) {
+    console.error('Forgot access code error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };

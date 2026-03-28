@@ -24,7 +24,7 @@ export default function OrderDetail() {
         <div className="card">
           <h4 style={{ marginBottom: 16 }}>Order Info</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[['Type', order.order_type_name], ['Subject', order.subject_name], ['Level', order.education_level_name], ['Plan', order.plan_name], ['Start', new Date(order.start_date).toLocaleDateString()], ['End', new Date(order.end_date).toLocaleDateString()], ['Weeks', order.num_weeks]].map(([l, v]) => (
+            {[['Source', order.source_url || 'Direct'], ['Type', order.order_type_name], ['Subject', order.subject_name], ['Level', order.education_level_name], ['Plan', order.plan_name], ['Start', new Date(order.start_date).toLocaleDateString()], ['End', new Date(order.end_date).toLocaleDateString()], ['Weeks', order.num_weeks]].map(([l, v]) => (
               <div key={l} className="summary-row"><span className="label">{l}</span><span>{v}</span></div>
             ))}
           </div>

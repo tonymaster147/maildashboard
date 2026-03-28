@@ -103,6 +103,31 @@ module.exports = function setupSocket(io) {
         // Broadcast to room
         io.to(`order_${order_id}`).emit('newMessage', messageData);
 
+        // Send global notification to users NOT currently in the room
+        try {
+          // Notify the order owner (if sender is not user)
+          if (senderRole !== 'user') {
+            const [orderOwner] = await db.query('SELECT user_id FROM orders WHERE id = ?', [order_id]);
+            if (orderOwner.length > 0) {
+              const ownerSocketId = onlineUsers.get(`user_${orderOwner[0].user_id}`);
+              if (ownerSocketId) {
+                io.to(ownerSocketId).emit('chatNotification', { order_id, sender_name: senderName, message: filteredMessage });
+              }
+            }
+          }
+          // Notify assigned tutors (if sender is not tutor, or is a different tutor)
+          const [assignedTutors] = await db.query('SELECT tutor_id FROM order_tutors WHERE order_id = ?', [order_id]);
+          for (const at of assignedTutors) {
+            if (senderRole === 'tutor' && at.tutor_id === senderId) continue;
+            const tutorSocketId = onlineUsers.get(`tutor_${at.tutor_id}`);
+            if (tutorSocketId) {
+              io.to(tutorSocketId).emit('chatNotification', { order_id, sender_name: senderName, message: filteredMessage });
+            }
+          }
+        } catch (notifErr) {
+          console.error('Chat notification error:', notifErr);
+        }
+
         // If flagged, notify admin channel
         if (isFlagged) {
           io.emit('flaggedMessage', {

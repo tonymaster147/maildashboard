@@ -1,16 +1,38 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail } from '../services/api';
-import { FiMessageSquare, FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen } from 'react-icons/fi';
+import { getOrderDetail, uploadFiles } from '../services/api';
+import { FiMessageSquare, FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload } from 'react-icons/fi';
 
 export default function OrderDetail() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  const fetchOrder = () => {
+    getOrderDetail(id).then(res => { setOrder(res.data); setLoading(false); }).catch(() => setLoading(false));
+  };
 
   useEffect(() => {
-    getOrderDetail(id).then(res => { setOrder(res.data); setLoading(false); }).catch(() => setLoading(false));
+    fetchOrder();
   }, [id]);
+
+  const handleFileUpload = async (e) => {
+    const files = e.target.files;
+    if (!files.length) return;
+    setUploading(true);
+    const formData = new FormData();
+    Array.from(files).forEach(f => formData.append('files', f));
+    formData.append('order_id', order.id);
+
+    try {
+      await uploadFiles(formData);
+      fetchOrder();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Upload failed');
+    }
+    setUploading(false);
+  };
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
   if (!order) return <div className="card text-center"><h3>Order not found</h3></div>;
@@ -64,10 +86,11 @@ export default function OrderDetail() {
         </div>
       )}
 
-      {order.files?.length > 0 && (
-        <div className="card mt-2">
-          <h4 style={{ marginBottom: 16 }}>📎 Files ({order.files.length})</h4>
-          <div className="file-list">
+      <div className="card mt-2">
+        <h4 style={{ marginBottom: 16 }}>📎 Files {order.files ? `(${order.files.length})` : '(0)'}</h4>
+        
+        {order.files?.length > 0 && (
+          <div className="file-list" style={{ marginBottom: 16 }}>
             {order.files.map(file => (
               <div key={file.id} className="file-item">
                 <div>
@@ -78,8 +101,24 @@ export default function OrderDetail() {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+
+        {order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'incomplete' && order.status !== 'pending' && (
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <div className="file-upload-zone" onClick={() => document.getElementById('user-upload-files').click()} style={{ padding: '20px', border: '2px dashed var(--border)', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', background: 'var(--bg-card-hover)', transition: 'var(--transition)' }}>
+              {uploading ? (
+                <div className="loading-spinner" style={{ margin: '0 auto' }}></div>
+              ) : (
+                <>
+                  <FiUpload size={24} style={{ marginBottom: 8, color: 'var(--accent)' }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>Click to upload additional files</p>
+                </>
+              )}
+            </div>
+            <input id="user-upload-files" type="file" multiple style={{ display: 'none' }} onChange={handleFileUpload} />
+          </div>
+        )}
+      </div>
 
       {order.chat_enabled && (
         <div className="mt-2">

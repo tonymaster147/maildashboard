@@ -36,6 +36,7 @@ export const signup = (data) => api.post('/auth/signup', data);
 export const login = (data) => api.post('/auth/login', data);
 export const getProfile = () => api.get('/auth/profile');
 export const changePassword = (data) => api.put('/auth/change-password', data);
+export const forgotAccessCode = (data) => api.post('/auth/forgot-access-code', data);
 
 // Orders
 export const getOrderTypes = () => api.get('/orders/types');
@@ -46,6 +47,8 @@ export const createOrder = (data) => api.post('/orders', data);
 export const getUserOrders = (status = '') => api.get(`/orders?status=${status}`);
 export const getOrderDetail = (id) => api.get(`/orders/${id}`);
 export const validateCoupon = (code) => api.post('/orders/validate-coupon', { code });
+export const createDraftOrder = (data) => api.post('/orders/draft', data);
+export const updateDraftOrder = (id, data) => api.put(`/orders/draft/${id}`, data);
 
 // Payments
 export const createPaymentSession = (data) => api.post('/payments/create-session', data);
@@ -62,5 +65,6 @@ export const getOrderFiles = (orderId) => api.get(`/files/order/${orderId}`);
 export const getChatMessages = (orderId) => api.get(`/chat/messages/${orderId}`);
 export const sendMessage = (data) => api.post('/chat/send', data);
 export const getUnreadCount = () => api.get('/chat/unread');
+export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');
 
 export default api;

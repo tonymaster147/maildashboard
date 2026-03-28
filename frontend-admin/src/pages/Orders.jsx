@@ -55,7 +55,7 @@ export default function Orders() {
     <div>
       <div className="page-header"><h2>Order Management</h2><p>Manage and assign orders</p></div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {['', 'pending', 'active', 'in_progress', 'completed', 'cancelled'].map(s => (
+        {['', 'incomplete', 'pending', 'active', 'in_progress', 'completed', 'cancelled'].map(s => (
           <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter(s)}>{s || 'All'}</button>
         ))}
       </div>
@@ -66,11 +66,12 @@ export default function Orders() {
       {loading ? <div className="flex-center"><div className="loading-spinner"></div></div> : (
         <div className="table-container">
           <table>
-            <thead><tr><th>ID</th><th>User</th><th>Course</th><th>Type</th><th>Plan</th><th>Total</th><th>Tutor(s)</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>ID</th><th>Source</th><th>User</th><th>Course</th><th>Type</th><th>Plan</th><th>Total</th><th>Tutor(s)</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {orders.map(o => (
                 <tr key={o.id}>
                   <td>#{o.id}</td>
+                  <td><div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.source_url || 'Direct'}>{o.source_url || 'Direct'}</div></td>
                   <td>{o.username}</td>
                   <td style={{ fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.course_name}</td>
                   <td>{o.order_type_name}</td>
@@ -79,7 +80,7 @@ export default function Orders() {
                   <td style={{ fontSize: 13 }}>{o.tutor_names || <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}</td>
                   <td>
                     <select className="form-select" value={o.status} onChange={e => handleStatusChange(o.id, e.target.value)} style={{ padding: '4px 8px', fontSize: 12, minWidth: 110 }}>
-                      <option value="pending">Pending</option><option value="active">Active</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
+                      <option value="incomplete">Incomplete</option><option value="pending">Pending</option><option value="active">Active</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
                     </select>
                   </td>
                   <td>
