@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const { sendTutorTaskEmail, sendTutorWelcomeEmail } = require('../services/emailService');
 
 /**
  * Admin Dashboard Stats
@@ -105,6 +106,10 @@ exports.createTutor = async (req, res) => {
       'INSERT INTO tutors (name, email, password, specialization) VALUES (?, ?, ?, ?)',
       [name, email, hashedPassword, specialization || null]
     );
+
+    // Send welcome email with credentials (non-blocking)
+    sendTutorWelcomeEmail(email, name, password).catch(e => console.error('Tutor welcome email error:', e));
+
     res.status(201).json({ message: 'Tutor created', id: result.insertId });
   } catch (error) {
     console.error('Create tutor error:', error);
@@ -203,17 +208,48 @@ exports.assignTutors = async (req, res) => {
     const { id } = req.params;
     const { tutor_ids } = req.body;
 
+    // Get order details for email
+    const [orders] = await db.query(
+      `SELECT o.course_name, s.name as subject_name, p.name as plan_name 
+       FROM orders o 
+       LEFT JOIN subjects s ON o.subject_id = s.id 
+       LEFT JOIN plans p ON o.plan_id = p.id 
+       WHERE o.id = ?`, [id]
+    );
+    const orderDetails = orders.length > 0 ? {
+      orderId: id,
+      courseName: orders[0].course_name,
+      subject: orders[0].subject_name,
+      planName: orders[0].plan_name
+    } : { orderId: id };
+
     // Remove existing assignments
     await db.query('DELETE FROM order_tutors WHERE order_id = ?', [id]);
 
     // Add new assignments
     for (const tutorId of tutor_ids) {
       await db.query('INSERT INTO order_tutors (order_id, tutor_id) VALUES (?, ?)', [id, tutorId]);
-      // Notify tutor
+      
+      // Save notification to DB
       await db.query(
         'INSERT INTO notifications (tutor_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
         [tutorId, 'tutor', 'task_assigned', `New task assigned: Order #${id}`, id, 'order']
       );
+
+      // Get tutor details for email + emit targeted socket event
+      const [tutorData] = await db.query('SELECT name, email FROM tutors WHERE id = ?', [tutorId]);
+      if (tutorData.length > 0) {
+        const { name, email } = tutorData[0];
+        
+        // 1. Emit live socket evet
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`tutor_${tutorId}`).emit('tutorNewTask', { tutorId, orderId: id });
+        }
+        
+        // 2. Send email (non-blocking)
+        sendTutorTaskEmail(email, name, orderDetails).catch(e => console.error('Tutor email error:', e));
+      }
     }
 
     // Update order status to active if pending

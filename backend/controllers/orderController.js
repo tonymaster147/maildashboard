@@ -114,6 +114,12 @@ exports.createOrder = async (req, res) => {
       ['admin', 'new_order', `New order #${result.insertId} received`, result.insertId, 'order']
     );
 
+    // Trigger live notification
+    const io = req.app.get('io');
+    if (io) {
+      io.to('admin_monitor').emit('newOrderNotification', { orderId: result.insertId });
+    }
+
     res.status(201).json({
       message: 'Order created successfully',
       order_id: result.insertId,
@@ -296,6 +302,12 @@ exports.createDraftOrder = async (req, res) => {
     sendNewOrderAdmin(orderDetails).catch(e => console.error('Admin email error:', e));
     if (userData[0]?.email) {
       sendOrderConfirmationUser(userData[0].email, orderDetails).catch(e => console.error('User email error:', e));
+    }
+
+    // Trigger live notification
+    const io = req.app.get('io');
+    if (io) {
+      io.to('admin_monitor').emit('newOrderNotification', { orderId: result.insertId });
     }
 
     res.status(201).json({ order_id: result.insertId, message: 'Draft order created' });

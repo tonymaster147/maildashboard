@@ -10,6 +10,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadChat, setUnreadChat] = useState(0);
+  const [unreadTasks, setUnreadTasks] = useState(0);
 
   const playNotificationSound = useCallback(() => {
     try {
@@ -50,10 +51,25 @@ export default function Layout() {
       }
     });
 
+    socket.on('tutorNewTask', () => {
+      if (location.pathname !== '/') {
+        setUnreadTasks(prev => prev + 1);
+      }
+      playNotificationSound();
+    });
+
     return () => {
       socket.off('chatNotification');
+      socket.off('tutorNewTask');
     };
   }, [token, location.pathname, playNotificationSound]);
+
+  // When visiting tasks page, clear unread tasks
+  useEffect(() => {
+    if (location.pathname === '/') {
+      setUnreadTasks(0);
+    }
+  }, [location.pathname]);
 
   // When tutor navigates to a chat, refresh unread count
   useEffect(() => {
@@ -76,6 +92,9 @@ export default function Layout() {
         <nav className="sidebar-nav">
           <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <FiBookOpen size={18} /> My Tasks
+            {unreadTasks > 0 && (
+              <span style={{ background: 'var(--success)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadTasks}</span>
+            )}
           </NavLink>
           <NavLink to="/chats" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <FiMessageSquare size={18} /> Chat

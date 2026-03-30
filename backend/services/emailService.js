@@ -145,4 +145,59 @@ async function sendOrderConfirmationUser(email, orderDetails) {
   }
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser };
+/**
+ * Send task assignment notification to tutor
+ */
+async function sendTutorTaskEmail(email, name, orderDetails) {
+  if (!email) return;
+  const { orderId, courseName, subject, planName } = orderDetails;
+
+  const html = `
+    ${header('🎓 New Task Assigned')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${name},</p>
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">A new task has been assigned to you. Please check your dashboard for more details.</p>
+      <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
+        <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> #${orderId}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Course:</strong> ${courseName || 'N/A'}</p>
+        ${subject ? `<p style="margin: 5px 0; color: #334155;"><strong>Subject:</strong> ${subject}</p>` : ''}
+        ${planName ? `<p style="margin: 5px 0; color: #334155;"><strong>Plan:</strong> ${planName}</p>` : ''}
+      </div>
+      <p style="color: #64748b; font-size: 14px;">Log in to your Tutor Panel to start working on this task.</p>
+    ${footer}
+  `;
+
+  try {
+    await transporter.sendMail({ from: FROM, to: email, subject: `New Task Assigned: Order #${orderId} - EduPro`, html });
+    console.log(`✅ Tutor task email sent to ${email} for order #${orderId}`);
+  } catch (error) {
+    console.error('❌ Tutor task email failed:', error.message);
+  }
+}
+
+/**
+ * Send welcome email to new tutor with credentials
+ */
+async function sendTutorWelcomeEmail(email, name, password) {
+  if (!email) return;
+
+  const html = `
+    ${header('Welcome to EduPro Tutors!')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${name},</p>
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">An administrator has just created a Tutor account for you. Here are your login credentials:</p>
+      <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #8b5cf6; margin-bottom: 20px;">
+        <p style="margin: 5px 0; color: #334155;"><strong>Email:</strong> ${email}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Password:</strong> <span style="background: #8b5cf6; color: white; padding: 4px 12px; border-radius: 4px; font-family: monospace; font-size: 16px; letter-spacing: 1px;">${password}</span></p>
+      </div>
+      <p style="color: #ef4444; font-size: 14px; font-weight: 500;">⚠️ Please keep your credentials secure and log into the Tutor Portal to see your tasks.</p>
+    ${footer}
+  `;
+
+  try {
+    await transporter.sendMail({ from: FROM, to: email, subject: 'Your Tutor Account Credentials - EduPro', html });
+    console.log(`✅ Tutor welcome email sent to ${email}`);
+  } catch (error) {
+    console.error('❌ Tutor welcome email failed:', error.message);
+  }
+}
+
+module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail };

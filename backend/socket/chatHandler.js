@@ -26,8 +26,10 @@ module.exports = function setupSocket(io) {
   io.on('connection', (socket) => {
     console.log(`🔌 User connected: ${socket.user.id} (${socket.user.role})`);
 
-    // Track online status
-    onlineUsers.set(`${socket.user.role}_${socket.user.id}`, socket.id);
+    // Track online status and join individual room for targeted notifications
+    const roomId = `${socket.user.role}_${socket.user.id}`;
+    socket.join(roomId);
+    onlineUsers.set(roomId, socket.id);
 
     // Join order room
     socket.on('joinRoom', async (orderId) => {
