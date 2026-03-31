@@ -1,4 +1,7 @@
 const db = require('../config/db');
+const fs = require('fs');
+const path = require('path');
+const { uploadToGoogleDrive } = require('../config/drive');
 
 /**
  * Get assigned tasks for tutor
@@ -134,11 +137,29 @@ exports.uploadWorkFiles = async (req, res) => {
     const uploadedFiles = [];
     for (const file of files) {
       try {
-        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
+        const filePath = path.join(__dirname, '..', 'uploads', file.filename);
+        
+        let fileUrl = '';
+        let fileDriveId = file.filename;
+        
+        try {
+          // Attempt Google Drive upload
+          const driveResponse = await uploadToGoogleDrive(filePath, file.originalname, file.mimetype);
+          fileUrl = driveResponse.fileUrl; // Use fileUrl to open in browser instead of downloadUrl
+          fileDriveId = driveResponse.fileId;
+          
+          // Delete local temporary file since it's on Drive now
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
+        } catch (driveErr) {
+          console.error(`Google Drive upload failed for ${file.originalname}, falling back to local storage:`, driveErr.message);
+          fileUrl = `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
+        }
         
         const [result] = await db.query(
           'INSERT INTO files (order_id, file_url, file_name, file_size, drive_file_id, uploaded_by, uploaded_by_role) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [id, fileUrl, file.originalname, file.size, file.filename, tutorId, 'tutor']
+          [id, fileUrl, file.originalname, file.size, fileDriveId, tutorId, 'tutor']
         );
         uploadedFiles.push({ id: result.insertId, file_name: file.originalname, file_url: fileUrl });
       } catch (err) {

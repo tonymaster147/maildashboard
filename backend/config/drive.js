@@ -1,29 +1,36 @@
 const { google } = require('googleapis');
-const stream = require('stream');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
-// Initialize Google Drive API using service account key file
-const auth = new google.auth.GoogleAuth({
-  keyFile: path.join(__dirname, '..', 'lastgdrive-key.json'),
-  scopes: ['https://www.googleapis.com/auth/drive.file']
+/**
+ * Google Drive upload using OAuth2 with refresh token.
+ * 
+ * Service accounts don't have storage quota on personal Google accounts.
+ * We use OAuth2 with a refresh token to upload as YOUR Google account,
+ * which uses YOUR storage quota.
+ */
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_DRIVE_CLIENT_ID,
+  process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+  'http://localhost:5000/api/auth/google/callback'
+);
+
+oauth2Client.setCredentials({
+  refresh_token: process.env.GOOGLE_DRIVE_REFRESH_TOKEN
 });
 
-const drive = google.drive({ version: 'v3', auth });
-
+const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
 /**
- * Upload a file buffer to Google Drive
- * @param {Buffer} fileBuffer - The file buffer
+ * Upload a local file to Google Drive
+ * @param {string} filePath - Absolute path to the local file
  * @param {string} fileName - Original file name
  * @param {string} mimeType - File MIME type
- * @returns {Object} { fileId, fileUrl }
+ * @returns {Object} { fileId, fileUrl, downloadUrl }
  */
-async function uploadToGoogleDrive(fileBuffer, fileName, mimeType) {
+async function uploadToGoogleDrive(filePath, fileName, mimeType) {
   try {
-    const bufferStream = new stream.PassThrough();
-    bufferStream.end(fileBuffer);
-
     const fileMetadata = {
       name: `${Date.now()}_${fileName}`,
       parents: [process.env.GOOGLE_DRIVE_FOLDER_ID]
@@ -31,7 +38,7 @@ async function uploadToGoogleDrive(fileBuffer, fileName, mimeType) {
 
     const media = {
       mimeType: mimeType,
-      body: bufferStream
+      body: fs.createReadStream(filePath)
     };
 
     const response = await drive.files.create({
@@ -56,7 +63,13 @@ async function uploadToGoogleDrive(fileBuffer, fileName, mimeType) {
     };
   } catch (error) {
     console.error('Google Drive upload error:', error.message);
-    throw new Error('Failed to upload file to Google Drive');
+    if (error.response) {
+      console.error('Google API response:', JSON.stringify(error.response.data));
+    }
+    if (error.errors) {
+      console.error('Google API errors:', JSON.stringify(error.errors));
+    }
+    throw new Error('Failed to upload file to Google Drive: ' + error.message);
   }
 }
 
