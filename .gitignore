@@ -6,3 +6,4 @@ build/
 backend/uploads/
 *.log
 .DS_Store
+*key.json
