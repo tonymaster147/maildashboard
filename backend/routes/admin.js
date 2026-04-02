@@ -47,4 +47,11 @@ router.get('/banned-words', adminController.getBannedWords);
 router.post('/banned-words', adminController.addBannedWord);
 router.delete('/banned-words/:id', adminController.deleteBannedWord);
 
+// Sales User management
+router.get('/sales-users', adminController.getAllSalesUsers);
+router.post('/sales-users', adminController.createSalesUser);
+router.put('/sales-users/:id', adminController.updateSalesUser);
+router.delete('/sales-users/:id', adminController.deleteSalesUser);
+router.get('/sales-users/:id/permissions', adminController.getSalesPermissions);
+
 module.exports = router;

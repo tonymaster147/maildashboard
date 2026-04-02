@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getAllOrders, updateOrderStatus, assignTutors, reopenChat, getAllTutors } from '../services/api';
 import { FiSearch, FiEye, FiUserPlus, FiX, FiRefreshCw } from 'react-icons/fi';
+import { useApi } from '../hooks/useApi';
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -11,6 +11,7 @@ export default function Orders() {
   const [search, setSearch] = useState('');
   const [assignModal, setAssignModal] = useState(null);
   const [selectedTutors, setSelectedTutors] = useState([]);
+  const { getAllOrders, updateOrderStatus, assignTutors, reopenChat, getAllTutors } = useApi();
 
   const fetchOrders = () => {
     setLoading(true);

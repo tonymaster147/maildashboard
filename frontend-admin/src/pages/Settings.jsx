@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { getSettings, updatePlan, createCoupon, deleteCoupon, getBannedWords, addBannedWord, deleteBannedWord } from '../services/api';
 import { FiSave, FiPlus, FiTrash2, FiShield } from 'react-icons/fi';
+import { useApi } from '../hooks/useApi';
 
 export default function Settings() {
+  const { getSettings, updatePlan, createCoupon, deleteCoupon, getBannedWords, addBannedWord, deleteBannedWord } = useApi();
   const [settings, setSettings] = useState(null);
   const [bannedWords, setBannedWords] = useState([]);
   const [loading, setLoading] = useState(true);

@@ -133,7 +133,7 @@ CREATE TABLE IF NOT EXISTS files (
   file_size INT DEFAULT 0,
   drive_file_id VARCHAR(255) DEFAULT NULL,
   uploaded_by INT NOT NULL,
-  uploaded_by_role ENUM('user', 'tutor', 'admin') NOT NULL,
+  uploaded_by_role ENUM('user', 'tutor', 'admin', 'sales_lead', 'sales_executive') NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS chats (
   id INT AUTO_INCREMENT PRIMARY KEY,
   order_id INT NOT NULL,
   sender_id INT NOT NULL,
-  sender_role ENUM('user', 'tutor', 'admin') NOT NULL,
+  sender_role ENUM('user', 'tutor', 'admin', 'sales_lead', 'sales_executive') NOT NULL,
   message TEXT NOT NULL,
   is_flagged TINYINT(1) DEFAULT 0,
   flag_reason VARCHAR(255) DEFAULT NULL,
@@ -172,7 +172,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT DEFAULT NULL,
   tutor_id INT DEFAULT NULL,
-  role ENUM('user', 'tutor', 'admin') NOT NULL,
+  role ENUM('user', 'tutor', 'admin', 'sales_lead', 'sales_executive') NOT NULL,
   type VARCHAR(50) NOT NULL,
   message TEXT NOT NULL,
   is_read TINYINT(1) DEFAULT 0,
@@ -181,6 +181,28 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- Sales Users (Sales Team Lead & Sales Executive)
+CREATE TABLE IF NOT EXISTS sales_users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  role ENUM('sales_lead', 'sales_executive') NOT NULL DEFAULT 'sales_executive',
+  status ENUM('active', 'inactive') DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Sales Permissions (which admin menu items each sales user can access)
+CREATE TABLE IF NOT EXISTS sales_permissions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sales_user_id INT NOT NULL,
+  menu_key VARCHAR(50) NOT NULL,
+  is_allowed TINYINT(1) DEFAULT 1,
+  FOREIGN KEY (sales_user_id) REFERENCES sales_users(id) ON DELETE CASCADE,
+  UNIQUE KEY unique_permission (sales_user_id, menu_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Indexes for performance
 CREATE INDEX idx_orders_user_id ON orders(user_id);
 CREATE INDEX idx_orders_status ON orders(status);
@@ -189,4 +211,5 @@ CREATE INDEX idx_chats_order_id ON chats(order_id);
 CREATE INDEX idx_files_order_id ON files(order_id);
 CREATE INDEX idx_payments_user_id ON payments(user_id);
 CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_sales_permissions_user_id ON sales_permissions(sales_user_id);
 

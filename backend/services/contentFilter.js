@@ -13,6 +13,27 @@ const PHONE_REGEX = /(\+?\d{1,4}[-.\s]?)?(\(?\d{1,4}\)?[-.\s]?)?[\d\s.-]{6,15}\d
 // Additional patterns for obfuscated attempts
 const OBFUSCATED_EMAIL_REGEX = /[a-zA-Z0-9._%+-]+\s*(?:@|at|AT)\s*[a-zA-Z0-9.-]+\s*(?:\.|dot|DOT)\s*[a-zA-Z]{2,}/gi;
 
+// In-memory cache for banned words (refreshed every 60s)
+let bannedWordsCache = [];
+let bannedWordsCacheTime = 0;
+const CACHE_TTL = 60000; // 60 seconds
+
+async function getBannedWords() {
+  const now = Date.now();
+  if (now - bannedWordsCacheTime < CACHE_TTL && bannedWordsCache.length >= 0 && bannedWordsCacheTime > 0) {
+    return bannedWordsCache;
+  }
+  try {
+    const [rows] = await db.query('SELECT word FROM banned_words WHERE is_active = 1');
+    bannedWordsCache = rows.map(r => r.word.trim()).filter(Boolean);
+    bannedWordsCacheTime = now;
+  } catch (error) {
+    console.error('Banned words fetch error:', error);
+    // Return stale cache on error rather than failing
+  }
+  return bannedWordsCache;
+}
+
 /**
  * Filter message content for sensitive information
  * @param {string} message - The message to filter
@@ -54,31 +75,20 @@ async function filterMessage(message) {
     });
   }
 
-  // 4. Check for dynamic Banned Words from Database
-  try {
-    const [banned] = await db.query('SELECT word FROM banned_words WHERE is_active = 1');
-    for (const row of banned) {
-      const word = row.word.trim();
-      if (!word) continue;
-      
-      // We will match the word case-insensitively, allowing boundaries to make sure it's somewhat isolated,
-      // or we can just replace as substring. For security phrases, substring replacement is safer but could false-positive.
-      // E.g. word "email" matches "email", "emails". We'll use word boundaries.
-      // For literal phrases like ".com", etc. we need to escape regex chars.
-      const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const escapedWord = escapeRegExp(word);
-      const regex = new RegExp(`\\b${escapedWord}\\b`, 'gi');
-      
-      if (regex.test(filteredMessage)) {
-        filteredMessage = filteredMessage.replace(regex, '***');
-        if (!flagReasons.includes(`Banned phrase: ${word}`)) {
-          flagReasons.push(`Banned phrase: ${word}`);
-        }
-        isFlagged = true;
+  // 4. Check for dynamic Banned Words (from cache)
+  const bannedWords = await getBannedWords();
+  for (const word of bannedWords) {
+    const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedWord = escapeRegExp(word);
+    const regex = new RegExp(`\\b${escapedWord}\\b`, 'gi');
+
+    if (regex.test(filteredMessage)) {
+      filteredMessage = filteredMessage.replace(regex, '***');
+      if (!flagReasons.includes(`Banned phrase: ${word}`)) {
+        flagReasons.push(`Banned phrase: ${word}`);
       }
+      isFlagged = true;
     }
-  } catch (error) {
-    console.error('Banned words fetch error:', error);
   }
 
   return {
@@ -88,4 +98,9 @@ async function filterMessage(message) {
   };
 }
 
-module.exports = { filterMessage };
+// Allow cache invalidation when banned words are updated
+function invalidateBannedWordsCache() {
+  bannedWordsCacheTime = 0;
+}
+
+module.exports = { filterMessage, invalidateBannedWordsCache };

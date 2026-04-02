@@ -1,14 +1,55 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail } from '../services/api';
-import { FiArrowLeft } from 'react-icons/fi';
+import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile } from '../services/api';
+import { FiArrowLeft, FiUpload, FiTrash2, FiDownload } from 'react-icons/fi';
 
 export default function OrderDetail() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
+  const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
-  useEffect(() => { getOrderDetail(id).then(res => { setOrder(res.data); setLoading(false); }).catch(() => setLoading(false)); }, [id]);
+  useEffect(() => {
+    Promise.all([
+      getOrderDetail(id),
+      getOrderFiles(id)
+    ]).then(([orderRes, filesRes]) => {
+      setOrder(orderRes.data);
+      setFiles(filesRes.data || []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [id]);
+
+  const handleUpload = async (e) => {
+    const selectedFiles = e.target.files;
+    if (!selectedFiles || selectedFiles.length === 0) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('order_id', id);
+    for (const file of selectedFiles) {
+      formData.append('files', file);
+    }
+    try {
+      const res = await uploadFiles(formData);
+      setFiles(prev => [...(res.data.files || []), ...prev]);
+    } catch (err) {
+      console.error('Upload failed:', err);
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDelete = async (fileId) => {
+    if (!confirm('Delete this file?')) return;
+    try {
+      await deleteFile(fileId);
+      setFiles(prev => prev.filter(f => f.id !== fileId));
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
   if (!order) return <div className="card text-center"><h3>Order not found</h3></div>;
@@ -48,14 +89,40 @@ export default function OrderDetail() {
         </div>
       </div>
       {order.additional_instructions && <div className="card mt-2"><h4 style={{ marginBottom: 8 }}>Instructions</h4><p style={{ color: 'var(--text-secondary)' }}>{order.additional_instructions}</p></div>}
-      {order.files?.length > 0 && (
-        <div className="card mt-2">
-          <h4 style={{ marginBottom: 12 }}>Files ({order.files.length})</h4>
-          <div className="file-list">
-            {order.files.map(f => <div key={f.id} className="file-item"><div><div className="file-name">{f.file_name}</div><div className="file-size">{f.uploaded_by_role}</div></div><a href={f.file_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline">View</a></div>)}
-          </div>
+
+      {/* Files section with upload */}
+      <div className="card mt-2">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h4>Files ({files.length})</h4>
+          <label className="btn btn-sm btn-primary" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <FiUpload size={14} /> {uploading ? 'Uploading...' : 'Upload Files'}
+            <input type="file" multiple ref={fileInputRef} onChange={handleUpload} style={{ display: 'none' }} disabled={uploading} />
+          </label>
         </div>
-      )}
+        {files.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>
+            <p>No files uploaded yet</p>
+          </div>
+        ) : (
+          <div className="file-list">
+            {files.map(f => (
+              <div key={f.id} className="file-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 8, background: 'var(--bg-input)', marginBottom: 6 }}>
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>{f.file_name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {f.uploaded_by_role} {f.created_at ? `• ${new Date(f.created_at).toLocaleDateString()}` : ''}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <a href={f.file_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline" title="Download"><FiDownload size={13} /></a>
+                  <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(f.id)} title="Delete"><FiTrash2 size={13} /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="mt-2"><Link to={`/chats/${order.id}`} className="btn btn-primary" style={{ width: '100%' }}>View Chat</Link></div>
     </div>
   );

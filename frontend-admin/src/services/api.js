@@ -47,6 +47,8 @@ export const reopenChat = (id) => api.put(`/admin/orders/${id}/reopen-chat`);
 export const getAllChats = () => api.get('/admin/chats');
 export const getFlaggedMessages = () => api.get('/admin/chats/flagged');
 export const getChatMessages = (orderId) => api.get(`/chat/messages/${orderId}`);
+export const getUnreadCount = () => api.get('/chat/unread');
+export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');
 
 // Settings
 export const getSettings = () => api.get('/admin/settings');
@@ -59,10 +61,53 @@ export const getNotifications = () => api.get('/admin/notifications');
 export const markNotificationRead = (id) => api.put(`/admin/notifications/${id}/read`);
 
 export const getOrderDetail = (id) => api.get(`/orders/${id}`);
+export const getOrderFiles = (orderId) => api.get(`/files/order/${orderId}`);
+export const uploadFiles = (formData) => api.post('/files/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const deleteFile = (id) => api.delete(`/files/${id}`);
 
 // Banned Words
 export const getBannedWords = () => api.get('/admin/banned-words');
 export const addBannedWord = (data) => api.post('/admin/banned-words', data);
 export const deleteBannedWord = (id) => api.delete(`/admin/banned-words/${id}`);
+
+// Reports
+export const getReports = (params) => api.get('/admin/reports', { params });
+
+// Sales User management (admin)
+export const getAllSalesUsers = () => api.get('/admin/sales-users');
+export const createSalesUser = (data) => api.post('/admin/sales-users', data);
+export const updateSalesUser = (id, data) => api.put(`/admin/sales-users/${id}`, data);
+export const deleteSalesUser = (id) => api.delete(`/admin/sales-users/${id}`);
+export const getSalesPermissions = (id) => api.get(`/admin/sales-users/${id}/permissions`);
+
+// Sales login
+export const salesLogin = (data) => api.post('/auth/sales/login', data);
+
+// Sales user accessing admin features (uses /api/sales/ prefix)
+export const salesApi = {
+  getDashboard: () => api.get('/sales/dashboard'),
+  getUsers: (params) => api.get('/sales/users', { params }),
+  getTutors: () => api.get('/sales/tutors'),
+  createTutor: (data) => api.post('/sales/tutors', data),
+  updateTutor: (id, data) => api.put(`/sales/tutors/${id}`, data),
+  deleteTutor: (id) => api.delete(`/sales/tutors/${id}`),
+  getOrders: (params) => api.get('/sales/orders', { params }),
+  updateOrderStatus: (id, data) => api.put(`/sales/orders/${id}/status`, data),
+  assignTutors: (id, data) => api.put(`/sales/orders/${id}/assign`, data),
+  reopenChat: (id) => api.put(`/sales/orders/${id}/reopen-chat`),
+  getChats: () => api.get('/sales/chats'),
+  getFlaggedMessages: () => api.get('/sales/chats/flagged'),
+  getReports: (params) => api.get('/sales/reports', { params }),
+  getSettings: () => api.get('/sales/settings'),
+  updatePlan: (id, data) => api.put(`/sales/plans/${id}`, data),
+  createCoupon: (data) => api.post('/sales/coupons', data),
+  deleteCoupon: (id) => api.delete(`/sales/coupons/${id}`),
+  getNotifications: () => api.get('/sales/notifications'),
+  markNotificationRead: (id) => api.put(`/sales/notifications/${id}/read`),
+  getBannedWords: () => api.get('/sales/banned-words'),
+  addBannedWord: (data) => api.post('/sales/banned-words', data),
+  deleteBannedWord: (id) => api.delete(`/sales/banned-words/${id}`),
+  getMyPermissions: () => api.get('/sales/my-permissions'),
+};
 
 export default api;

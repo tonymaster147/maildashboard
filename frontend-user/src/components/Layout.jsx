@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { getUnreadCount } from '../services/api';
 import { connectSocket } from '../services/socket';
@@ -10,6 +10,8 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadChat, setUnreadChat] = useState(0);
+  const locationRef = useRef(location.pathname);
+  useEffect(() => { locationRef.current = location.pathname; }, [location.pathname]);
 
   const playNotificationSound = useCallback(() => {
     try {
@@ -20,9 +22,11 @@ export default function Layout() {
       gain.connect(ctx.destination);
       osc.frequency.value = 800;
       osc.type = 'sine';
-      gain.gain.value = 0.3;
-      osc.start();
-      setTimeout(() => { osc.stop(); ctx.close(); }, 200);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+      setTimeout(() => ctx.close(), 500);
     } catch (e) {
       console.log('Sound not supported');
     }
@@ -38,29 +42,33 @@ export default function Layout() {
     return () => clearInterval(interval);
   }, []);
 
-  // Listen for real-time chat notifications via socket
+  // Listen for real-time chat notifications via socket (use ref to avoid re-registering on every navigation)
   useEffect(() => {
     if (!token) return;
     const socket = connectSocket(token);
 
-    socket.on('chatNotification', (data) => {
-      if (!location.pathname.includes(`/chat/${data.order_id}`)) {
+    const handleChatNotif = (data) => {
+      if (!locationRef.current.includes(`/chat/${data.order_id}`)) {
         setUnreadChat(prev => prev + 1);
         playNotificationSound();
       }
-    });
+    };
+
+    socket.on('chatNotification', handleChatNotif);
 
     return () => {
-      socket.off('chatNotification');
+      socket.off('chatNotification', handleChatNotif);
     };
-  }, [token, location.pathname, playNotificationSound]);
+  }, [token, playNotificationSound]);
 
-  // When user navigates to a chat, refresh unread count
+  // When user navigates to a chat, refresh unread count after messages are marked read
   useEffect(() => {
     if (location.pathname.includes('/chat/')) {
-      setTimeout(() => {
+      // Wait 4s so getChatMessages has time to mark messages as read on the backend
+      const timer = setTimeout(() => {
         getUnreadCount().then(res => setUnreadChat(res.data.unread || 0)).catch(() => {});
-      }, 1000);
+      }, 4000);
+      return () => clearTimeout(timer);
     }
   }, [location.pathname]);
 

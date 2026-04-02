@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { FiDownload, FiFilter, FiRefreshCw } from 'react-icons/fi';
-import api from '../services/api';
+import { useApi } from '../hooks/useApi';
 
 export default function Reports() {
+  const { getReports } = useApi();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
@@ -27,7 +28,7 @@ export default function Reports() {
         if (value) queryParams.append(key, value);
       });
 
-      const response = await api.get(`/admin/reports?${queryParams.toString()}`);
+      const response = await getReports(Object.fromEntries(queryParams));
       setReports(response.data.data);
       if (response.data.meta) {
         setUsers(response.data.meta.users);

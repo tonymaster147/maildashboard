@@ -20,8 +20,9 @@ The project is built as a monorepo containing four main services:
 - **Real-Time Engine**: Socket.io (for live chat & online status)
 - **Payments**: Stripe Checkout Integration
 - **Emails**: Nodemailer with SMTP Integration (HTML templates, order confirmation, access code recovery)
-- **File Storage**: Local Multer Disk Storage (`backend/uploads/`)
+- **File Storage**: Google Drive API with local Multer fallback (`backend/uploads/`)
 - **Authentication**: JWT (JSON Web Tokens) with role-based access control (RBAC)
+- **Rate Limiting**: express-rate-limit for API and auth endpoints
 
 ---
 
@@ -42,13 +43,23 @@ The project is built as a monorepo containing four main services:
 - **Direct Messaging**: Chat with the client securely via Socket.io with live, per-task unread notification badges.
 
 ### 🛡️ Admin Panel
-- **Dashboard**: High-level overview of revenue, active orders, and user metrics.
+- **Dashboard**: High-level overview of revenue, active orders, and user metrics (parallel-optimized DB queries).
 - **Order Management**: Adjust order statuses, assign specific tutors to active orders, and monitor deadlines.
 - **User & Tutor Management**: Add new tutors, block/unblock users.
+- **File Management**: Upload and delete files on any order directly from the order detail page.
 - **Chat Monitor**: Real-time view of all platform conversations.
-- **Smart Chat Censor**: Automatically flags and blocks specific phrases (configurable), phone numbers, and email patterns to prevent off-platform communication.
+- **Customer Chat**: Direct real-time chat with customers on their orders, with per-order unread badges and notification sounds.
+- **Smart Chat Censor**: Automatically flags and blocks specific phrases (in-memory cached, configurable), phone numbers, and email patterns to prevent off-platform communication.
 - **Reporting Engine**: Advanced filtering by payment status, project status, dates, and assigned tutors, with CSV Export functionality.
 - **Dynamic Configuration**: Configure pricing plans, add/remove discount coupons, and manage security banned phrases dynamically from the UI.
+- **Sales Team Management**: Create and manage sales users (Sales Lead / Sales Executive) with granular per-menu permission controls.
+
+### 📊 Sales Panel (Sales Lead / Sales Executive)
+- **Role-Based Access**: Sales users access a subset of admin features based on individually assigned menu permissions (Dashboard, Users, Tutors, Orders, Chat Monitor, Reports, Settings, Customer Chat).
+- **Full Tutor CRUD**: Sales users with Tutors permission can add, edit, and delete tutors.
+- **Customer Chat**: Dedicated real-time chat interface for communicating with customers, with per-order unread badges and live notifications.
+- **Order Management**: View orders, update statuses, assign tutors, and upload files to orders.
+- **Permission-Gated Routes**: Backend enforces permissions per endpoint via `requirePermission` middleware on `/api/sales/` routes.
 
 ---
 
@@ -108,7 +119,7 @@ npm run dev
 **Default Development Ports:**
 - Backend API: `5000`
 - User Panel: `5173`
-- Admin Panel: `5174`
+- Admin Panel / Sales Panel: `5174`
 - Tutor Panel: `5175`
 
 ---
@@ -119,6 +130,10 @@ npm run dev
 - Username: `admin`
 - Password: `admin123`
 
+**Sales Access:**
+- Created via Admin Panel → Sales Team page
+- Login at the same Admin Panel URL (`/login`) using sales credentials
+
 *(Ensure you change these in production or delete the seed data!)*
 
 ---
@@ -127,20 +142,31 @@ npm run dev
 
 ```text
 ├── backend/
-│   ├── config/          # Database, Stripe configs
-│   ├── controllers/     # API logic (Orders, Auth, Admin, etc.)
-│   ├── middleware/      # JWT auth, role verification
-│   ├── routes/          # Express route definitions
-│   ├── services/        # Helper services (Content Filter, Emails)
-│   ├── socket/          # Socket.io chat handlers
-│   └── uploads/         # Local file storage
+│   ├── config/          # Database, Stripe, Google Drive configs
+│   ├── controllers/     # API logic (Orders, Auth, Admin, Chat, Files, etc.)
+│   ├── middleware/      # JWT auth, role verification, rate limiting, file upload
+│   ├── migrations/      # Database migration scripts
+│   ├── routes/          # Express route definitions (admin, sales, tutor, etc.)
+│   ├── services/        # Helper services (Content Filter with caching, Emails)
+│   ├── socket/          # Socket.io chat handlers with room management
+│   └── uploads/         # Local file storage (fallback)
 ├── frontend-admin/      # Admin React SPA
 ├── frontend-tutor/      # Tutor React SPA
 └── frontend-user/       # User React SPA
 ```
+
+## ⚡ Performance & Reliability
+- **Database Connection Pooling**: MySQL pool with 50 connections, idle timeout, and connection health monitoring.
+- **Banned Words Caching**: Content filter caches banned words in memory (60s TTL) to avoid per-message DB queries.
+- **Sender Name Caching**: Socket chat handler caches sender name lookups to reduce repeated DB queries.
+- **Parallel DB Queries**: Dashboard stats and chat notifications use `Promise.all` for concurrent execution.
+- **Socket Room Deduplication**: Prevents duplicate room joins and unnecessary DB verification queries.
+- **Rate Limiting**: 1000 req/15min for API, 10 req/15min for auth, 50 req/hr for file uploads.
 
 ## 🧠 For AI Assistants
 *If you are an AI reading this codebase to assist the developer:*
 - The platform uses **Vanilla CSS** with global CSS variables (e.g., `var(--bg-dark)`) defined in `index.css` for each frontend. Avoid importing external CSS frameworks like Tailwind or Bootstrap unless explicitly requested.
 - When modifying form elements in the Admin Panel, utilize the global `.form-input` and `.form-select` classes for design consistency.
 - Database foreign keys strictly enforce data integrity. If altering checkout/file flows, ensure matching metadata is passed down post-Stripe webhook.
+- Sales users share the `frontend-admin` codebase. Use the `useApi()` hook (not direct API imports) to ensure correct endpoint routing based on role. The `useAuth().isSalesUser` flag determines which API prefix is used (`/api/admin/` vs `/api/sales/`).
+- Socket notifications use a `useRef` pattern for `location.pathname` to avoid stale closures and listener re-registration on every navigation.

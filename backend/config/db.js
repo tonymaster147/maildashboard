@@ -8,10 +8,12 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'tutoring_platform',
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+  connectionLimit: 50,
+  queueLimit: 100,
+  connectTimeout: 10000,
   enableKeepAlive: true,
-  keepAliveInitialDelay: 0
+  keepAliveInitialDelay: 0,
+  idleTimeout: 60000
 });
 
 // Test connection
@@ -23,5 +25,18 @@ pool.getConnection()
   .catch(err => {
     console.error('❌ MySQL connection failed:', err.message);
   });
+
+// Log pool health every 60s to detect exhaustion
+setInterval(() => {
+  const p = pool.pool;
+  if (p) {
+    const free = p._freeConnections?.length || 0;
+    const all = p._allConnections?.length || 0;
+    const queued = p._connectionQueue?.length || 0;
+    if (queued > 0 || free === 0) {
+      console.warn(`⚠️ DB Pool: ${all} active, ${free} free, ${queued} queued`);
+    }
+  }
+}, 60000);
 
 module.exports = pool;

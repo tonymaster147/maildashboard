@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getTasks, getUnreadPerOrder } from '../services/api';
+import { getSocket } from '../services/socket';
 import { FiMessageSquare } from 'react-icons/fi';
 
 export default function Chats() {
@@ -18,6 +19,17 @@ export default function Chats() {
       setUnreadMap(unreadRes.data || {});
       setLoading(false);
     }).catch(() => setLoading(false));
+  }, []);
+
+  // Real-time: update per-order unread when chatNotification arrives
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const handler = (data) => {
+      setUnreadMap(prev => ({ ...prev, [data.order_id]: (prev[data.order_id] || 0) + 1 }));
+    };
+    socket.on('chatNotification', handler);
+    return () => socket.off('chatNotification', handler);
   }, []);
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;

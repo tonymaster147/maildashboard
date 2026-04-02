@@ -1,33 +1,43 @@
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
-const { sendTutorTaskEmail, sendTutorWelcomeEmail } = require('../services/emailService');
+const { sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail } = require('../services/emailService');
+const { invalidateBannedWordsCache } = require('../services/contentFilter');
 
 /**
  * Admin Dashboard Stats
  */
 exports.getDashboardStats = async (req, res) => {
   try {
-    const [[totalSales]] = await db.query('SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = "completed"');
-    const [[activeOrders]] = await db.query('SELECT COUNT(*) as count FROM orders WHERE status IN ("active", "in_progress")');
-    const [[completedOrders]] = await db.query('SELECT COUNT(*) as count FROM orders WHERE status = "completed"');
-    const [[pendingOrders]] = await db.query('SELECT COUNT(*) as count FROM orders WHERE status = "pending"');
-    const [[totalUsers]] = await db.query('SELECT COUNT(*) as count FROM users WHERE role = "user"');
-    const [[totalTutors]] = await db.query('SELECT COUNT(*) as count FROM tutors');
-    const [[flaggedMessages]] = await db.query('SELECT COUNT(*) as count FROM chats WHERE is_flagged = 1');
-    
-    // Recent orders
-    const [recentOrders] = await db.query(`
-      SELECT o.id, o.course_name, o.total_price, o.status, o.created_at, u.username
-      FROM orders o JOIN users u ON o.user_id = u.id
-      ORDER BY o.created_at DESC LIMIT 10
-    `);
-
-    // Monthly revenue (last 12 months)
-    const [monthlyRevenue] = await db.query(`
-      SELECT DATE_FORMAT(created_at, '%Y-%m') as month, SUM(amount) as revenue
-      FROM payments WHERE status = 'completed'
-      GROUP BY month ORDER BY month DESC LIMIT 12
-    `);
+    // Run all stat queries in parallel to reduce connection hold time
+    const [
+      [[totalSales]],
+      [[activeOrders]],
+      [[completedOrders]],
+      [[pendingOrders]],
+      [[totalUsers]],
+      [[totalTutors]],
+      [[flaggedMessages]],
+      [recentOrders],
+      [monthlyRevenue]
+    ] = await Promise.all([
+      db.query('SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = "completed"'),
+      db.query('SELECT COUNT(*) as count FROM orders WHERE status IN ("active", "in_progress")'),
+      db.query('SELECT COUNT(*) as count FROM orders WHERE status = "completed"'),
+      db.query('SELECT COUNT(*) as count FROM orders WHERE status = "pending"'),
+      db.query('SELECT COUNT(*) as count FROM users WHERE role = "user"'),
+      db.query('SELECT COUNT(*) as count FROM tutors'),
+      db.query('SELECT COUNT(*) as count FROM chats WHERE is_flagged = 1'),
+      db.query(`
+        SELECT o.id, o.course_name, o.total_price, o.status, o.created_at, u.username
+        FROM orders o JOIN users u ON o.user_id = u.id
+        ORDER BY o.created_at DESC LIMIT 10
+      `),
+      db.query(`
+        SELECT DATE_FORMAT(created_at, '%Y-%m') as month, SUM(amount) as revenue
+        FROM payments WHERE status = 'completed'
+        GROUP BY month ORDER BY month DESC LIMIT 12
+      `)
+    ]);
 
     res.json({
       total_sales: totalSales.total,
@@ -297,11 +307,17 @@ exports.getFlaggedMessages = async (req, res) => {
   try {
     const [messages] = await db.query(`
       SELECT c.*, o.course_name,
-        CASE WHEN c.sender_role = 'user' THEN u.username WHEN c.sender_role = 'tutor' THEN t.name END as sender_name
+        CASE
+          WHEN c.sender_role = 'user' THEN u.username
+          WHEN c.sender_role = 'tutor' THEN t.name
+          WHEN c.sender_role IN ('sales_lead', 'sales_executive') THEN COALESCE(su.name, 'Sales')
+          ELSE 'Admin'
+        END as sender_name
       FROM chats c
       JOIN orders o ON c.order_id = o.id
       LEFT JOIN users u ON c.sender_id = u.id AND c.sender_role = 'user'
       LEFT JOIN tutors t ON c.sender_id = t.id AND c.sender_role = 'tutor'
+      LEFT JOIN sales_users su ON c.sender_id = su.id AND c.sender_role IN ('sales_lead', 'sales_executive')
       WHERE c.is_flagged = 1
       ORDER BY c.created_at DESC
     `);
@@ -507,6 +523,7 @@ exports.addBannedWord = async (req, res) => {
     const cleanWord = word.trim().toLowerCase();
     
     await db.query('INSERT INTO banned_words (word) VALUES (?)', [cleanWord]);
+    invalidateBannedWordsCache();
     res.status(201).json({ message: 'Banned word added', word: cleanWord });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -523,9 +540,139 @@ exports.deleteBannedWord = async (req, res) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Banned word not found' });
     }
+    invalidateBannedWordsCache();
     res.json({ message: 'Banned word deleted' });
   } catch (error) {
     console.error('Delete banned word error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// ============= SALES USER MANAGEMENT =============
+const AVAILABLE_MENUS = ['dashboard', 'users', 'tutors', 'orders', 'chats', 'reports', 'settings'];
+
+exports.getAllSalesUsers = async (req, res) => {
+  try {
+    const [salesUsers] = await db.query(
+      'SELECT id, name, email, role, status, created_at, updated_at FROM sales_users ORDER BY created_at DESC'
+    );
+    // Load permissions for each
+    for (const su of salesUsers) {
+      const [perms] = await db.query(
+        'SELECT menu_key FROM sales_permissions WHERE sales_user_id = ? AND is_allowed = 1',
+        [su.id]
+      );
+      su.permissions = perms.map(p => p.menu_key);
+    }
+    res.json(salesUsers);
+  } catch (error) {
+    console.error('Get sales users error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.createSalesUser = async (req, res) => {
+  try {
+    const { name, email, password, role, permissions } = req.body;
+    if (!['sales_lead', 'sales_executive'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    const [existing] = await db.query('SELECT id FROM sales_users WHERE email = ?', [email]);
+    if (existing.length > 0) return res.status(400).json({ error: 'Email already exists' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const [result] = await db.query(
+      'INSERT INTO sales_users (name, email, password, role) VALUES (?, ?, ?, ?)',
+      [name, email, hashedPassword, role]
+    );
+
+    // Save permissions
+    if (permissions && Array.isArray(permissions)) {
+      for (const menuKey of permissions) {
+        if (AVAILABLE_MENUS.includes(menuKey)) {
+          await db.query(
+            'INSERT INTO sales_permissions (sales_user_id, menu_key, is_allowed) VALUES (?, ?, 1)',
+            [result.insertId, menuKey]
+          );
+        }
+      }
+    }
+
+    // Chat is always allowed — add it explicitly
+    await db.query(
+      'INSERT IGNORE INTO sales_permissions (sales_user_id, menu_key, is_allowed) VALUES (?, ?, 1)',
+      [result.insertId, 'sales_chat']
+    );
+
+    // Send welcome email with credentials (non-blocking)
+    sendSalesWelcomeEmail(email, name, password, role).catch(e => console.error('Sales welcome email error:', e));
+
+    res.status(201).json({ message: 'Sales user created', id: result.insertId });
+  } catch (error) {
+    console.error('Create sales user error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.updateSalesUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, role, status, permissions } = req.body;
+    if (role && !['sales_lead', 'sales_executive'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    await db.query(
+      'UPDATE sales_users SET name = ?, email = ?, role = ?, status = ? WHERE id = ?',
+      [name, email, role, status, id]
+    );
+
+    // Update permissions if provided
+    if (permissions && Array.isArray(permissions)) {
+      await db.query('DELETE FROM sales_permissions WHERE sales_user_id = ?', [id]);
+      for (const menuKey of permissions) {
+        if (AVAILABLE_MENUS.includes(menuKey)) {
+          await db.query(
+            'INSERT INTO sales_permissions (sales_user_id, menu_key, is_allowed) VALUES (?, ?, 1)',
+            [id, menuKey]
+          );
+        }
+      }
+      // Always keep sales_chat
+      await db.query(
+        'INSERT IGNORE INTO sales_permissions (sales_user_id, menu_key, is_allowed) VALUES (?, ?, 1)',
+        [id, 'sales_chat']
+      );
+    }
+
+    res.json({ message: 'Sales user updated' });
+  } catch (error) {
+    console.error('Update sales user error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.deleteSalesUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.query('DELETE FROM sales_permissions WHERE sales_user_id = ?', [id]);
+    await db.query('DELETE FROM sales_users WHERE id = ?', [id]);
+    res.json({ message: 'Sales user deleted' });
+  } catch (error) {
+    console.error('Delete sales user error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+exports.getSalesPermissions = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [perms] = await db.query(
+      'SELECT menu_key FROM sales_permissions WHERE sales_user_id = ? AND is_allowed = 1',
+      [id]
+    );
+    res.json({ permissions: perms.map(p => p.menu_key), available_menus: AVAILABLE_MENUS });
+  } catch (error) {
+    console.error('Get sales permissions error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { getDashboardStats } from '../services/api';
 import { FiDollarSign, FiTrendingUp, FiCheckCircle, FiClock, FiUsers, FiUserCheck, FiAlertTriangle } from 'react-icons/fi';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useApi } from '../hooks/useApi';
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { getDashboardStats } = useApi();
 
   useEffect(() => {
     getDashboardStats().then(res => { setStats(res.data); setLoading(false); }).catch(() => setLoading(false));

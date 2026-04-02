@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { getAllTutors, createTutor, updateTutor, deleteTutor } from '../services/api';
+import { useApi } from '../hooks/useApi';
 import { FiPlus, FiEdit2, FiTrash2, FiX, FiSave } from 'react-icons/fi';
 
 export default function Tutors() {
+  const { getAllTutors, createTutor, updateTutor, deleteTutor } = useApi();
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);

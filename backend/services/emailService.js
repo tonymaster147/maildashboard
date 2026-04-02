@@ -200,4 +200,33 @@ async function sendTutorWelcomeEmail(email, name, password) {
   }
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail };
+/**
+ * Send welcome email to new sales user with credentials
+ */
+async function sendSalesWelcomeEmail(email, name, password, role) {
+  if (!email) return;
+
+  const roleLabel = role === 'sales_lead' ? 'Sales Team Lead' : 'Sales Executive';
+
+  const html = `
+    ${header(`Welcome to EduPro - ${roleLabel}!`)}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${name},</p>
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">An administrator has created a <strong>${roleLabel}</strong> account for you. Here are your login credentials:</p>
+      <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+        <p style="margin: 5px 0; color: #334155;"><strong>Email:</strong> ${email}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Password:</strong> <span style="background: #f59e0b; color: white; padding: 4px 12px; border-radius: 4px; font-family: monospace; font-size: 16px; letter-spacing: 1px;">${password}</span></p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Role:</strong> ${roleLabel}</p>
+      </div>
+      <p style="color: #ef4444; font-size: 14px; font-weight: 500;">⚠️ Please keep your credentials secure and log into the Admin Panel using the Sales Team login option.</p>
+    ${footer}
+  `;
+
+  try {
+    await transporter.sendMail({ from: FROM, to: email, subject: `Your ${roleLabel} Account Credentials - EduPro`, html });
+    console.log(`✅ Sales welcome email sent to ${email}`);
+  } catch (error) {
+    console.error('❌ Sales welcome email failed:', error.message);
+  }
+}
+
+module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail };

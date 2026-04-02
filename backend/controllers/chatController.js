@@ -25,17 +25,20 @@ exports.getMessages = async (req, res) => {
         return res.status(403).json({ error: 'Access denied' });
       }
     }
+    // admin, sales_lead, sales_executive can access any order chat
 
     const [messages] = await db.query(
-      `SELECT c.*, 
-        CASE 
+      `SELECT c.*,
+        CASE
           WHEN c.sender_role = 'user' THEN u.username
           WHEN c.sender_role = 'tutor' THEN t.name
           WHEN c.sender_role = 'admin' THEN 'Admin'
+          WHEN c.sender_role IN ('sales_lead', 'sales_executive') THEN COALESCE(su.name, 'Sales')
         END as sender_name
        FROM chats c
        LEFT JOIN users u ON c.sender_id = u.id AND c.sender_role = 'user'
        LEFT JOIN tutors t ON c.sender_id = t.id AND c.sender_role = 'tutor'
+       LEFT JOIN sales_users su ON c.sender_id = su.id AND c.sender_role IN ('sales_lead', 'sales_executive')
        WHERE c.order_id = ?
        ORDER BY c.created_at ASC`,
       [orderId]
@@ -113,23 +116,27 @@ exports.getUnreadCount = async (req, res) => {
     const role = req.user.role;
 
     let query;
+    let params = [];
     if (role === 'user') {
       query = `
         SELECT COUNT(*) as count FROM chats c
         JOIN orders o ON c.order_id = o.id
         WHERE o.user_id = ? AND c.sender_role != 'user' AND c.is_read = 0
       `;
+      params = [userId];
     } else if (role === 'tutor') {
       query = `
         SELECT COUNT(*) as count FROM chats c
         JOIN order_tutors ot ON c.order_id = ot.order_id
         WHERE ot.tutor_id = ? AND c.sender_role != 'tutor' AND c.is_read = 0
       `;
+      params = [userId];
     } else {
-      query = `SELECT COUNT(*) as count FROM chats WHERE is_read = 0 AND sender_role != 'admin'`;
+      // admin, sales_lead, sales_executive — see all unread from users
+      query = `SELECT COUNT(*) as count FROM chats WHERE is_read = 0 AND sender_role = 'user'`;
     }
 
-    const [result] = await db.query(query, role !== 'admin' ? [userId] : []);
+    const [result] = await db.query(query, params);
     res.json({ unread: result[0].count });
   } catch (error) {
     console.error('Get unread count error:', error);
@@ -146,6 +153,7 @@ exports.getUnreadPerOrder = async (req, res) => {
     const role = req.user.role;
 
     let query;
+    let params = [];
     if (role === 'user') {
       query = `
         SELECT c.order_id, COUNT(*) as count FROM chats c
@@ -153,6 +161,7 @@ exports.getUnreadPerOrder = async (req, res) => {
         WHERE o.user_id = ? AND c.sender_role != 'user' AND c.is_read = 0
         GROUP BY c.order_id
       `;
+      params = [userId];
     } else if (role === 'tutor') {
       query = `
         SELECT c.order_id, COUNT(*) as count FROM chats c
@@ -160,11 +169,13 @@ exports.getUnreadPerOrder = async (req, res) => {
         WHERE ot.tutor_id = ? AND c.sender_role != 'tutor' AND c.is_read = 0
         GROUP BY c.order_id
       `;
+      params = [userId];
     } else {
-      query = `SELECT order_id, COUNT(*) as count FROM chats WHERE is_read = 0 AND sender_role != 'admin' GROUP BY order_id`;
+      // admin, sales_lead, sales_executive
+      query = `SELECT order_id, COUNT(*) as count FROM chats WHERE is_read = 0 AND sender_role = 'user' GROUP BY order_id`;
     }
 
-    const [results] = await db.query(query, role !== 'admin' ? [userId] : []);
+    const [results] = await db.query(query, params);
     // Convert to { orderId: count } map
     const unreadMap = {};
     results.forEach(r => { unreadMap[r.order_id] = r.count; });

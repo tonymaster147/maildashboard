@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getAllChats, getFlaggedMessages } from '../services/api';
 import { FiMessageCircle, FiAlertTriangle, FiEye } from 'react-icons/fi';
+import { useApi } from '../hooks/useApi';
 
 export default function ChatMonitor() {
   const [chats, setChats] = useState([]);
   const [flagged, setFlagged] = useState([]);
   const [tab, setTab] = useState('all');
   const [loading, setLoading] = useState(true);
+  const { getAllChats, getFlaggedMessages } = useApi();
 
   useEffect(() => {
     Promise.all([getAllChats(), getFlaggedMessages()]).then(([c, f]) => {

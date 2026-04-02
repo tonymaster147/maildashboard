@@ -165,6 +165,57 @@ exports.tutorLogin = async (req, res) => {
 };
 
 /**
+ * Sales Login (Sales Team Lead / Sales Executive)
+ */
+exports.salesLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const [salesUsers] = await db.query(
+      'SELECT id, name, email, password, role FROM sales_users WHERE email = ? AND status = "active"',
+      [email]
+    );
+
+    if (salesUsers.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const salesUser = salesUsers[0];
+    const isMatch = await bcrypt.compare(password, salesUser.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Load permissions
+    const [permissions] = await db.query(
+      'SELECT menu_key FROM sales_permissions WHERE sales_user_id = ? AND is_allowed = 1',
+      [salesUser.id]
+    );
+    const allowedMenus = permissions.map(p => p.menu_key);
+
+    const token = jwt.sign(
+      { id: salesUser.id, name: salesUser.name, role: salesUser.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: salesUser.id,
+        name: salesUser.name,
+        email: salesUser.email,
+        role: salesUser.role,
+        permissions: allowedMenus
+      }
+    });
+  } catch (error) {
+    console.error('Sales login error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
  * Change Password (User)
  */
 exports.changePassword = async (req, res) => {

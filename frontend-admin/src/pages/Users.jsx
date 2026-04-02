@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { getAllUsers, toggleUserStatus } from '../services/api';
+import { toggleUserStatus } from '../services/api';
 import { FiSearch, FiToggleLeft, FiToggleRight } from 'react-icons/fi';
+import { useApi } from '../hooks/useApi';
 
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const { getAllUsers } = useApi();
 
   const fetchUsers = (s = '') => {
     setLoading(true);
