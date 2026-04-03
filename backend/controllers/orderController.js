@@ -297,7 +297,8 @@ exports.createDraftOrder = async (req, res) => {
       subject: subjectData[0]?.name,
       educationLevel: levelData[0]?.name,
       status: 'incomplete',
-      sourceUrl: source_url
+      sourceUrl: source_url,
+      paymentStatus: 'unpaid'
     };
 
     // Send emails (non-blocking)
@@ -371,13 +372,15 @@ exports.updateDraftOrder = async (req, res) => {
     // Send admin notification on each update (non-blocking)
     try {
       const [orderData] = await db.query(
-        `SELECT o.*, u.username, ot.name as order_type_name, s.name as subject_name, el.name as education_level_name, p.name as plan_name
+        `SELECT o.*, u.username, ot.name as order_type_name, s.name as subject_name, el.name as education_level_name, p.name as plan_name,
+         IFNULL(pay.status, 'unpaid') as payment_status
          FROM orders o
          LEFT JOIN users u ON o.user_id = u.id
          LEFT JOIN order_types ot ON o.order_type_id = ot.id
          LEFT JOIN subjects s ON o.subject_id = s.id
          LEFT JOIN education_levels el ON o.education_level_id = el.id
          LEFT JOIN plans p ON o.plan_id = p.id
+         LEFT JOIN payments pay ON o.id = pay.order_id
          WHERE o.id = ?`, [id]
       );
       if (orderData.length > 0) {
@@ -392,7 +395,8 @@ exports.updateDraftOrder = async (req, res) => {
           planName: od.plan_name,
           totalPrice: od.total_price,
           sourceUrl: od.source_url,
-          status: od.status
+          status: od.status,
+          paymentStatus: od.payment_status
         }).catch(e => console.error('Admin update email error:', e));
       }
     } catch (emailErr) {

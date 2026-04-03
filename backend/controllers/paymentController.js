@@ -125,7 +125,8 @@ const fulfillOrder = async (session) => {
         planName: od.plan_name,
         totalPrice: od.total_price,
         sourceUrl: od.source_url,
-        status: 'active'
+        status: 'active',
+        paymentStatus: 'completed'
       };
       sendNewOrderAdmin(details).catch(e => console.error('Admin payment email error:', e));
       if (od.email) {

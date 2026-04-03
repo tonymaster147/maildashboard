@@ -86,7 +86,11 @@ async function sendForgotAccessCode(email, username, newAccessCode) {
  * Send order notification to admin (on every step)
  */
 async function sendNewOrderAdmin(orderDetails) {
-  const { orderId, courseName, username, orderType, subject, educationLevel, status, sourceUrl, planName, totalPrice } = orderDetails;
+  const { orderId, courseName, username, orderType, subject, educationLevel, status, sourceUrl, planName, totalPrice, paymentStatus } = orderDetails;
+
+  const pStatus = paymentStatus || 'unpaid';
+  const paymentColors = { completed: { bg: '#dcfce7', text: '#16a34a' }, pending: { bg: '#fef3c7', text: '#d97706' }, cancelled: { bg: '#fee2e2', text: '#dc2626' }, unpaid: { bg: '#f1f5f9', text: '#64748b' } };
+  const pColor = paymentColors[pStatus] || paymentColors.unpaid;
 
   const html = `
     ${header('📋 New Order Notification')}
@@ -101,7 +105,8 @@ async function sendNewOrderAdmin(orderDetails) {
         ${planName ? `<tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Plan</td><td style="padding: 10px 0; color: #334155; text-align: right;">${planName}</td></tr>` : ''}
         ${totalPrice ? `<tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Total</td><td style="padding: 10px 0; color: #84C225; font-weight: 700; font-size: 18px; text-align: right;">$${parseFloat(totalPrice).toFixed(2)}</td></tr>` : ''}
         ${sourceUrl ? `<tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Source</td><td style="padding: 10px 0; color: #334155; text-align: right;">${sourceUrl}</td></tr>` : ''}
-        <tr><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Status</td><td style="padding: 10px 0; text-align: right;"><span style="background: ${status === 'active' ? '#dcfce7' : '#fef3c7'}; color: ${status === 'active' ? '#16a34a' : '#d97706'}; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase;">${status}</span></td></tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Payment</td><td style="padding: 10px 0; text-align: right;"><span style="background: ${pColor.bg}; color: ${pColor.text}; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase;">${pStatus}</span></td></tr>
+        <tr><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Order Status</td><td style="padding: 10px 0; text-align: right;"><span style="background: ${status === 'active' ? '#dcfce7' : '#fef3c7'}; color: ${status === 'active' ? '#16a34a' : '#d97706'}; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; text-transform: uppercase;">${status}</span></td></tr>
       </table>
     ${footer}
   `;
