@@ -12,10 +12,17 @@ export const connectSocket = (token) => {
   socket = io(baseUrl, {
     auth: { token },
     reconnection: true,
-    reconnectionAttempts: 5,
+    reconnectionAttempts: Infinity,
     reconnectionDelay: 1000
   });
-  
+
+  // Re-join rooms after reconnection (server loses room membership on disconnect)
+  socket.on('connect', () => {
+    if (socket._adminMonitor) {
+      socket.emit('adminMonitorAll');
+    }
+  });
+
   return socket;
 };
 

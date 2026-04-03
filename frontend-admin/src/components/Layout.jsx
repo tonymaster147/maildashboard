@@ -60,6 +60,7 @@ export default function Layout() {
 
     const socket = connectSocket(token);
     socket.emit('adminMonitorAll');
+    socket._adminMonitor = true; // flag for reconnection handler
 
     const handleNewOrder = () => {
       if (!locationRef.current.includes('/orders')) {
@@ -87,17 +88,19 @@ export default function Layout() {
 
   useEffect(() => {
     if (location.pathname.includes('/orders')) {
-      setUnreadOrders(0);
+      const timer = setTimeout(() => setUnreadOrders(0), 5000);
+      return () => clearTimeout(timer);
     }
   }, [location.pathname]);
 
-  // Refresh unread count when entering chat pages
+  // Refresh unread count when entering chat pages (5s delay for proper read marking)
   useEffect(() => {
     if (location.pathname.includes('/sales-chat') || location.pathname.includes('/chats/')) {
       if (!getUnreadCount) return;
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         getUnreadCount().then(res => setUnreadChat(res.data.unread || 0)).catch(() => {});
-      }, 500);
+      }, 5000);
+      return () => clearTimeout(timer);
     }
   }, [location.pathname, getUnreadCount]);
 

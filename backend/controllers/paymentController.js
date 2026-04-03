@@ -80,7 +80,7 @@ exports.createCheckoutSession = async (req, res) => {
 /**
  * Extracted fulfillment logic
  */
-const fulfillOrder = async (session) => {
+const fulfillOrder = async (session, io) => {
   // Update payment status
   await db.query(
     'UPDATE payments SET stripe_payment_id = ?, status = "completed" WHERE stripe_session_id = ?',
@@ -100,6 +100,11 @@ const fulfillOrder = async (session) => {
     'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
     ['admin', 'new_order', `New paid order #${orderId}`, orderId, 'order']
   );
+
+  // Emit live notification to admin/sales panels
+  if (io) {
+    io.to('admin_monitor').emit('newOrderNotification', { orderId });
+  }
 
   // Send payment confirmation emails
   try {
@@ -161,7 +166,8 @@ exports.handleWebhook = async (req, res) => {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     try {
-      await fulfillOrder(session);
+      const io = req.app.get('io');
+      await fulfillOrder(session, io);
     } catch (error) {
       console.error('Order creation from webhook failed:', error);
     }
