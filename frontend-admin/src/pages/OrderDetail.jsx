@@ -78,6 +78,12 @@ export default function OrderDetail() {
             {parseFloat(order.discount_amount) > 0 && <div className="summary-row"><span className="label">Discount</span><span style={{ color: 'var(--success)' }}>-${parseFloat(order.discount_amount).toFixed(2)}</span></div>}
             <div className="summary-row total"><span className="label">Total</span><span className="value">${parseFloat(order.total_price).toFixed(2)}</span></div>
           </div>
+          <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Payment Status</span>
+            <span className={`badge-status ${order.payment_status === 'completed' ? 'badge-active' : order.payment_status === 'pending' ? 'badge-in_progress' : order.payment_status === 'cancelled' ? 'badge-cancelled' : 'badge-incomplete'}`} style={{ fontSize: 12, padding: '4px 12px', textTransform: 'capitalize' }}>
+              {order.payment_status || 'unpaid'}
+            </span>
+          </div>
           {order.school_url && (
             <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8 }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>School Credentials</div>

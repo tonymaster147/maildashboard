@@ -182,18 +182,20 @@ exports.getOrderDetail = async (req, res) => {
     const role = req.user.role;
 
     let query = `
-      SELECT o.*, 
-        ot.name as order_type_name, 
-        s.name as subject_name, 
-        el.name as education_level_name, 
+      SELECT o.*,
+        ot.name as order_type_name,
+        s.name as subject_name,
+        el.name as education_level_name,
         p.name as plan_name,
-        u.username
+        u.username,
+        IFNULL(pay.status, 'unpaid') as payment_status
       FROM orders o
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
       JOIN education_levels el ON o.education_level_id = el.id
       JOIN plans p ON o.plan_id = p.id
       JOIN users u ON o.user_id = u.id
+      LEFT JOIN payments pay ON o.id = pay.order_id
       WHERE o.id = ?
     `;
     const params = [id];
