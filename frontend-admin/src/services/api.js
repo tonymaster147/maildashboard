@@ -48,6 +48,7 @@ export const getAllChats = () => api.get('/admin/chats');
 export const getFlaggedMessages = () => api.get('/admin/chats/flagged');
 export const getChatMessages = (orderId) => api.get(`/chat/messages/${orderId}`);
 export const getUnreadCount = () => api.get('/chat/unread');
+export const markAllRead = () => api.post('/chat/mark-all-read');
 export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');
 
 // Settings

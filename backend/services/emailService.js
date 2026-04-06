@@ -234,4 +234,48 @@ async function sendSalesWelcomeEmail(email, name, password, role) {
   }
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail };
+/**
+ * Send order status change notification to user
+ */
+async function sendOrderStatusChangeEmail(email, orderDetails) {
+  if (!email) return;
+  const { orderId, courseName, oldStatus, newStatus, planName, totalPrice } = orderDetails;
+
+  const statusColors = {
+    incomplete: { bg: '#f1f5f9', text: '#64748b' },
+    pending: { bg: '#fef3c7', text: '#d97706' },
+    active: { bg: '#dcfce7', text: '#16a34a' },
+    in_progress: { bg: '#dbeafe', text: '#2563eb' },
+    completed: { bg: '#dcfce7', text: '#16a34a' },
+    cancelled: { bg: '#fee2e2', text: '#dc2626' }
+  };
+  const newColor = statusColors[newStatus] || statusColors.pending;
+  const oldColor = statusColors[oldStatus] || statusColors.pending;
+
+  const html = `
+    ${header('📦 Order Status Updated')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">The status of your order has been updated.</p>
+      <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid ${newColor.text}; margin-bottom: 20px;">
+        <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> #${orderId}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Course:</strong> ${courseName || 'N/A'}</p>
+        ${planName ? `<p style="margin: 5px 0; color: #334155;"><strong>Plan:</strong> ${planName}</p>` : ''}
+        ${totalPrice ? `<p style="margin: 5px 0; color: #334155;"><strong>Total:</strong> $${parseFloat(totalPrice).toFixed(2)}</p>` : ''}
+      </div>
+      <div style="text-align: center; margin: 24px 0;">
+        <span style="background: ${oldColor.bg}; color: ${oldColor.text}; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; text-transform: uppercase;">${oldStatus}</span>
+        <span style="color: #94a3b8; font-size: 20px; margin: 0 12px;">→</span>
+        <span style="background: ${newColor.bg}; color: ${newColor.text}; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; text-transform: uppercase;">${newStatus}</span>
+      </div>
+      <p style="color: #64748b; font-size: 14px;">Log in to your dashboard to view your order details.</p>
+    ${footer}
+  `;
+
+  try {
+    await transporter.sendMail({ from: FROM, to: email, subject: `Order #${orderId} Status Updated to ${newStatus.replace('_', ' ').toUpperCase()} - EduPro`, html });
+    console.log(`✅ Status change email sent to ${email} for order #${orderId}`);
+  } catch (error) {
+    console.error('❌ Status change email failed:', error.message);
+  }
+}
+
+module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail };

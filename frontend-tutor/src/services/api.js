@@ -29,6 +29,7 @@ export const uploadWorkFiles = (id, formData) => api.post(`/tutor/tasks/${id}/up
 export const getChatMessages = (orderId) => api.get(`/chat/messages/${orderId}`);
 export const getNotifications = () => api.get('/tutor/notifications');
 export const getUnreadCount = () => api.get('/chat/unread');
+export const markAllRead = () => api.post('/chat/mark-all-read');
 export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');
 
 export default api;

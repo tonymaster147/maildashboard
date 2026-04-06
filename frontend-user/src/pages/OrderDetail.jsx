@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, uploadFiles } from '../services/api';
-import { FiMessageSquare, FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload } from 'react-icons/fi';
+import { getOrderDetail, uploadFiles, createPaymentSession } from '../services/api';
+import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones } from 'react-icons/fi';
 
 export default function OrderDetail() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   const fetchOrder = () => {
     getOrderDetail(id).then(res => { setOrder(res.data); setLoading(false); }).catch(() => setLoading(false));
@@ -32,6 +33,17 @@ export default function OrderDetail() {
       alert(err.response?.data?.error || 'Upload failed');
     }
     setUploading(false);
+  };
+
+  const handleCompletePayment = async () => {
+    setPaymentLoading(true);
+    try {
+      const res = await createPaymentSession({ order_id: order.id });
+      window.location.href = res.data.url;
+    } catch (err) {
+      alert(err.response?.data?.error || 'Payment session failed');
+      setPaymentLoading(false);
+    }
   };
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
@@ -70,6 +82,11 @@ export default function OrderDetail() {
             {parseFloat(order.discount_amount) > 0 && <div className="summary-row"><span className="label">Discount</span><span style={{ color: 'var(--success)' }}>-${parseFloat(order.discount_amount).toFixed(2)}</span></div>}
             <div className="summary-row total"><span className="label">Total</span><span className="value">${parseFloat(order.total_price).toFixed(2)}</span></div>
           </div>
+          {order.status === 'incomplete' && parseFloat(order.total_price) > 0 && (
+            <button className="btn btn-primary mt-2" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 20px', fontSize: 15 }} onClick={handleCompletePayment} disabled={paymentLoading}>
+              {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : <><FiCreditCard size={18} /> Complete Payment</>}
+            </button>
+          )}
           {order.tutors?.length > 0 && (
             <div style={{ marginTop: 20, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}><FiUser size={12} /> Assigned Tutor(s)</div>
@@ -120,10 +137,13 @@ export default function OrderDetail() {
         )}
       </div>
 
-      {order.chat_enabled && (
-        <div className="mt-2">
-          <Link to={`/chat/${order.id}`} className="btn btn-primary btn-lg" style={{ width: '100%' }}>
-            <FiMessageSquare size={18} /> Open Chat
+      {!!order.chat_enabled && (
+        <div className="mt-2" style={{ display: 'flex', gap: 12 }}>
+          <Link to={`/chat/tutor/${order.id}`} className="btn btn-lg" style={{ flex: 1, background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <FiUser size={18} /> Tutor Chat
+          </Link>
+          <Link to={`/chat/support/${order.id}`} className="btn btn-lg" style={{ flex: 1, background: 'rgba(132, 194, 37, 0.1)', border: '1px solid rgba(132, 194, 37, 0.3)', color: '#84c225', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <FiHeadphones size={18} /> Support Chat
           </Link>
         </div>
       )}

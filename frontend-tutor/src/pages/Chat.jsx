@@ -18,7 +18,15 @@ export default function Chat() {
     getChatMessages(orderId).then(res => { setMessages(res.data); setLoading(false); }).catch(() => setLoading(false));
     const socket = connectSocket(token);
     socket.emit('joinRoom', parseInt(orderId));
-    socket.on('newMessage', (msg) => setMessages(prev => [...prev, msg]));
+    socket.on('newMessage', (msg) => {
+      // 2-way channel: tutor only sees tutor-channel messages
+      if (msg.channel === 'tutor' || msg.sender_role === 'user' || msg.sender_role === 'tutor') {
+        setMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    });
     socket.on('userTyping', (data) => { if (data.user_id !== user.id) setTyping(data.name); });
     socket.on('userStopTyping', () => setTyping(null));
     return () => { socket.emit('leaveRoom', parseInt(orderId)); socket.off('newMessage'); socket.off('userTyping'); socket.off('userStopTyping'); };

@@ -3,27 +3,28 @@ const db = require('../config/db');
 const { filterMessage } = require('../services/contentFilter');
 require('dotenv').config();
 
+/**
+ * 2-way chat with channel column:
+ *   channel='tutor'   → User <-> Tutor
+ *   channel='support' → User <-> Admin/Sales
+ *
+ * User frontend sends channel in the sendMessage data.
+ * Tutor/Admin/Sales channel is auto-detected from role.
+ */
+
 module.exports = function setupSocket(io) {
-  // Authentication middleware for Socket.io
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
-    if (!token) {
-      return next(new Error('Authentication required'));
-    }
-
+    if (!token) return next(new Error('Authentication required'));
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.user = decoded;
+      socket.user = jwt.verify(token, process.env.JWT_SECRET);
       next();
     } catch (err) {
       next(new Error('Invalid token'));
     }
   });
 
-  // Track online users
-  const onlineUsers = new Map();
-
-  // Cache sender names to avoid repeated DB lookups
+  // Cache sender names
   const senderNameCache = new Map();
   async function getSenderName(role, id) {
     const key = `${role}_${id}`;
@@ -45,73 +46,85 @@ module.exports = function setupSocket(io) {
     return name;
   }
 
+  // Helper: emit to all connected admin/sales sockets (except excludeId)
+  function emitToAdminSales(event, data, excludeId) {
+    for (const [, s] of io.sockets.sockets) {
+      if (s.user && ['admin', 'sales_lead', 'sales_executive'].includes(s.user.role)) {
+        if (excludeId && s.id === excludeId) continue;
+        s.emit(event, data);
+      }
+    }
+  }
+
   io.on('connection', (socket) => {
     console.log(`🔌 User connected: ${socket.user.id} (${socket.user.role})`);
 
-    // Track online status and join individual room for targeted notifications
-    const roomId = `${socket.user.role}_${socket.user.id}`;
-    socket.join(roomId);
-    onlineUsers.set(roomId, socket.id);
+    // Join personal room for targeted notifications
+    const personalRoom = `${socket.user.role}_${socket.user.id}`;
+    socket.join(personalRoom);
 
-    // Join order room (with dedup and error handling)
+    // Join order chat room
     socket.on('joinRoom', async (orderId) => {
       try {
         const roomName = `order_${orderId}`;
-        // Skip if already in this room
         if (socket.rooms.has(roomName)) return;
 
         const role = socket.user.role;
         const userId = socket.user.id;
 
-        // Verify access
         if (role === 'user') {
           const [orders] = await db.query('SELECT id FROM orders WHERE id = ? AND user_id = ?', [orderId, userId]);
           if (orders.length === 0) return;
         } else if (role === 'tutor') {
-          const [assignments] = await db.query(
-            'SELECT id FROM order_tutors WHERE order_id = ? AND tutor_id = ?',
-            [orderId, userId]
-          );
+          const [assignments] = await db.query('SELECT id FROM order_tutors WHERE order_id = ? AND tutor_id = ?', [orderId, userId]);
           if (assignments.length === 0) return;
         }
-        // Admin and sales users can join any room
 
         socket.join(roomName);
-        console.log(`📥 ${role} ${userId} joined room ${roomName}`);
       } catch (err) {
         console.error('joinRoom error:', err.message);
       }
     });
 
-    // Leave room
     socket.on('leaveRoom', (orderId) => {
       socket.leave(`order_${orderId}`);
     });
 
-    // Send message
+    // Send message with channel-based routing
     socket.on('sendMessage', async (data) => {
       try {
-        const { order_id, message } = data;
+        const { order_id, message, channel: clientChannel } = data;
         const senderId = socket.user.id;
         const senderRole = socket.user.role;
 
-        // Check chat enabled
-        const [orders] = await db.query('SELECT chat_enabled FROM orders WHERE id = ?', [order_id]);
+        // Determine channel
+        let channel;
+        if (senderRole === 'tutor') {
+          channel = 'tutor';
+        } else if (['admin', 'sales_lead', 'sales_executive'].includes(senderRole)) {
+          channel = 'support';
+        } else {
+          // User must specify channel
+          channel = clientChannel || 'support';
+        }
+
+        // Check chat enabled + get order owner
+        const [orders] = await db.query('SELECT chat_enabled, user_id FROM orders WHERE id = ?', [order_id]);
         if (orders.length === 0 || !orders[0].chat_enabled) {
           socket.emit('error', { message: 'Chat is disabled for this order' });
           return;
         }
+        const orderOwnerId = orders[0].user_id;
 
-        // Filter message (now async)
+        // Filter message
         const { filteredMessage, isFlagged, flagReason } = await filterMessage(message);
 
-        // Save to DB
+        // Save to DB with channel
         const [result] = await db.query(
-          'INSERT INTO chats (order_id, sender_id, sender_role, message, is_flagged, flag_reason) VALUES (?, ?, ?, ?, ?, ?)',
-          [order_id, senderId, senderRole, filteredMessage, isFlagged ? 1 : 0, flagReason || null]
+          'INSERT INTO chats (order_id, sender_id, sender_role, channel, message, is_flagged, flag_reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [order_id, senderId, senderRole, channel, filteredMessage, isFlagged ? 1 : 0, flagReason || null]
         );
 
-        // Get sender name (cached)
         const senderName = await getSenderName(senderRole, senderId);
 
         const messageData = {
@@ -120,66 +133,52 @@ module.exports = function setupSocket(io) {
           sender_id: senderId,
           sender_role: senderRole,
           sender_name: senderName,
+          channel,
           message: filteredMessage,
           is_flagged: isFlagged,
           created_at: new Date()
         };
 
-        // Broadcast to room
-        io.to(`order_${order_id}`).emit('newMessage', messageData);
+        // ── DELIVER MESSAGE to the correct channel only ──
 
-        // Send global notification to users NOT currently in the room
-        try {
-          const notifPayload = { order_id, sender_name: senderName, message: filteredMessage };
+        if (channel === 'tutor') {
+          // Tutor channel: deliver to user + tutor(s) only
+          // Send back to sender
+          socket.emit('newMessage', messageData);
 
-          // Fetch owner + assigned tutors in parallel (2 queries → 1 round-trip)
-          const [ownerResult, tutorResult] = await Promise.all([
-            senderRole !== 'user' ? db.query('SELECT user_id FROM orders WHERE id = ?', [order_id]) : [[]],
-            db.query('SELECT tutor_id FROM order_tutors WHERE order_id = ?', [order_id])
-          ]);
+          if (senderRole === 'user') {
+            // User sent → deliver to assigned tutors
+            const [tutors] = await db.query('SELECT tutor_id FROM order_tutors WHERE order_id = ?', [order_id]);
+            for (const t of tutors) {
+              io.to(`tutor_${t.tutor_id}`).emit('newMessage', messageData);
+              io.to(`tutor_${t.tutor_id}`).emit('chatNotification', { order_id, sender_name: senderName, message: filteredMessage, channel });
+            }
+          } else {
+            // Tutor sent → deliver to order owner
+            io.to(`user_${orderOwnerId}`).emit('newMessage', messageData);
+            io.to(`user_${orderOwnerId}`).emit('chatNotification', { order_id, sender_name: senderName, message: filteredMessage, channel });
+          }
 
-          // Notify the order owner
-          if (senderRole !== 'user' && ownerResult[0].length > 0) {
-            const ownerSocketId = onlineUsers.get(`user_${ownerResult[0][0].user_id}`);
-            if (ownerSocketId) {
-              io.to(ownerSocketId).emit('chatNotification', notifPayload);
-            }
+        } else {
+          // Support channel: deliver to user + admin/sales only
+          socket.emit('newMessage', messageData);
+
+          if (senderRole === 'user') {
+            // User sent → deliver to all admin/sales directly
+            emitToAdminSales('newMessage', messageData);
+            emitToAdminSales('chatNotification', { order_id, sender_name: senderName, message: filteredMessage, channel });
+          } else {
+            // Admin/Sales sent → deliver to order owner
+            io.to(`user_${orderOwnerId}`).emit('newMessage', messageData);
+            io.to(`user_${orderOwnerId}`).emit('chatNotification', { order_id, sender_name: senderName, message: filteredMessage, channel });
+            // Also deliver to other admin/sales (exclude sender)
+            emitToAdminSales('newMessage', messageData, socket.id);
           }
-          // Notify assigned tutors
-          for (const at of tutorResult[0]) {
-            if (senderRole === 'tutor' && at.tutor_id === senderId) continue;
-            const tutorSocketId = onlineUsers.get(`tutor_${at.tutor_id}`);
-            if (tutorSocketId) {
-              io.to(tutorSocketId).emit('chatNotification', notifPayload);
-            }
-          }
-          // Notify all online sales users (no DB query needed — just iterate onlineUsers)
-          const salesRoles = ['sales_lead', 'sales_executive'];
-          for (const [key, socketId] of onlineUsers.entries()) {
-            if (salesRoles.some(r => key.startsWith(r + '_'))) {
-              if (key === `${senderRole}_${senderId}`) continue;
-              io.to(socketId).emit('chatNotification', notifPayload);
-            }
-          }
-          // Notify admin if sender is not admin
-          if (senderRole !== 'admin') {
-            for (const [key, socketId] of onlineUsers.entries()) {
-              if (key.startsWith('admin_')) {
-                io.to(socketId).emit('chatNotification', notifPayload);
-              }
-            }
-          }
-        } catch (notifErr) {
-          console.error('Chat notification error:', notifErr);
         }
 
         // If flagged, notify admin channel
         if (isFlagged) {
-          io.emit('flaggedMessage', {
-            ...messageData,
-            flag_reason: flagReason
-          });
-
+          io.emit('flaggedMessage', { ...messageData, flag_reason: flagReason });
           await db.query(
             'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
             ['admin', 'flagged_message', `Flagged: ${flagReason} in order #${order_id}`, result.insertId, 'chat']
@@ -191,34 +190,23 @@ module.exports = function setupSocket(io) {
       }
     });
 
-    // Typing indicator
+    // Typing indicators
     socket.on('typing', (data) => {
       socket.to(`order_${data.order_id}`).emit('userTyping', {
-        user_id: socket.user.id,
-        role: socket.user.role,
-        name: data.name
+        user_id: socket.user.id, role: socket.user.role, name: data.name
       });
     });
 
     socket.on('stopTyping', (data) => {
       socket.to(`order_${data.order_id}`).emit('userStopTyping', {
-        user_id: socket.user.id,
-        role: socket.user.role
+        user_id: socket.user.id, role: socket.user.role
       });
     });
 
-    // Admin/Sales: join monitoring room (with dedup)
-    socket.on('adminMonitorAll', () => {
-      if (['admin', 'sales_lead', 'sales_executive'].includes(socket.user.role)) {
-        if (!socket.rooms.has('admin_monitor')) {
-          socket.join('admin_monitor');
-        }
-      }
-    });
+    // Keep adminMonitorAll for backward compat (no-op now, direct socket iteration used instead)
+    socket.on('adminMonitorAll', () => {});
 
-    // Disconnect
     socket.on('disconnect', () => {
-      onlineUsers.delete(`${socket.user.role}_${socket.user.id}`);
       console.log(`🔌 User disconnected: ${socket.user.id}`);
     });
   });

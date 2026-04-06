@@ -28,9 +28,9 @@ export default function ChatView() {
         <div className="chat-messages">
           {messages.length === 0 && <div className="text-center" style={{ padding: 40, color: 'var(--text-muted)' }}><p>No messages</p></div>}
           {messages.map(msg => (
-            <div key={msg.id} className={`message ${msg.sender_role === 'admin' ? 'message-sent' : 'message-received'} ${msg.is_flagged ? 'message-flagged' : ''}`}>
-              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'tutor' ? 'var(--accent)' : msg.sender_role === 'admin' ? '#3b82f6' : 'var(--info)' }}>
-                {msg.sender_name} ({msg.sender_role})
+            <div key={msg.id} className={`message ${['admin', 'sales_lead', 'sales_executive'].includes(msg.sender_role) ? 'message-sent' : 'message-received'} ${msg.is_flagged ? 'message-flagged' : ''}`}>
+              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'admin' ? '#3b82f6' : msg.sender_role === 'tutor' ? 'var(--accent)' : msg.sender_role === 'sales_lead' ? '#f59e0b' : msg.sender_role === 'sales_executive' ? '#f97316' : 'var(--info)' }}>
+                {msg.sender_name} ({msg.sender_role === 'sales_lead' ? 'Sales Lead' : msg.sender_role === 'sales_executive' ? 'Sales Exec' : msg.sender_role})
               </div>
               <div>{msg.message}</div>
               {msg.is_flagged && <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>⚠️ {msg.flag_reason}</div>}

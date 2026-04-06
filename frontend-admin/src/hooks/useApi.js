@@ -34,6 +34,7 @@ export function useApi() {
       getNotifications: salesApi.getNotifications,
       markNotificationRead: salesApi.markNotificationRead,
       getUnreadCount: adminApi.getUnreadCount,
+      markAllRead: adminApi.markAllRead,
       getUnreadPerOrder: adminApi.getUnreadPerOrder,
     };
   }
@@ -62,6 +63,7 @@ export function useApi() {
     getNotifications: adminApi.getNotifications,
     markNotificationRead: adminApi.markNotificationRead,
     getUnreadCount: adminApi.getUnreadCount,
+    markAllRead: adminApi.markAllRead,
     getUnreadPerOrder: adminApi.getUnreadPerOrder,
   };
 }

@@ -1,3 +1,4 @@
+
 -- Migration: Add Sales Users feature
 -- Run this on existing databases to add sales support
 

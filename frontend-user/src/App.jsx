@@ -42,7 +42,7 @@ function AppRoutes() {
         <Route path="orders" element={<Orders />} />
         <Route path="orders/:id" element={<OrderDetail />} />
         <Route path="chats" element={<Chats />} />
-        <Route path="chat/:orderId" element={<Chat />} />
+        <Route path="chat/:channel/:orderId" element={<Chat />} />
         <Route path="payments" element={<PaymentHistory />} />
         <Route path="profile" element={<Profile />} />
       </Route>

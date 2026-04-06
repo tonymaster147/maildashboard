@@ -1,7 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiSearch, FiEye, FiUserPlus, FiX, FiRefreshCw } from 'react-icons/fi';
+import { FiSearch, FiEye, FiUserPlus, FiX, FiRefreshCw, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+
+const VIEWED_ORDERS_KEY = 'admin_viewed_orders';
+
+const getViewedOrders = () => {
+  try { return new Set(JSON.parse(localStorage.getItem(VIEWED_ORDERS_KEY) || '[]')); }
+  catch { return new Set(); }
+};
+
+const markOrderViewed = (id) => {
+  const viewed = getViewedOrders();
+  viewed.add(id);
+  localStorage.setItem(VIEWED_ORDERS_KEY, JSON.stringify([...viewed]));
+};
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -9,16 +22,21 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [unassigned, setUnassigned] = useState(false);
   const [assignModal, setAssignModal] = useState(null);
   const [selectedTutors, setSelectedTutors] = useState([]);
+  const [viewedIds, setViewedIds] = useState(getViewedOrders);
+  const [page, setPage] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const perPage = 50;
   const { getAllOrders, updateOrderStatus, assignTutors, reopenChat, getAllTutors } = useApi();
 
   const fetchOrders = () => {
     setLoading(true);
-    getAllOrders({ status: filter, search }).then(res => { setOrders(res.data.orders); setLoading(false); }).catch(() => setLoading(false));
+    getAllOrders({ status: filter, search, page, limit: perPage, unassigned }).then(res => { setOrders(res.data.orders); setTotalOrders(res.data.total); setLoading(false); }).catch(() => setLoading(false));
   };
 
-  useEffect(() => { fetchOrders(); }, [filter]);
+  useEffect(() => { fetchOrders(); }, [filter, page, unassigned]);
   useEffect(() => { getAllTutors().then(res => setTutors(res.data)); }, []);
 
   const handleStatusChange = async (id, status) => {
@@ -57,21 +75,24 @@ export default function Orders() {
       <div className="page-header"><h2>Order Management</h2><p>Manage and assign orders</p></div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {['', 'incomplete', 'pending', 'active', 'in_progress', 'completed', 'cancelled'].map(s => (
-          <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter(s)}>{s || 'All'}</button>
+          <button key={s} className={`btn btn-sm ${filter === s && !unassigned ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s); setUnassigned(false); setPage(1); }}>{s || 'All'}</button>
         ))}
+        <button className={`btn btn-sm ${unassigned ? 'btn-primary' : 'btn-secondary'}`} style={{ marginLeft: 8 }} onClick={() => { setUnassigned(!unassigned); setPage(1); }}>Unassigned</button>
       </div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
         <input className="form-input" placeholder="Search orders..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 300 }} onKeyDown={e => e.key === 'Enter' && fetchOrders()} />
-        <button className="btn btn-secondary" onClick={fetchOrders}><FiSearch size={16} /></button>
+        <button className="btn btn-secondary" onClick={() => { setPage(1); fetchOrders(); }}><FiSearch size={16} /></button>
       </div>
       {loading ? <div className="flex-center"><div className="loading-spinner"></div></div> : (
         <div className="table-container">
           <table>
             <thead><tr><th>ID</th><th>Source</th><th>User</th><th>Course</th><th>Type</th><th>Plan</th><th>Total</th><th>Tutor(s)</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
-              {orders.map(o => (
-                <tr key={o.id}>
-                  <td>#{o.id}</td>
+              {orders.map(o => {
+                const isNew = !viewedIds.has(o.id);
+                return (
+                <tr key={o.id} style={isNew ? { background: 'rgba(132,194,37,0.08)', boxShadow: 'inset 3px 0 0 var(--accent)' } : {}}>
+                  <td>#{o.id}{isNew && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block', marginLeft: 6, verticalAlign: 'middle' }}></span>}</td>
                   <td><div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.source_url || 'Direct'}>{o.source_url || 'Direct'}</div></td>
                   <td>{o.username}</td>
                   <td style={{ fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.course_name}</td>
@@ -86,15 +107,30 @@ export default function Orders() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <Link to={`/orders/${o.id}`} className="btn btn-sm btn-outline"><FiEye size={12} /></Link>
+                      <Link to={`/orders/${o.id}`} className="btn btn-sm btn-outline" onClick={() => { markOrderViewed(o.id); setViewedIds(prev => new Set([...prev, o.id])); }}><FiEye size={12} /></Link>
                       <button className="btn btn-sm btn-secondary" onClick={() => openAssign(o)} title="Assign Tutor"><FiUserPlus size={12} /></button>
                       {!o.chat_enabled && <button className="btn btn-sm btn-secondary" onClick={() => handleReopen(o.id)} title="Reopen Chat"><FiRefreshCw size={12} /></button>}
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
+        </div>
+      )}
+      {/* Pagination */}
+      {totalOrders > perPage && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 24 }}>
+          <button className="btn btn-sm btn-secondary" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+            <FiChevronLeft size={14} /> Prev
+          </button>
+          <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+            Page {page} of {Math.ceil(totalOrders / perPage)} <span style={{ color: 'var(--text-muted)' }}>({totalOrders} orders)</span>
+          </span>
+          <button className="btn btn-sm btn-secondary" disabled={page >= Math.ceil(totalOrders / perPage)} onClick={() => setPage(p => p + 1)}>
+            Next <FiChevronRight size={14} />
+          </button>
         </div>
       )}
       {assignModal && (

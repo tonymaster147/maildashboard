@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
-const { sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail } = require('../services/emailService');
+const { sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail } = require('../services/emailService');
 const { invalidateBannedWordsCache } = require('../services/contentFilter');
 
 /**
@@ -157,7 +157,7 @@ exports.deleteTutor = async (req, res) => {
 // ============= ORDER MANAGEMENT =============
 exports.getAllOrders = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, search } = req.query;
+    const { page = 1, limit = 20, status, search, unassigned } = req.query;
     const offset = (page - 1) * limit;
     let query = `
       SELECT o.*, u.username, ot.name as order_type_name, s.name as subject_name,
@@ -175,10 +175,17 @@ exports.getAllOrders = async (req, res) => {
     const params = [];
     if (status) { query += ' AND o.status = ?'; params.push(status); }
     if (search) { query += ' AND (o.course_name LIKE ? OR u.username LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
-    query += ' GROUP BY o.id ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
+    query += ' GROUP BY o.id';
+    if (unassigned === 'true') { query += ' HAVING tutor_names IS NULL'; }
+    query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
     const [orders] = await db.query(query, params);
-    const [[{ total }]] = await db.query('SELECT COUNT(*) as total FROM orders');
+    let countQuery = 'SELECT COUNT(*) as total FROM orders o JOIN users u ON o.user_id = u.id LEFT JOIN order_tutors otr ON o.id = otr.order_id WHERE 1=1';
+    const countParams = [];
+    if (status) { countQuery += ' AND o.status = ?'; countParams.push(status); }
+    if (search) { countQuery += ' AND (o.course_name LIKE ? OR u.username LIKE ?)'; countParams.push(`%${search}%`, `%${search}%`); }
+    if (unassigned === 'true') { countQuery += ' AND otr.order_id IS NULL'; }
+    const [[{ total }]] = await db.query(countQuery, countParams);
     res.json({ orders, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
     console.error('Get all orders error:', error);
@@ -190,20 +197,44 @@ exports.updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    // Fetch current order details + user email before updating
+    const [orders] = await db.query(
+      `SELECT o.*, u.email, u.username, p.name as plan_name
+       FROM orders o
+       JOIN users u ON o.user_id = u.id
+       LEFT JOIN plans p ON o.plan_id = p.id
+       WHERE o.id = ?`, [id]
+    );
+
+    const oldStatus = orders.length > 0 ? orders[0].status : null;
+
     await db.query('UPDATE orders SET status = ? WHERE id = ?', [status, id]);
-    
+
     // Disable chat if completed
     if (status === 'completed') {
       await db.query('UPDATE orders SET chat_enabled = 0 WHERE id = ?', [id]);
     }
 
-    // Notify user
-    const [orders] = await db.query('SELECT user_id FROM orders WHERE id = ?', [id]);
+    // Notify user + send email
     if (orders.length > 0) {
+      const order = orders[0];
       await db.query(
         'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [orders[0].user_id, 'user', 'order_update', `Order #${id} status: ${status}`, id, 'order']
+        [order.user_id, 'user', 'order_update', `Order #${id} status: ${status}`, id, 'order']
       );
+
+      // Send status change email to user (non-blocking)
+      if (order.email && oldStatus !== status) {
+        sendOrderStatusChangeEmail(order.email, {
+          orderId: id,
+          courseName: order.course_name,
+          oldStatus,
+          newStatus: status,
+          planName: order.plan_name,
+          totalPrice: order.total_price
+        }).catch(e => console.error('Status change email error:', e));
+      }
     }
 
     res.json({ message: 'Order status updated' });

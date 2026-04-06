@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { useApi } from '../hooks/useApi';
@@ -44,10 +44,13 @@ export default function Layout() {
     }
   }, []);
 
-  // Fetch initial unread chat count & poll every 30s
+  const isOnChatPage = (path) => path.startsWith('/chats') || path === '/sales-chat';
+
+  // Poll unread count every 30s (skip on chat pages)
   useEffect(() => {
     if (!getUnreadCount) return;
     const fetchUnread = () => {
+      if (isOnChatPage(locationRef.current)) return;
       getUnreadCount().then(res => setUnreadChat(res.data.unread || 0)).catch(() => {});
     };
     fetchUnread();
@@ -55,12 +58,13 @@ export default function Layout() {
     return () => clearInterval(interval);
   }, [getUnreadCount]);
 
+  // Socket: listen for order + chat notifications, join admin_monitor room
   useEffect(() => {
     if (!token) return;
 
     const socket = connectSocket(token);
     socket.emit('adminMonitorAll');
-    socket._adminMonitor = true; // flag for reconnection handler
+    socket._adminMonitor = true;
 
     const handleNewOrder = () => {
       if (!locationRef.current.includes('/orders')) {
@@ -70,11 +74,16 @@ export default function Layout() {
     };
 
     const handleChatNotif = () => {
-      const inChat = locationRef.current.includes('/sales-chat') || locationRef.current.includes('/chats/');
-      if (!inChat) {
+      const onSalesChat = locationRef.current === '/sales-chat';
+      if (!isOnChatPage(locationRef.current)) {
+        // Not on any chat page — show badge + sound
         setUnreadChat(prev => prev + 1);
         playNotificationSound();
+      } else if (!onSalesChat) {
+        // On ChatMonitor/ChatView but not SalesChat — just play sound
+        playNotificationSound();
       }
+      // On /sales-chat — SalesChat component handles its own sound
     };
 
     socket.on('newOrderNotification', handleNewOrder);
@@ -86,6 +95,7 @@ export default function Layout() {
     };
   }, [token, playNotificationSound]);
 
+  // Clear order badge after 5s on orders page
   useEffect(() => {
     if (location.pathname.includes('/orders')) {
       const timer = setTimeout(() => setUnreadOrders(0), 5000);
@@ -93,18 +103,13 @@ export default function Layout() {
     }
   }, [location.pathname]);
 
-  // Refresh unread count when entering chat pages (5s delay for proper read marking)
+  // Clear chat badge when entering chat pages
   useEffect(() => {
-    if (location.pathname.includes('/sales-chat') || location.pathname.includes('/chats/')) {
-      if (!getUnreadCount) return;
-      const timer = setTimeout(() => {
-        getUnreadCount().then(res => setUnreadChat(res.data.unread || 0)).catch(() => {});
-      }, 5000);
-      return () => clearTimeout(timer);
+    if (isOnChatPage(location.pathname)) {
+      setUnreadChat(0);
     }
-  }, [location.pathname, getUnreadCount]);
+  }, [location.pathname]);
 
-  // Filter menu items based on permissions
   const visibleMenuItems = MENU_ITEMS.filter(item => hasPermission(item.key));
 
   const panelLabel = isSalesUser
@@ -126,26 +131,25 @@ export default function Layout() {
         </div>
         <nav className="sidebar-nav">
           {visibleMenuItems.map(item => (
-            <NavLink key={item.key} to={item.to} end={item.end} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <item.icon size={18} /> {item.label}
-              {item.hasBadge && unreadOrders > 0 && (
-                <span className="badge" style={{ animation: 'pulse 2s infinite' }}>{unreadOrders}</span>
+            <React.Fragment key={item.key}>
+              <NavLink to={item.to} end={item.end} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                <item.icon size={18} /> {item.label}
+                {item.hasBadge && unreadOrders > 0 && (
+                  <span className="badge" style={{ animation: 'pulse 2s infinite' }}>{unreadOrders}</span>
+                )}
+              </NavLink>
+              {item.key === 'tutors' && isAdmin && (
+                <NavLink to="/sales-team" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                  <FiUserPlus size={18} /> Sales Team
+                </NavLink>
               )}
-            </NavLink>
+            </React.Fragment>
           ))}
 
-          {/* Sales Team management - admin only */}
-          {isAdmin && (
-            <NavLink to="/sales-team" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <FiUserPlus size={18} /> Sales Team
-            </NavLink>
-          )}
-
-          {/* Sales Chat - always visible for sales users */}
           {isSalesUser && (
             <NavLink to="/sales-chat" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <FiMessageCircle size={18} /> Customer Chat
-              {unreadChat > 0 && (
+              {unreadChat > 0 && !isOnChatPage(location.pathname) && (
                 <span style={{ background: 'var(--error)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadChat}</span>
               )}
             </NavLink>

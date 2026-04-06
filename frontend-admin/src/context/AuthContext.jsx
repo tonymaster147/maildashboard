@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { disconnectSocket } from '../services/socket';
 
 const AuthContext = createContext(null);
 
@@ -30,6 +31,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logoutUser = () => {
+    disconnectSocket();
     localStorage.removeItem('admin_token');
     localStorage.removeItem('admin_user');
     localStorage.removeItem('admin_permissions');

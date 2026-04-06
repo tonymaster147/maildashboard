@@ -2,21 +2,26 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getChatMessages } from '../services/api';
-import { connectSocket, getSocket, disconnectSocket } from '../services/socket';
+import { connectSocket, getSocket } from '../services/socket';
 import { FiSend } from 'react-icons/fi';
 
 export default function Chat() {
-  const { orderId } = useParams();
+  const { orderId, channel } = useParams(); // channel = 'tutor' or 'support'
   const { user, token } = useAuth();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [typing, setTyping] = useState(null);
   const messagesEndRef = useRef(null);
+  const channelRef = useRef(channel);
+  useEffect(() => { channelRef.current = channel; }, [channel]);
+
+  const channelLabel = channel === 'tutor' ? 'Tutor' : 'Support';
+  const channelColor = channel === 'tutor' ? '#6366f1' : '#84c225';
 
   useEffect(() => {
-    // Load existing messages
-    getChatMessages(orderId).then(res => {
+    // Load existing messages filtered by channel
+    getChatMessages(orderId, channel).then(res => {
       setMessages(res.data);
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -25,25 +30,31 @@ export default function Chat() {
     const socket = connectSocket(token);
     socket.emit('joinRoom', parseInt(orderId));
 
-    socket.on('newMessage', (msg) => {
-      setMessages(prev => [...prev, msg]);
-    });
+    const handleNewMsg = (msg) => {
+      // Only show messages for THIS channel
+      if (msg.order_id === parseInt(orderId) && msg.channel === channelRef.current) {
+        setMessages(prev => {
+          // Avoid duplicates (sender gets their own message back)
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    };
+
+    socket.on('newMessage', handleNewMsg);
 
     socket.on('userTyping', (data) => {
       if (data.user_id !== user.id) setTyping(data.name);
     });
-
-    socket.on('userStopTyping', () => {
-      setTyping(null);
-    });
+    socket.on('userStopTyping', () => setTyping(null));
 
     return () => {
       socket.emit('leaveRoom', parseInt(orderId));
-      socket.off('newMessage');
+      socket.off('newMessage', handleNewMsg);
       socket.off('userTyping');
       socket.off('userStopTyping');
     };
-  }, [orderId, token, user.id]);
+  }, [orderId, channel, token, user.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,7 +66,11 @@ export default function Chat() {
 
     const socket = getSocket();
     if (socket) {
-      socket.emit('sendMessage', { order_id: parseInt(orderId), message: newMessage });
+      socket.emit('sendMessage', {
+        order_id: parseInt(orderId),
+        message: newMessage,
+        channel // send channel so backend knows where to route
+      });
       socket.emit('stopTyping', { order_id: parseInt(orderId) });
     }
     setNewMessage('');
@@ -79,7 +94,9 @@ export default function Chat() {
     <div className="chat-container">
       <div className="chat-header">
         <div>
-          <h3 style={{ fontSize: 16 }}>Chat - Order #{orderId}</h3>
+          <h3 style={{ fontSize: 16 }}>
+            Order #{orderId} — <span style={{ color: channelColor }}>{channelLabel} Chat</span>
+          </h3>
           {typing && <p style={{ color: 'var(--accent)', fontSize: 12 }}>{typing} is typing...</p>}
         </div>
       </div>
@@ -94,8 +111,8 @@ export default function Chat() {
         {messages.map(msg => (
           <div key={msg.id} className={`message ${msg.sender_role === 'user' && msg.sender_id === user.id ? 'message-sent' : 'message-received'} ${msg.is_flagged ? 'message-flagged' : ''}`}>
             {msg.sender_role !== 'user' || msg.sender_id !== user.id ? (
-              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'admin' ? 'var(--info)' : 'var(--accent)' }}>
-                {msg.sender_name} ({msg.sender_role})
+              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'tutor' ? '#6366f1' : msg.sender_role === 'admin' ? '#3b82f6' : msg.sender_role === 'sales_lead' ? '#f59e0b' : msg.sender_role === 'sales_executive' ? '#f97316' : 'var(--accent)' }}>
+                {msg.sender_name} ({msg.sender_role === 'sales_lead' ? 'Sales Lead' : msg.sender_role === 'sales_executive' ? 'Sales Exec' : msg.sender_role})
               </div>
             ) : null}
             <div>{msg.message}</div>

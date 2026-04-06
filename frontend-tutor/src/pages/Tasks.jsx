@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getTasks } from '../services/api';
-import { FiEye, FiMessageSquare, FiClock, FiCheckCircle, FiTrendingUp } from 'react-icons/fi';
+import { FiEye, FiMessageSquare, FiClock, FiCheckCircle, FiTrendingUp, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+
+const PER_PAGE = 25;
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     getTasks(filter).then(res => { setTasks(res.data); setLoading(false); }).catch(() => setLoading(false));
@@ -14,6 +17,9 @@ export default function Tasks() {
 
   const active = tasks.filter(t => ['active', 'in_progress'].includes(t.status)).length;
   const completed = tasks.filter(t => t.status === 'completed').length;
+
+  const totalPages = Math.ceil(tasks.length / PER_PAGE);
+  const paged = tasks.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
 
@@ -41,37 +47,52 @@ export default function Tasks() {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         {['', 'active', 'in_progress', 'completed'].map(s => (
-          <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter(s)}>{s || 'All'}</button>
+          <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s); setPage(1); }}>{s || 'All'}</button>
         ))}
       </div>
 
       {tasks.length === 0 ? (
         <div className="card text-center" style={{ padding: '60px 40px' }}><div style={{ fontSize: 48, marginBottom: 16 }}>📋</div><h3>No tasks assigned</h3><p style={{ color: 'var(--text-secondary)' }}>New tasks will appear here when assigned by admin</p></div>
       ) : (
-        <div className="table-container">
-          <table>
-            <thead><tr><th>Order</th><th>Course</th><th>Type</th><th>Subject</th><th>User</th><th>Duration</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>
-              {tasks.map(t => (
-                <tr key={t.id}>
-                  <td>#{t.id}</td>
-                  <td style={{ fontWeight: 500 }}>{t.course_name}</td>
-                  <td>{t.order_type_name}</td>
-                  <td>{t.subject_name}</td>
-                  <td>{t.username}</td>
-                  <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t.num_weeks} weeks</td>
-                  <td><span className={`badge-status badge-${t.status}`}>{t.status}</span></td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <Link to={`/tasks/${t.id}`} className="btn btn-sm btn-outline"><FiEye size={12} /></Link>
-                      {t.chat_enabled && <Link to={`/chat/${t.id}`} className="btn btn-sm btn-secondary"><FiMessageSquare size={12} /></Link>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="table-container">
+            <table>
+              <thead><tr><th>Order</th><th>Course</th><th>Type</th><th>Subject</th><th>User</th><th>Duration</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                {paged.map(t => (
+                  <tr key={t.id}>
+                    <td>#{t.id}</td>
+                    <td style={{ fontWeight: 500 }}>{t.course_name}</td>
+                    <td>{t.order_type_name}</td>
+                    <td>{t.subject_name}</td>
+                    <td>{t.username}</td>
+                    <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t.num_weeks} weeks</td>
+                    <td><span className={`badge-status badge-${t.status}`}>{t.status}</span></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <Link to={`/tasks/${t.id}`} className="btn btn-sm btn-outline"><FiEye size={12} /></Link>
+                        {!!t.chat_enabled && <Link to={`/chat/${t.id}`} className="btn btn-sm btn-secondary"><FiMessageSquare size={12} /></Link>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 24 }}>
+              <button className="btn btn-sm btn-secondary" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <FiChevronLeft size={14} /> Prev
+              </button>
+              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                Page {page} of {totalPages} <span style={{ color: 'var(--text-muted)' }}>({tasks.length} tasks)</span>
+              </span>
+              <button className="btn btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                Next <FiChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

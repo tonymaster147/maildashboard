@@ -1,8 +1,27 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { salesApi, getChatMessages, getUnreadPerOrder } from '../services/api';
+import { salesApi, getChatMessages, getUnreadPerOrder, markAllRead } from '../services/api';
 import { connectSocket, getSocket } from '../services/socket';
 import { FiSend, FiMessageCircle, FiSearch } from 'react-icons/fi';
+
+function useNotificationSound() {
+  return useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 800;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+      setTimeout(() => ctx.close(), 500);
+    } catch (e) {}
+  }, []);
+}
 
 export default function SalesChat() {
   const { user, token } = useAuth();
@@ -17,6 +36,7 @@ export default function SalesChat() {
   const [unreadMap, setUnreadMap] = useState({});
   const bottomRef = useRef(null);
   const selectedOrderRef = useRef(null);
+  const playSound = useNotificationSound();
 
   // Keep ref in sync so socket listener always has current value
   useEffect(() => { selectedOrderRef.current = selectedOrder; }, [selectedOrder]);
@@ -31,6 +51,7 @@ export default function SalesChat() {
       setOrders(orderList.filter(o => o.chat_enabled));
       setUnreadMap(unreadRes.data || {});
       setLoading(false);
+      markAllRead().catch(() => {});
     }).catch(() => setLoading(false));
   }, []);
 
@@ -41,18 +62,23 @@ export default function SalesChat() {
     socket.emit('adminMonitorAll');
 
     // newMessage only arrives for the currently-selected (joined) order room
+    // 2-way channel: admin/sales only sees user + admin/sales messages
     socket.on('newMessage', (msg) => {
       const current = selectedOrderRef.current;
-      if (current && msg.order_id === current.id) {
-        setMessages(prev => [...prev, msg]);
+      if (current && msg.order_id === current.id && msg.channel === 'support') {
+        setMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
       }
     });
 
-    // chatNotification arrives for ALL orders (sent directly to our socket)
+    // chatNotification arrives for ALL orders — play sound + update badge
     socket.on('chatNotification', (data) => {
       const current = selectedOrderRef.current;
       if (!current || data.order_id !== current.id) {
         setUnreadMap(prev => ({ ...prev, [data.order_id]: (prev[data.order_id] || 0) + 1 }));
+        playSound();
       }
     });
 
@@ -200,8 +226,8 @@ export default function SalesChat() {
                   messages.map(msg => (
                     <div key={msg.id} className={`message ${isMySentMessage(msg) ? 'message-sent' : 'message-received'} ${msg.is_flagged ? 'message-flagged' : ''}`}>
                       {!isMySentMessage(msg) && (
-                        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'admin' ? '#3b82f6' : msg.sender_role === 'tutor' ? 'var(--accent)' : 'var(--info)' }}>
-                          {msg.sender_name} ({msg.sender_role})
+                        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'admin' ? '#3b82f6' : msg.sender_role === 'tutor' ? 'var(--accent)' : msg.sender_role === 'sales_lead' ? '#f59e0b' : msg.sender_role === 'sales_executive' ? '#f97316' : 'var(--info)' }}>
+                          {msg.sender_name} ({msg.sender_role === 'sales_lead' ? 'Sales Lead' : msg.sender_role === 'sales_executive' ? 'Sales Exec' : msg.sender_role})
                         </div>
                       )}
                       <div>{msg.message}</div>

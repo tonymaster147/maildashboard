@@ -8,11 +8,12 @@ export default function ChatMonitor() {
   const [flagged, setFlagged] = useState([]);
   const [tab, setTab] = useState('all');
   const [loading, setLoading] = useState(true);
-  const { getAllChats, getFlaggedMessages } = useApi();
+  const { getAllChats, getFlaggedMessages, markAllRead } = useApi();
 
   useEffect(() => {
     Promise.all([getAllChats(), getFlaggedMessages()]).then(([c, f]) => {
       setChats(c.data); setFlagged(f.data); setLoading(false);
+      if (markAllRead) markAllRead().catch(() => {});
     }).catch(() => setLoading(false));
   }, []);
 

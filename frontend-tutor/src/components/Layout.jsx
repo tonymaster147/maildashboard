@@ -33,9 +33,12 @@ export default function Layout() {
     }
   }, []);
 
-  // Fetch initial unread count
+  const isOnChatPage = (path) => path.startsWith('/chat/') || path === '/chats';
+
+  // Poll unread count every 30s (skip on chat pages)
   useEffect(() => {
     const fetchUnread = () => {
+      if (isOnChatPage(locationRef.current)) return;
       getUnreadCount().then(res => setUnreadChat(res.data.unread || 0)).catch(() => {});
     };
     fetchUnread();
@@ -43,13 +46,13 @@ export default function Layout() {
     return () => clearInterval(interval);
   }, []);
 
-  // Listen for real-time chat notifications via socket (use ref to avoid re-registering on every navigation)
+  // Real-time chat + task notifications via socket
   useEffect(() => {
     if (!token) return;
     const socket = connectSocket(token);
 
-    const handleChatNotif = (data) => {
-      if (!locationRef.current.includes(`/chat/${data.order_id}`)) {
+    const handleChatNotif = () => {
+      if (!isOnChatPage(locationRef.current)) {
         setUnreadChat(prev => prev + 1);
         playNotificationSound();
       }
@@ -71,20 +74,13 @@ export default function Layout() {
     };
   }, [token, playNotificationSound]);
 
-  // When visiting tasks page, clear unread tasks
+  // Clear badges when entering relevant pages
   useEffect(() => {
-    if (location.pathname === '/') {
-      setUnreadTasks(0);
-    }
+    if (location.pathname === '/') setUnreadTasks(0);
   }, [location.pathname]);
 
-  // When tutor navigates to a chat, refresh unread count
   useEffect(() => {
-    if (location.pathname.includes('/chat/')) {
-      setTimeout(() => {
-        getUnreadCount().then(res => setUnreadChat(res.data.unread || 0)).catch(() => {});
-      }, 500);
-    }
+    if (isOnChatPage(location.pathname)) setUnreadChat(0);
   }, [location.pathname]);
 
   return (
@@ -105,7 +101,7 @@ export default function Layout() {
           </NavLink>
           <NavLink to="/chats" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <FiMessageSquare size={18} /> Chat
-            {unreadChat > 0 && (
+            {unreadChat > 0 && !isOnChatPage(location.pathname) && (
               <span style={{ background: 'var(--error)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadChat}</span>
             )}
           </NavLink>

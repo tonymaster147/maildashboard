@@ -32,43 +32,44 @@ export default function Layout() {
     }
   }, []);
 
-  // Fetch initial unread count
+  const isOnChatPage = (path) => path.startsWith('/chat/') || path === '/chats';
+
+  // Total unread across both channels
+  const fetchUnreadTotal = () => {
+    if (isOnChatPage(locationRef.current)) return;
+    getUnreadCount().then(res => {
+      const d = res.data;
+      setUnreadChat((d.tutor || 0) + (d.support || 0) || d.unread || 0);
+    }).catch(() => {});
+  };
+
+  // Poll unread count every 30s (skip on chat pages)
   useEffect(() => {
-    const fetchUnread = () => {
-      getUnreadCount().then(res => setUnreadChat(res.data.unread || 0)).catch(() => {});
-    };
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 30000);
+    fetchUnreadTotal();
+    const interval = setInterval(fetchUnreadTotal, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Listen for real-time chat notifications via socket (use ref to avoid re-registering on every navigation)
+  // Real-time chat notifications via socket
   useEffect(() => {
     if (!token) return;
     const socket = connectSocket(token);
 
-    const handleChatNotif = (data) => {
-      if (!locationRef.current.includes(`/chat/${data.order_id}`)) {
+    const handleChatNotif = () => {
+      if (!isOnChatPage(locationRef.current)) {
         setUnreadChat(prev => prev + 1);
         playNotificationSound();
       }
     };
 
     socket.on('chatNotification', handleChatNotif);
-
-    return () => {
-      socket.off('chatNotification', handleChatNotif);
-    };
+    return () => { socket.off('chatNotification', handleChatNotif); };
   }, [token, playNotificationSound]);
 
-  // When user navigates to a chat, refresh unread count after messages are marked read
+  // Clear badge when entering chat pages
   useEffect(() => {
-    if (location.pathname.includes('/chat/')) {
-      // Wait 4s so getChatMessages has time to mark messages as read on the backend
-      const timer = setTimeout(() => {
-        getUnreadCount().then(res => setUnreadChat(res.data.unread || 0)).catch(() => {});
-      }, 4000);
-      return () => clearTimeout(timer);
+    if (isOnChatPage(location.pathname)) {
+      setUnreadChat(0);
     }
   }, [location.pathname]);
 
@@ -96,7 +97,7 @@ export default function Layout() {
           </NavLink>
           <NavLink to="/chats" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
             <FiMessageSquare size={18} /> Chat
-            {unreadChat > 0 && (
+            {unreadChat > 0 && !isOnChatPage(location.pathname) && (
               <span style={{ background: 'var(--error)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadChat}</span>
             )}
           </NavLink>

@@ -62,9 +62,10 @@ export const uploadFiles = (formData) => api.post('/files/upload', formData, {
 export const getOrderFiles = (orderId) => api.get(`/files/order/${orderId}`);
 
 // Chat
-export const getChatMessages = (orderId) => api.get(`/chat/messages/${orderId}`);
+export const getChatMessages = (orderId, channel) => api.get(`/chat/messages/${orderId}${channel ? `?channel=${channel}` : ''}`);
 export const sendMessage = (data) => api.post('/chat/send', data);
 export const getUnreadCount = () => api.get('/chat/unread');
+export const markAllRead = () => api.post('/chat/mark-all-read');
 export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');
 
 export default api;

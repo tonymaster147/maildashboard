@@ -1,26 +1,35 @@
-import io from 'socket.io-client';
+import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_URL?.replace(/\/api$/, '') || 'http://localhost:5000';
 let socket = null;
 
 export const connectSocket = (token) => {
-  if (socket) return socket;
-  
-  // ensure we use the base url (remove /api if present)
-  const baseUrl = SOCKET_URL.replace(/\/api$/, '');
-  
-  socket = io(baseUrl, {
+  if (socket?.connected) return socket;
+
+  // Clean up old disconnected socket
+  if (socket) {
+    socket.removeAllListeners();
+    socket.disconnect();
+    socket = null;
+  }
+
+  socket = io(SOCKET_URL, {
     auth: { token },
+    transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000
   });
 
-  // Re-join rooms after reconnection (server loses room membership on disconnect)
   socket.on('connect', () => {
+    console.log('🔌 Admin socket connected');
     if (socket._adminMonitor) {
       socket.emit('adminMonitorAll');
     }
+  });
+
+  socket.on('connect_error', (err) => {
+    console.error('Socket connection error:', err.message);
   });
 
   return socket;
