@@ -176,9 +176,9 @@ module.exports = function setupSocket(io) {
           }
         }
 
-        // If flagged, notify admin channel
+        // If flagged, notify admin/sales only
         if (isFlagged) {
-          io.emit('flaggedMessage', { ...messageData, flag_reason: flagReason });
+          emitToAdminSales('flaggedMessage', { ...messageData, flag_reason: flagReason });
           await db.query(
             'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
             ['admin', 'flagged_message', `Flagged: ${flagReason} in order #${order_id}`, result.insertId, 'chat']

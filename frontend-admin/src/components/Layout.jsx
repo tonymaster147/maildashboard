@@ -10,7 +10,7 @@ const MENU_ITEMS = [
   { to: '/users', key: 'users', icon: FiUsers, label: 'Users' },
   { to: '/tutors', key: 'tutors', icon: FiUserCheck, label: 'Tutors' },
   { to: '/orders', key: 'orders', icon: FiShoppingBag, label: 'Orders', hasBadge: true },
-  { to: '/chats', key: 'chats', icon: FiMessageCircle, label: 'Chat Monitor' },
+  { to: '/chats', key: 'chats', icon: FiMessageCircle, label: 'Chat Monitor', hasFlaggedBadge: true },
   { to: '/reports', key: 'reports', icon: FiPieChart, label: 'Reports' },
   { to: '/settings', key: 'settings', icon: FiSettings, label: 'Settings' },
 ];
@@ -22,6 +22,7 @@ export default function Layout() {
   const location = useLocation();
   const [unreadOrders, setUnreadOrders] = useState(0);
   const [unreadChat, setUnreadChat] = useState(0);
+  const [unreadFlagged, setUnreadFlagged] = useState(0);
   const locationRef = useRef(location.pathname);
   useEffect(() => { locationRef.current = location.pathname; }, [location.pathname]);
 
@@ -86,12 +87,21 @@ export default function Layout() {
       // On /sales-chat — SalesChat component handles its own sound
     };
 
+    const handleFlagged = () => {
+      if (!locationRef.current.startsWith('/chats')) {
+        setUnreadFlagged(prev => prev + 1);
+      }
+      playNotificationSound();
+    };
+
     socket.on('newOrderNotification', handleNewOrder);
     socket.on('chatNotification', handleChatNotif);
+    socket.on('flaggedMessage', handleFlagged);
 
     return () => {
       socket.off('newOrderNotification', handleNewOrder);
       socket.off('chatNotification', handleChatNotif);
+      socket.off('flaggedMessage', handleFlagged);
     };
   }, [token, playNotificationSound]);
 
@@ -107,6 +117,9 @@ export default function Layout() {
   useEffect(() => {
     if (isOnChatPage(location.pathname)) {
       setUnreadChat(0);
+    }
+    if (location.pathname.startsWith('/chats')) {
+      setUnreadFlagged(0);
     }
   }, [location.pathname]);
 
@@ -136,6 +149,9 @@ export default function Layout() {
                 <item.icon size={18} /> {item.label}
                 {item.hasBadge && unreadOrders > 0 && (
                   <span className="badge" style={{ animation: 'pulse 2s infinite' }}>{unreadOrders}</span>
+                )}
+                {item.hasFlaggedBadge && unreadFlagged > 0 && (
+                  <span style={{ background: 'var(--warning)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadFlagged}</span>
                 )}
               </NavLink>
               {item.key === 'tutors' && isAdmin && (

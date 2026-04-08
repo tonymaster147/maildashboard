@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { FiMessageCircle, FiAlertTriangle, FiEye } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
+import { connectSocket } from '../services/socket';
 
 export default function ChatMonitor() {
   const [chats, setChats] = useState([]);
@@ -9,6 +11,24 @@ export default function ChatMonitor() {
   const [tab, setTab] = useState('all');
   const [loading, setLoading] = useState(true);
   const { getAllChats, getFlaggedMessages, markAllRead } = useApi();
+  const { token } = useAuth();
+
+  const playSound = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 600;
+      osc.type = 'triangle';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.5);
+      setTimeout(() => ctx.close(), 600);
+    } catch (e) {}
+  }, []);
 
   useEffect(() => {
     Promise.all([getAllChats(), getFlaggedMessages()]).then(([c, f]) => {
@@ -16,6 +36,20 @@ export default function ChatMonitor() {
       if (markAllRead) markAllRead().catch(() => {});
     }).catch(() => setLoading(false));
   }, []);
+
+  // Live flagged message notifications
+  useEffect(() => {
+    if (!token) return;
+    const socket = connectSocket(token);
+
+    const handleFlagged = (msg) => {
+      setFlagged(prev => [msg, ...prev]);
+      playSound();
+    };
+
+    socket.on('flaggedMessage', handleFlagged);
+    return () => { socket.off('flaggedMessage', handleFlagged); };
+  }, [token, playSound]);
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
 
