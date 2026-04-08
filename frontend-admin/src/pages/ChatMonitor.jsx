@@ -4,13 +4,15 @@ import { FiMessageCircle, FiAlertTriangle, FiEye } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
+import { getUnreadPerOrder } from '../services/api';
 
 export default function ChatMonitor() {
   const [chats, setChats] = useState([]);
   const [flagged, setFlagged] = useState([]);
+  const [unreadMap, setUnreadMap] = useState({});
   const [tab, setTab] = useState('all');
   const [loading, setLoading] = useState(true);
-  const { getAllChats, getFlaggedMessages, markAllRead } = useApi();
+  const { getAllChats, getFlaggedMessages } = useApi();
   const { token } = useAuth();
 
   const playSound = useCallback(() => {
@@ -31,13 +33,17 @@ export default function ChatMonitor() {
   }, []);
 
   useEffect(() => {
-    Promise.all([getAllChats(), getFlaggedMessages()]).then(([c, f]) => {
-      setChats(c.data); setFlagged(f.data); setLoading(false);
-      if (markAllRead) markAllRead().catch(() => {});
+    Promise.all([
+      getAllChats(),
+      getFlaggedMessages(),
+      getUnreadPerOrder().catch(() => ({ data: {} }))
+    ]).then(([c, f, u]) => {
+      setChats(c.data); setFlagged(f.data); setUnreadMap(u.data || {});
+      setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
 
-  // Live flagged message notifications
+  // Live notifications: flagged messages + new chat messages
   useEffect(() => {
     if (!token) return;
     const socket = connectSocket(token);
@@ -47,8 +53,16 @@ export default function ChatMonitor() {
       playSound();
     };
 
+    const handleChatNotif = (data) => {
+      setUnreadMap(prev => ({ ...prev, [data.order_id]: (prev[data.order_id] || 0) + 1 }));
+    };
+
     socket.on('flaggedMessage', handleFlagged);
-    return () => { socket.off('flaggedMessage', handleFlagged); };
+    socket.on('chatNotification', handleChatNotif);
+    return () => {
+      socket.off('flaggedMessage', handleFlagged);
+      socket.off('chatNotification', handleChatNotif);
+    };
   }, [token, playSound]);
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
@@ -66,17 +80,29 @@ export default function ChatMonitor() {
           <table>
             <thead><tr><th>Order</th><th>User</th><th>Course</th><th>Messages</th><th>Flagged</th><th>Last Message</th><th>Action</th></tr></thead>
             <tbody>
-              {chats.map(c => (
-                <tr key={c.order_id} style={c.flagged_count > 0 ? { background: 'rgba(239, 68, 68, 0.08)', borderLeft: '3px solid var(--error)' } : undefined}>
-                  <td>#{c.order_id}</td>
-                  <td>{c.username}</td>
-                  <td>{c.course_name}</td>
-                  <td style={{ fontWeight: 600 }}>{c.message_count}</td>
-                  <td>{c.flagged_count > 0 ? <span style={{ color: 'var(--error)', fontWeight: 600 }}>{c.flagged_count}</span> : '0'}</td>
-                  <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{c.last_message_at ? new Date(c.last_message_at).toLocaleString() : '—'}</td>
-                  <td><Link to={`/chats/${c.order_id}`} className="btn btn-sm btn-outline"><FiEye size={14} /></Link></td>
-                </tr>
-              ))}
+              {chats.map(c => {
+                const unread = unreadMap[c.order_id] || 0;
+                const hasFlag = c.flagged_count > 0;
+                return (
+                  <tr key={c.order_id} style={{
+                    ...(hasFlag ? { background: 'rgba(239, 68, 68, 0.08)', borderLeft: '3px solid var(--error)' } : {}),
+                    ...(unread > 0 && !hasFlag ? { background: 'rgba(99, 102, 241, 0.08)', borderLeft: '3px solid var(--accent)' } : {})
+                  }}>
+                    <td>
+                      <span style={{ fontWeight: unread > 0 ? 700 : 400 }}>#{c.order_id}</span>
+                      {unread > 0 && (
+                        <span style={{ background: 'var(--accent)', color: '#fff', fontSize: 10, padding: '1px 6px', borderRadius: 10, fontWeight: 700, marginLeft: 8 }}>{unread} new</span>
+                      )}
+                    </td>
+                    <td>{c.username}</td>
+                    <td>{c.course_name}</td>
+                    <td style={{ fontWeight: 600 }}>{c.message_count}</td>
+                    <td>{hasFlag ? <span style={{ color: 'var(--error)', fontWeight: 600 }}>{c.flagged_count}</span> : '0'}</td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{c.last_message_at ? new Date(c.last_message_at).toLocaleString() : '—'}</td>
+                    <td><Link to={`/chats/${c.order_id}`} className="btn btn-sm btn-outline" onClick={() => setUnreadMap(prev => { const next = { ...prev }; delete next[c.order_id]; return next; })}><FiEye size={14} /></Link></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
