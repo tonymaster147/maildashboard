@@ -36,8 +36,9 @@ exports.getMessages = async (req, res) => {
       if (assignments.length === 0) return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Determine channel filter
-    const channel = req.query.channel || getChannelForRole(role);
+    // Determine channel filter ('all' = no filter, for monitoring)
+    const rawChannel = req.query.channel || getChannelForRole(role);
+    const channel = rawChannel === 'all' ? null : rawChannel;
     const channelFilter = channel ? `AND c.channel = ?` : '';
     const channelParams = channel ? [channel] : [];
 
