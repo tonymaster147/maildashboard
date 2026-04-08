@@ -203,8 +203,10 @@ module.exports = function setupSocket(io) {
       });
     });
 
-    // Keep adminMonitorAll for backward compat (no-op now, direct socket iteration used instead)
-    socket.on('adminMonitorAll', () => {});
+    // Join admin_monitor room for order notifications (emitted by orderController/paymentController)
+    socket.on('adminMonitorAll', () => {
+      socket.join('admin_monitor');
+    });
 
     socket.on('disconnect', () => {
       console.log(`🔌 User disconnected: ${socket.user.id}`);
