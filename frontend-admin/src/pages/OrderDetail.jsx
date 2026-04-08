@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile } from '../services/api';
-import { FiArrowLeft, FiUpload, FiTrash2, FiDownload } from 'react-icons/fi';
+import { useApi } from '../hooks/useApi';
+import { FiArrowLeft, FiUpload, FiTrash2, FiDownload, FiUserPlus, FiX } from 'react-icons/fi';
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -9,9 +10,13 @@ export default function OrderDetail() {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [tutors, setTutors] = useState([]);
+  const [showAssign, setShowAssign] = useState(false);
+  const [selectedTutors, setSelectedTutors] = useState([]);
   const fileInputRef = useRef(null);
+  const { assignTutors, getAllTutors } = useApi();
 
-  useEffect(() => {
+  const fetchOrder = () => {
     Promise.all([
       getOrderDetail(id),
       getOrderFiles(id)
@@ -20,7 +25,25 @@ export default function OrderDetail() {
       setFiles(filesRes.data || []);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [id]);
+  };
+
+  useEffect(() => { fetchOrder(); }, [id]);
+  useEffect(() => { getAllTutors().then(res => setTutors(res.data)).catch(() => {}); }, []);
+
+  const openAssign = () => {
+    setSelectedTutors(order.tutors ? order.tutors.map(t => t.id) : []);
+    setShowAssign(true);
+  };
+
+  const toggleTutor = (tid) => {
+    setSelectedTutors(prev => prev.includes(tid) ? prev.filter(t => t !== tid) : [...prev, tid]);
+  };
+
+  const handleAssign = async () => {
+    await assignTutors(id, { tutor_ids: selectedTutors });
+    setShowAssign(false);
+    fetchOrder();
+  };
 
   const handleUpload = async (e) => {
     const selectedFiles = e.target.files;
@@ -129,7 +152,48 @@ export default function OrderDetail() {
         )}
       </div>
 
+      {/* Assigned Tutors */}
+      <div className="card mt-2">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h4>Assigned Tutor(s)</h4>
+          <button className="btn btn-sm btn-primary" onClick={openAssign} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <FiUserPlus size={14} /> {order.tutors?.length ? 'Change' : 'Assign'}
+          </button>
+        </div>
+        {order.tutors?.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {order.tutors.map(t => (
+              <span key={t.id} style={{ padding: '6px 14px', background: 'rgba(132,194,37,0.1)', border: '1px solid var(--accent)', borderRadius: 8, fontSize: 13, fontWeight: 500 }}>{t.name}</span>
+            ))}
+          </div>
+        ) : (
+          <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No tutors assigned yet</p>
+        )}
+      </div>
+
       <div className="mt-2"><Link to={`/chats/${order.id}`} className="btn btn-primary" style={{ width: '100%' }}>View Chat</Link></div>
+
+      {/* Assign Tutor Modal */}
+      {showAssign && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+          <div className="card" style={{ width: 440 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
+              <h3>Assign Tutor(s) to Order #{order.id}</h3>
+              <button className="btn btn-sm btn-secondary" onClick={() => setShowAssign(false)}><FiX size={16} /></button>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 16, fontSize: 14 }}>Select one or multiple tutors:</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
+              {tutors.filter(t => t.status === 'active').map(t => (
+                <div key={t.id} onClick={() => toggleTutor(t.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: selectedTutors.includes(t.id) ? 'rgba(132,194,37,0.1)' : 'var(--bg-input)', border: `1px solid ${selectedTutors.includes(t.id) ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 8, cursor: 'pointer' }}>
+                  <div style={{ width: 20, height: 20, borderRadius: 4, border: `2px solid ${selectedTutors.includes(t.id) ? 'var(--accent)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', background: selectedTutors.includes(t.id) ? 'var(--accent)' : 'transparent', color: '#000', fontSize: 12, fontWeight: 700 }}>{selectedTutors.includes(t.id) ? '✓' : ''}</div>
+                  <div><div style={{ fontWeight: 500 }}>{t.name}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t.specialization || t.email}</div></div>
+                </div>
+              ))}
+            </div>
+            <button className="btn btn-primary mt-2" style={{ width: '100%' }} onClick={handleAssign} disabled={selectedTutors.length === 0}>Assign {selectedTutors.length} Tutor(s)</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
