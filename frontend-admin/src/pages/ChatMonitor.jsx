@@ -67,7 +67,7 @@ export default function ChatMonitor() {
             <thead><tr><th>Order</th><th>User</th><th>Course</th><th>Messages</th><th>Flagged</th><th>Last Message</th><th>Action</th></tr></thead>
             <tbody>
               {chats.map(c => (
-                <tr key={c.order_id}>
+                <tr key={c.order_id} style={c.flagged_count > 0 ? { background: 'rgba(239, 68, 68, 0.08)', borderLeft: '3px solid var(--error)' } : undefined}>
                   <td>#{c.order_id}</td>
                   <td>{c.username}</td>
                   <td>{c.course_name}</td>
