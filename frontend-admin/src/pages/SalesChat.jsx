@@ -63,7 +63,7 @@ export default function SalesChat() {
 
     // newMessage only arrives for the currently-selected (joined) order room
     // 2-way channel: admin/sales only sees user + admin/sales messages
-    socket.on('newMessage', (msg) => {
+    const handleNewMessage = (msg) => {
       const current = selectedOrderRef.current;
       if (current && msg.order_id === current.id && msg.channel === 'support') {
         setMessages(prev => {
@@ -71,27 +71,32 @@ export default function SalesChat() {
           return [...prev, msg];
         });
       }
-    });
+    };
 
     // chatNotification arrives for ALL orders — play sound + update badge
-    socket.on('chatNotification', (data) => {
+    const handleChatNotif = (data) => {
       const current = selectedOrderRef.current;
       if (!current || data.order_id !== current.id) {
         setUnreadMap(prev => ({ ...prev, [data.order_id]: (prev[data.order_id] || 0) + 1 }));
         playSound();
       }
-    });
+    };
 
-    socket.on('userTyping', (data) => {
+    const handleTyping = (data) => {
       if (data.user_id !== user.id) setTyping(data.name);
-    });
-    socket.on('userStopTyping', () => setTyping(null));
+    };
+    const handleStopTyping = () => setTyping(null);
+
+    socket.on('newMessage', handleNewMessage);
+    socket.on('chatNotification', handleChatNotif);
+    socket.on('userTyping', handleTyping);
+    socket.on('userStopTyping', handleStopTyping);
 
     return () => {
-      socket.off('newMessage');
-      socket.off('chatNotification');
-      socket.off('userTyping');
-      socket.off('userStopTyping');
+      socket.off('newMessage', handleNewMessage);
+      socket.off('chatNotification', handleChatNotif);
+      socket.off('userTyping', handleTyping);
+      socket.off('userStopTyping', handleStopTyping);
     };
   }, [token, user.id]);
 
