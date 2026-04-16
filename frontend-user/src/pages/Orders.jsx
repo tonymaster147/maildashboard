@@ -70,7 +70,7 @@ export default function Orders() {
                     <td style={{ fontWeight: 500 }}>{order.course_name}</td>
                     <td>{order.order_type_name}</td>
                     <td>{order.subject_name}</td>
-                    <td>{order.plan_name}</td>
+                    <td>{order.plan_name || '—'}</td>
                     <td style={{ color: 'var(--accent)', fontWeight: 600 }}>${parseFloat(order.total_price).toFixed(2)}</td>
                     <td><span className={`badge-status badge-${order.status}`}>{order.status}</span></td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{new Date(order.created_at).toLocaleDateString()}</td>

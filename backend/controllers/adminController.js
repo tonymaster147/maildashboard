@@ -167,7 +167,7 @@ exports.getAllOrders = async (req, res) => {
       JOIN users u ON o.user_id = u.id
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
-      JOIN plans p ON o.plan_id = p.id
+      LEFT JOIN plans p ON o.plan_id = p.id
       LEFT JOIN order_tutors otr ON o.id = otr.order_id
       LEFT JOIN tutors t ON otr.tutor_id = t.id
       WHERE 1=1
@@ -467,7 +467,7 @@ exports.getReports = async (req, res) => {
       JOIN users u ON o.user_id = u.id
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
-      JOIN plans p ON o.plan_id = p.id
+      LEFT JOIN plans p ON o.plan_id = p.id
       LEFT JOIN order_tutors otr ON o.id = otr.order_id
       LEFT JOIN tutors t ON otr.tutor_id = t.id
       LEFT JOIN payments pay ON o.id = pay.order_id

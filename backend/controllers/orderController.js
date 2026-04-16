@@ -6,7 +6,7 @@ const { sendNewOrderAdmin, sendOrderConfirmationUser } = require('../services/em
  */
 exports.getOrderTypes = async (req, res) => {
   try {
-    const [types] = await db.query('SELECT * FROM order_types WHERE is_active = 1');
+    const [types] = await db.query("SELECT * FROM order_types WHERE is_active = 1 AND name != '_urgent_surcharge'");
     res.json(types);
   } catch (error) {
     console.error('Get order types error:', error);
@@ -71,18 +71,35 @@ exports.createOrder = async (req, res) => {
     const userId = req.user.id;
     const {
       order_type_id, course_name, subject_id, education_level_id,
-      plan_id, additional_instructions, school_url, school_username,
-      school_password, start_date, end_date, num_weeks, urgent_fee,
-      coupon_code, payment_session_id
+      plan_id, pricing_rule_id, additional_instructions, school_url, school_username,
+      school_password, start_date, end_date, num_weeks, num_pages, urgent_fee,
+      coupon_code, payment_session_id, price: clientPrice
     } = req.body;
 
-    // Get plan price
-    const [plans] = await db.query('SELECT price FROM plans WHERE id = ?', [plan_id]);
-    if (plans.length === 0) {
-      return res.status(400).json({ error: 'Invalid plan' });
+    let price = 0;
+    let resolvedPricingRuleId = pricing_rule_id || null;
+    let resolvedPlanId = plan_id || null;
+
+    if (pricing_rule_id) {
+      // New dynamic pricing path
+      const [rules] = await db.query('SELECT price FROM pricing_rules WHERE id = ? AND is_active = 1', [pricing_rule_id]);
+      if (rules.length === 0) {
+        return res.status(400).json({ error: 'Invalid pricing rule' });
+      }
+      price = parseFloat(rules[0].price);
+    } else if (plan_id) {
+      // Legacy plan-based pricing
+      const [plans] = await db.query('SELECT price FROM plans WHERE id = ?', [plan_id]);
+      if (plans.length === 0) {
+        return res.status(400).json({ error: 'Invalid plan' });
+      }
+      price = parseFloat(plans[0].price);
+    } else if (clientPrice !== undefined) {
+      price = parseFloat(clientPrice);
+    } else {
+      return res.status(400).json({ error: 'Either pricing_rule_id or plan_id is required' });
     }
 
-    let price = parseFloat(plans[0].price);
     let urgentFee = parseFloat(urgent_fee || 0);
     let discountAmount = 0;
     let couponId = null;
@@ -103,9 +120,9 @@ exports.createOrder = async (req, res) => {
     const totalPrice = price + urgentFee - discountAmount;
 
     const [result] = await db.query(
-      `INSERT INTO orders (user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, price, urgent_fee, total_price, additional_instructions, school_url, school_username, school_password, start_date, end_date, num_weeks, coupon_id, discount_amount, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-      [userId, order_type_id, course_name, subject_id, education_level_id, plan_id, price, urgentFee, totalPrice, additional_instructions || null, school_url || null, school_username || null, school_password || null, start_date, end_date, num_weeks || 0, couponId, discountAmount]
+      `INSERT INTO orders (user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, pricing_rule_id, price, urgent_fee, total_price, additional_instructions, school_url, school_username, school_password, start_date, end_date, num_weeks, num_pages, coupon_id, discount_amount, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [userId, order_type_id, course_name, subject_id, education_level_id, resolvedPlanId, resolvedPricingRuleId, price, urgentFee, totalPrice, additional_instructions || null, school_url || null, school_username || null, school_password || null, start_date, end_date, num_weeks || 0, num_pages || null, couponId, discountAmount]
     );
 
     // Create notification for admin
@@ -140,17 +157,17 @@ exports.getUserOrders = async (req, res) => {
     const { status } = req.query;
 
     let query = `
-      SELECT o.*, 
-        ot.name as order_type_name, 
-        s.name as subject_name, 
-        el.name as education_level_name, 
+      SELECT o.*,
+        ot.name as order_type_name,
+        s.name as subject_name,
+        el.name as education_level_name,
         p.name as plan_name,
         GROUP_CONCAT(DISTINCT t.name) as tutor_names
       FROM orders o
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
       JOIN education_levels el ON o.education_level_id = el.id
-      JOIN plans p ON o.plan_id = p.id
+      LEFT JOIN plans p ON o.plan_id = p.id
       LEFT JOIN order_tutors otr ON o.id = otr.order_id
       LEFT JOIN tutors t ON otr.tutor_id = t.id
       WHERE o.user_id = ?
@@ -187,13 +204,15 @@ exports.getOrderDetail = async (req, res) => {
         s.name as subject_name,
         el.name as education_level_name,
         p.name as plan_name,
+        pr.plan_tier,
         u.username,
         IFNULL(pay.status, 'unpaid') as payment_status
       FROM orders o
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
       JOIN education_levels el ON o.education_level_id = el.id
-      JOIN plans p ON o.plan_id = p.id
+      LEFT JOIN plans p ON o.plan_id = p.id
+      LEFT JOIN pricing_rules pr ON o.pricing_rule_id = pr.id
       JOIN users u ON o.user_id = u.id
       LEFT JOIN payments pay ON o.id = pay.order_id
       WHERE o.id = ?
@@ -277,9 +296,9 @@ exports.createDraftOrder = async (req, res) => {
     const { order_type_id, course_name, subject_id, education_level_id, source_url } = req.body;
 
     const [result] = await db.query(
-      `INSERT INTO orders 
-       (user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, price, total_price, start_date, end_date, status, source_url)
-       VALUES (?, ?, ?, ?, ?, 1, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?)`,
+      `INSERT INTO orders
+       (user_id, order_type_id, course_name, subject_id, education_level_id, price, total_price, start_date, end_date, status, source_url)
+       VALUES (?, ?, ?, ?, ?, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?)`,
       [userId, order_type_id, course_name, subject_id, education_level_id, source_url || null]
     );
 
@@ -334,15 +353,11 @@ exports.updateDraftOrder = async (req, res) => {
     const params = [];
     
     // Whitelist fields
-    const validFields = ['start_date', 'end_date', 'num_weeks', 'plan_id', 'urgent_fee', 'additional_instructions', 'school_url', 'school_username', 'school_password', 'source_url', 'price', 'total_price', 'coupon_id', 'discount_amount'];
+    const validFields = ['start_date', 'end_date', 'num_weeks', 'num_pages', 'plan_id', 'pricing_rule_id', 'urgent_fee', 'additional_instructions', 'school_url', 'school_username', 'school_password', 'source_url', 'price', 'total_price', 'coupon_id', 'discount_amount'];
 
     validFields.forEach(field => {
       if (updateData[field] !== undefined) {
         let val = updateData[field] === '' ? null : updateData[field];
-        if (field === 'plan_id' && val === null) {
-          // Skip updating plan_id to null to avoid foreign key constraint errors
-          return;
-        }
         query += `${field} = ?, `;
         params.push(val);
       }

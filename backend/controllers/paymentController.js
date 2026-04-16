@@ -19,20 +19,31 @@ exports.createCheckoutSession = async (req, res) => {
 
     const order_data = orders[0];
 
-    // Validate plan
-    const [plans] = await db.query('SELECT * FROM plans WHERE id = ?', [order_data.plan_id]);
-    if (plans.length === 0) {
-      return res.status(400).json({ error: 'Invalid plan' });
-    }
-
-    let price = parseFloat(plans[0].price);
+    // Use stored price from the draft order (already calculated during order form)
+    let price = parseFloat(order_data.price || 0);
     let urgentFee = parseFloat(order_data.urgent_fee || 0);
     let discountAmount = parseFloat(order_data.discount_amount || 0);
 
+    // Fallback: if price is 0 and plan_id exists, use legacy plan pricing
+    if (price === 0 && order_data.plan_id) {
+      const [plans] = await db.query('SELECT price FROM plans WHERE id = ?', [order_data.plan_id]);
+      if (plans.length > 0) {
+        price = parseFloat(plans[0].price);
+      }
+    }
+
     const totalAmount = Math.round((price + urgentFee - discountAmount) * 100); // Stripe uses cents
+
+    if (totalAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid order total' });
+    }
 
     const [users] = await db.query('SELECT email FROM users WHERE id = ?', [userId]);
     const userEmail = users.length > 0 ? users[0].email : null;
+
+    // Build product name from order type
+    const [orderType] = await db.query('SELECT name FROM order_types WHERE id = ?', [order_data.order_type_id]);
+    const productName = orderType.length > 0 ? orderType[0].name : 'Order';
 
     const sessionParams = {
       payment_method_types: ['card'],
@@ -41,8 +52,8 @@ exports.createCheckoutSession = async (req, res) => {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `${plans[0].name} Plan - ${order_data.course_name}`,
-              description: `Draft Order #${order_id}`
+              name: `${productName} - ${order_data.course_name}`,
+              description: `Order #${order_id}`
             },
             unit_amount: totalAmount
           },

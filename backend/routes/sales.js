@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const adminController = require('../controllers/adminController');
+const pricingController = require('../controllers/pricingController');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const db = require('../config/db');
 
@@ -55,6 +56,13 @@ router.get('/settings', requirePermission('settings'), adminController.getSettin
 router.put('/plans/:id', requirePermission('settings'), adminController.updatePlan);
 router.post('/coupons', requirePermission('settings'), adminController.createCoupon);
 router.delete('/coupons/:id', requirePermission('settings'), adminController.deleteCoupon);
+
+// Pricing rules (if settings permitted)
+router.get('/pricing-rules', requirePermission('settings'), pricingController.getPricingRules);
+router.post('/pricing-rules', requirePermission('settings'), pricingController.createPricingRule);
+router.put('/pricing-rules/:id', requirePermission('settings'), pricingController.updatePricingRule);
+router.delete('/pricing-rules/:id', requirePermission('settings'), pricingController.deletePricingRule);
+router.put('/urgent-fee', requirePermission('settings'), pricingController.updateUrgentFee);
 
 // Notifications — always allowed for sales users
 router.get('/notifications', adminController.getNotifications);

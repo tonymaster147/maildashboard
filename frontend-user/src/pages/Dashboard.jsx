@@ -82,7 +82,7 @@ export default function Dashboard() {
                     <td>#{order.id}</td>
                     <td>{order.course_name}</td>
                     <td>{order.subject_name}</td>
-                    <td>{order.plan_name}</td>
+                    <td>{order.plan_name || order.order_type_name || '—'}</td>
                     <td><span className={`badge-status badge-${order.status}`}>{order.status}</span></td>
                     <td>
                       <Link to={`/orders/${order.id}`} className="btn btn-sm btn-outline">Details</Link>

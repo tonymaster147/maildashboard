@@ -20,7 +20,7 @@ exports.getTasks = async (req, res) => {
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
       JOIN education_levels el ON o.education_level_id = el.id
-      JOIN plans p ON o.plan_id = p.id
+      LEFT JOIN plans p ON o.plan_id = p.id
       JOIN users u ON o.user_id = u.id
       WHERE otr.tutor_id = ?
     `;
@@ -59,7 +59,7 @@ exports.getTaskDetail = async (req, res) => {
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
       JOIN education_levels el ON o.education_level_id = el.id
-      JOIN plans p ON o.plan_id = p.id
+      LEFT JOIN plans p ON o.plan_id = p.id
       JOIN users u ON o.user_id = u.id
       WHERE o.id = ? AND otr.tutor_id = ?
     `, [id, tutorId]);

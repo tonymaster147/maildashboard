@@ -47,6 +47,7 @@ export const createOrder = (data) => api.post('/orders', data);
 export const getUserOrders = (status = '') => api.get(`/orders?status=${status}`);
 export const getOrderDetail = (id) => api.get(`/orders/${id}`);
 export const validateCoupon = (code) => api.post('/orders/validate-coupon', { code });
+export const calculatePrice = (data) => api.post('/orders/calculate-price', data);
 export const createDraftOrder = (data) => api.post('/orders/draft', data);
 export const updateDraftOrder = (id, data) => api.put(`/orders/draft/${id}`, data);
 

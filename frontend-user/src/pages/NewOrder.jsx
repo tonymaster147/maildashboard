@@ -1,11 +1,36 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getOrderTypes, getSubjects, getEducationLevels, getPlans, validateCoupon, createPaymentSession, uploadFiles, createDraftOrder, updateDraftOrder } from '../services/api';
+import { getOrderTypes, getSubjects, getEducationLevels, validateCoupon, calculatePrice, createPaymentSession, uploadFiles, createDraftOrder, updateDraftOrder } from '../services/api';
 import { FiUpload, FiX, FiCheck, FiArrowRight, FiArrowLeft, FiTag } from 'react-icons/fi';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
-const STEPS = ['Service Details', 'Schedule', 'Plan Selection', 'Review & Pay'];
+const STEPS = ['Service Details', 'Schedule & Plan', 'Review & Checkout'];
+
+// Only show these 3 education levels in the order form
+const ALLOWED_LEVELS = ['High School', 'Undergraduate', 'Graduate'];
+
+// Determine what the quantity field means per service type
+const getQuantityConfig = (typeName) => {
+  if (!typeName) return { label: 'Pages', placeholder: 'Number of pages', needsDueDate: true };
+  const n = typeName.toLowerCase();
+  if (n.includes('online class')) return { label: null, placeholder: null, needsDueDate: true, weeksOnly: true };
+  if (n.includes('quiz')) return { label: 'Number of Quizzes', placeholder: 'How many quizzes?', needsDueDate: true };
+  if (n.includes('exam')) return { label: 'Number of Exams', placeholder: 'How many exams?', needsDueDate: true };
+  if (n.includes('test')) return { label: 'Number of Tests', placeholder: 'How many tests?', needsDueDate: true };
+  if (n.includes('discussion')) return { label: 'Number of Discussions', placeholder: 'How many discussions?', needsDueDate: true };
+  // Assignment, Essay/Paper, Project → pages
+  return { label: 'Pages', placeholder: 'Number of pages', needsDueDate: true };
+};
+
+// Which tiers to show for each service type
+const getTiersForType = (typeName) => {
+  if (!typeName) return ['essential', 'premium'];
+  const n = typeName.toLowerCase();
+  if (n.includes('online class')) return ['essential', 'priority', 'vip'];
+  if (n.includes('quiz') || n.includes('exam') || n.includes('test')) return ['essential'];
+  return ['essential', 'premium'];
+};
 
 export default function NewOrder() {
   const navigate = useNavigate();
@@ -20,27 +45,32 @@ export default function NewOrder() {
   const [orderTypes, setOrderTypes] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [educationLevels, setEducationLevels] = useState([]);
-  const [plans, setPlans] = useState([]);
   const [subjectSearch, setSubjectSearch] = useState('');
   const [showSubjectDropdown, setShowSubjectDropdown] = useState(false);
 
   // Form data
   const [formData, setFormData] = useState({
     order_type_id: '', course_name: '', subject_id: '', subject_name: '',
-    education_level_id: '', start_date: '', end_date: '', num_weeks: 0,
-    plan_id: '', additional_instructions: '', school_url: '', school_username: '',
-    school_password: '', urgent_fee: 0, coupon_code: ''
+    education_level_id: '', due_date: '', num_pages: '', work_type: '',
+    additional_instructions: '', school_url: '', school_username: '',
+    school_password: '', coupon_code: ''
   });
   const [files, setFiles] = useState([]);
+  const [file2, setFile2] = useState(null);
   const [couponValid, setCouponValid] = useState(null);
   const [couponDiscount, setCouponDiscount] = useState(0);
 
+  // Dynamic pricing state — fetch all available tiers so user can pick
+  const [tierPricing, setTierPricing] = useState({});  // { essential: {...}, premium: {...}, ... }
+  const [selectedPlan, setSelectedPlan] = useState('essential');
+  const [pricingLoading, setPricingLoading] = useState(false);
+
   useEffect(() => {
-    Promise.all([getOrderTypes(), getEducationLevels(), getPlans()])
-      .then(([types, levels, plansData]) => {
+    Promise.all([getOrderTypes(), getEducationLevels()])
+      .then(([types, levels]) => {
         setOrderTypes(types.data);
-        setEducationLevels(levels.data);
-        setPlans(plansData.data);
+        // Only keep 3 allowed levels
+        setEducationLevels(levels.data.filter(l => ALLOWED_LEVELS.includes(l.name)));
         setLoading(false);
       }).catch(() => setLoading(false));
   }, []);
@@ -58,6 +88,11 @@ export default function NewOrder() {
 
   const update = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Reset plan selection when service type changes
+    if (field === 'order_type_id') {
+      setSelectedPlan('essential');
+      setTierPricing({});
+    }
   };
 
   const handleFileChange = (e) => {
@@ -87,16 +122,66 @@ export default function NewOrder() {
     return new Date(dateStr + 'T00:00:00');
   };
 
-  const calcWeeks = () => {
-    if (formData.start_date && formData.end_date) {
-      const start = new Date(formData.start_date);
-      const end = new Date(formData.end_date);
-      const diff = Math.ceil((end - start) / (7 * 24 * 60 * 60 * 1000));
-      update('num_weeks', Math.max(diff, 0));
-    }
+  // Calculate weeks from today to due date
+  const calcWeeksFromDueDate = () => {
+    if (!formData.due_date) return 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(formData.due_date);
+    const diffMs = due - today;
+    if (diffMs <= 0) return 1; // minimum 1 week for same-day or past dates
+    return Math.max(Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000)), 1);
   };
 
-  useEffect(() => { calcWeeks(); }, [formData.start_date, formData.end_date]);
+  const fetchPrice = useCallback(async () => {
+    if (!formData.order_type_id) return;
+
+    const numWeeks = calcWeeksFromDueDate();
+    const numPages = formData.num_pages ? parseInt(formData.num_pages) : 0;
+
+    // Need at least a due date or pages
+    if (numWeeks <= 0 && numPages <= 0) {
+      setTierPricing({});
+      return;
+    }
+
+    setPricingLoading(true);
+    const tiers = getTiersForType(orderTypes.find(t => t.id === Number(formData.order_type_id))?.name);
+    const params = {
+      order_type_id: parseInt(formData.order_type_id),
+      education_level_id: formData.education_level_id ? parseInt(formData.education_level_id) : null,
+      num_weeks: numWeeks,
+      num_pages: numPages,
+      is_urgent: isUrgent,
+      coupon_code: couponValid ? formData.coupon_code : undefined
+    };
+
+    const results = await Promise.allSettled(
+      tiers.map(tier => calculatePrice({ ...params, plan_tier: tier }))
+    );
+
+    const newPricing = {};
+    tiers.forEach((tier, i) => {
+      if (results[i].status === 'fulfilled') {
+        newPricing[tier] = results[i].value.data;
+      }
+    });
+    setTierPricing(newPricing);
+
+    // Auto-select first available tier if current selection isn't available
+    if (!newPricing[selectedPlan] && Object.keys(newPricing).length > 0) {
+      setSelectedPlan(Object.keys(newPricing)[0]);
+    }
+
+    setPricingLoading(false);
+  }, [formData.order_type_id, formData.education_level_id, formData.due_date, formData.num_pages, isUrgent, couponValid, formData.coupon_code, orderTypes, selectedPlan]);
+
+  // Re-calculate price when on step 2 and inputs change
+  useEffect(() => {
+    if (currentStep === 1) {
+      fetchPrice();
+    }
+  }, [currentStep, fetchPrice]);
 
   const applyCoupon = async () => {
     if (!formData.coupon_code) return;
@@ -110,18 +195,25 @@ export default function NewOrder() {
     }
   };
 
-  const selectedPlan = plans.find(p => p.id === Number(formData.plan_id));
-  const basePrice = selectedPlan ? parseFloat(selectedPlan.price) : 0;
-  const urgentFee = isUrgent ? 75 : 0;
-  const discount = couponValid ? (basePrice * couponDiscount / 100) : 0;
-  const totalPrice = basePrice + urgentFee - discount;
+  // Computed values available to all steps
+  const selectedType = orderTypes.find(t => t.id === Number(formData.order_type_id));
+  const qtyConfig = getQuantityConfig(selectedType?.name);
+  const availableTiers = getTiersForType(selectedType?.name);
+
+  // Computed values from selected plan's pricing
+  const pricing = tierPricing[selectedPlan] || null;
+  const basePrice = pricing?.base_price || 0;
+  const urgentFee = pricing?.urgent_fee || 0;
+  const discount = pricing?.discount_amount || 0;
+  const totalPrice = pricing?.total_price || 0;
+  const rangeType = pricing?.range_type || 'weeks';
+  const hasTierPricing = Object.keys(tierPricing).length > 0;
 
   const canProceed = () => {
     switch (currentStep) {
       case 0: return formData.order_type_id && formData.course_name && formData.subject_id && formData.education_level_id;
-      case 1: return formData.start_date && formData.end_date;
-      case 2: return formData.plan_id;
-      case 3: return true;
+      case 1: return pricing && totalPrice > 0 && formData.due_date;
+      case 2: return pricing && totalPrice > 0;
       default: return false;
     }
   };
@@ -130,24 +222,31 @@ export default function NewOrder() {
     try {
       setSubmitting(true);
       setError('');
-      
-      const payload = { 
-        ...formData, 
-        urgent_fee: isUrgent ? 75 : 0,
-        source_url: window.location.origin
+
+      const payload = {
+        ...formData,
+        start_date: formatDate(new Date()),
+        end_date: formData.due_date,
+        num_weeks: calcWeeksFromDueDate(),
+        source_url: window.location.origin,
+        // Include pricing data when leaving the schedule step
+        ...(currentStep === 1 && pricing ? {
+          num_pages: formData.num_pages ? parseInt(formData.num_pages) : null,
+          price: basePrice,
+          total_price: totalPrice,
+          urgent_fee: urgentFee,
+          discount_amount: discount,
+          pricing_rule_id: pricing.pricing_rule_id
+        } : {})
       };
 
-      if (currentStep === 0) {
-        if (!draftOrderId) {
-          const res = await createDraftOrder(payload);
-          setDraftOrderId(res.data.order_id);
-        } else {
-          await updateDraftOrder(draftOrderId, payload);
-        }
+      if (!draftOrderId) {
+        const res = await createDraftOrder(payload);
+        setDraftOrderId(res.data.order_id);
       } else {
         await updateDraftOrder(draftOrderId, payload);
       }
-      
+
       setCurrentStep(prev => prev + 1);
       setSubmitting(false);
     } catch (err) {
@@ -164,36 +263,44 @@ export default function NewOrder() {
       let tempFileIds = [];
 
       // 1. Upload files first if any were selected
-      if (files.length > 0) {
+      const allFiles = [...files];
+      if (file2) allFiles.push(file2);
+
+      if (allFiles.length > 0) {
         const uploadFormData = new FormData();
-        files.forEach(f => uploadFormData.append('files', f));
-        
+        allFiles.forEach(f => uploadFormData.append('files', f));
+
         const uploadRes = await uploadFiles(uploadFormData);
         if (uploadRes.data && uploadRes.data.files) {
           tempFileIds = uploadRes.data.files.map(f => f.id);
         }
       }
 
-      // Update draft with files, final price, discount
+      // Update draft with final pricing data
       await updateDraftOrder(draftOrderId, {
         ...formData,
-        urgent_fee: isUrgent ? 75 : 0,
+        start_date: formatDate(new Date()),
+        end_date: formData.due_date,
+        num_weeks: calcWeeksFromDueDate(),
+        num_pages: formData.num_pages ? parseInt(formData.num_pages) : null,
+        urgent_fee: urgentFee,
         source_url: window.location.origin,
         price: basePrice,
         total_price: totalPrice,
         discount_amount: discount,
+        pricing_rule_id: pricing?.pricing_rule_id || null,
         temp_file_ids: tempFileIds
       });
 
-      // 2. Proceed to Stripe Checkout with order_id
+      // 2. Proceed to Stripe Checkout
       const res = await createPaymentSession({
         order_id: draftOrderId
       });
-      
+
       window.location.href = res.data.url;
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || 'Failed to process order or upload files');
+      setError(err.response?.data?.error || 'Failed to process order');
       setSubmitting(false);
     }
   };
@@ -283,78 +390,154 @@ export default function NewOrder() {
           </div>
         )}
 
-        {/* Step 2: Schedule */}
+        {/* Step 2: Schedule & Plan */}
         {currentStep === 1 && (
-          <div className="step-content card">
-            <h3 style={{ marginBottom: 24 }}>Schedule</h3>
-            <div className="grid-2">
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
-                <label className="form-label">Start Date *</label>
-                <DatePicker 
-                  selected={parseDate(formData.start_date)} 
-                  onChange={date => update('start_date', formatDate(date))} 
-                  className="form-input" 
-                  dateFormat="dd-MM-yyyy"
-                  placeholderText="DD-MM-YYYY"
-                  minDate={new Date()}
-                />
-              </div>
-              <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
-                <label className="form-label">End Date *</label>
-                <DatePicker 
-                  selected={parseDate(formData.end_date)} 
-                  onChange={date => update('end_date', formatDate(date))} 
-                  className="form-input" 
-                  dateFormat="dd-MM-yyyy"
-                  placeholderText="DD-MM-YYYY"
-                  minDate={parseDate(formData.start_date) || new Date()}
-                />
-              </div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Number of Weeks</label>
-              <input className="form-input" type="number" value={formData.num_weeks} readOnly style={{ background: 'var(--bg-card)', color: 'var(--accent)', fontWeight: 600, fontSize: 18 }} />
-              <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>Auto-calculated from dates</p>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Plan Selection */}
-        {currentStep === 2 && (
           <div className="step-content">
-            <div className="card" style={{ marginBottom: 24 }}>
-              <h3 style={{ marginBottom: 24 }}>Select Your Plan</h3>
-              <div className="plans-grid">
-                {plans.map(plan => {
-                  let features = [];
-                  try { features = typeof plan.features === 'string' ? JSON.parse(plan.features) : plan.features || []; } catch { features = []; }
-                  return (
-                    <div key={plan.id} className={`plan-card ${Number(formData.plan_id) === plan.id ? 'selected' : ''}`} onClick={() => update('plan_id', plan.id)}>
-                      <div className="plan-name">{plan.name}</div>
-                      <div className="plan-price">${parseFloat(plan.price).toFixed(2)}</div>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>{plan.description}</p>
-                      <ul className="plan-features">
-                        {features.map((f, i) => <li key={i}>{f}</li>)}
-                      </ul>
-                    </div>
-                  );
-                })}
+            {/* Due Date & Quantity */}
+            <div className="card" style={{ marginBottom: 20 }}>
+              <h3 style={{ marginBottom: 24 }}>Schedule & Pricing</h3>
+              <div className="grid-2">
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
+                  <label className="form-label">Due Date *</label>
+                  <DatePicker
+                    selected={parseDate(formData.due_date)}
+                    onChange={date => update('due_date', formatDate(date))}
+                    className="form-input"
+                    dateFormat="MM/dd/yy"
+                    placeholderText="MM/DD/YY"
+                    minDate={new Date()}
+                  />
+                </div>
+                {qtyConfig.label && (
+                  <div className="form-group">
+                    <label className="form-label">{qtyConfig.label} *</label>
+                    <input className="form-input" type="number" min="1" placeholder={qtyConfig.placeholder} value={formData.num_pages} onChange={e => update('num_pages', e.target.value)} />
+                  </div>
+                )}
               </div>
+              {qtyConfig.weeksOnly && formData.due_date && (
+                <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Duration: ~{calcWeeksFromDueDate()} week(s) from today</p>
+              )}
+
             </div>
 
-            <div className="card">
-              <h4 style={{ marginBottom: 16 }}>Extra Options</h4>
+            {/* Plan Selection Cards */}
+            {pricingLoading ? (
+              <div className="flex-center" style={{ padding: 30 }}><div className="loading-spinner" style={{ width: 28, height: 28 }}></div></div>
+            ) : hasTierPricing ? (
+              availableTiers.length > 1 ? (
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${availableTiers.length}, 1fr)`, gap: 16, marginBottom: 20 }}>
+                  {availableTiers.map(tier => {
+                    const tp = tierPricing[tier];
+                    if (!tp) return null;
+                    const isSelected = selectedPlan === tier;
+                    const tierLabels = {
+                      essential: { name: 'Essential Plan', desc: 'Perfect for getting started', features: ['Highly Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Limited Revisions'] },
+                      premium: { name: 'Premium Plan', desc: 'Most Popular Choice', recommended: true, features: ['Highly Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Unlimited Revisions', 'Proofread by an Expert Writer'] },
+                      priority: { name: 'Priority Plan', desc: 'Faster turnaround time', recommended: true, features: ['Highly Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Priority Matching', 'Faster Turnaround'] },
+                      vip: { name: 'VIP Plan', desc: 'Best-in-class experience', features: ['Top Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Priority Matching', 'Faster Turnaround', 'Dedicated Support Agent'] }
+                    };
+                    const label = tierLabels[tier] || { name: tier, desc: '', features: [] };
+                    return (
+                      <div
+                        key={tier}
+                        onClick={() => setSelectedPlan(tier)}
+                        style={{
+                          border: isSelected ? '2px solid var(--accent)' : '2px solid var(--border)',
+                          borderRadius: 12, padding: 24, cursor: 'pointer', position: 'relative',
+                          background: isSelected ? 'var(--bg-card-hover)' : 'var(--bg-card)',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        {label.recommended && (
+                          <div style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', background: 'var(--accent)', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 12px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            Recommended
+                          </div>
+                        )}
+                        {isSelected && (
+                          <div style={{ position: 'absolute', top: 12, right: 12, width: 22, height: 22, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <FiCheck size={14} color="#fff" />
+                          </div>
+                        )}
+                        <h4 style={{ marginBottom: 8, fontSize: 18 }}>{label.name}</h4>
+                        <p style={{ fontSize: 32, fontWeight: 800, color: 'var(--accent)', marginBottom: 4 }}>
+                          ${tp.base_price?.toFixed(2) || '—'}
+                        </p>
+                        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>{label.desc}</p>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {label.features.map(f => (
+                            <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                              <FiCheck size={14} color="var(--success)" /> {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null /* single-tier types (exam/quiz/test) skip plan cards */
+            ) : (formData.due_date || formData.num_pages) ? (
+              <div style={{ padding: 16, textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-input)', borderRadius: 8, marginBottom: 20 }}>
+                <p>No pricing available for this combination. Try adjusting the values.</p>
+              </div>
+            ) : null}
+
+            {/* Type - Assignment specific */}
+            {selectedType?.name === 'Assignment' && (
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Type *</label>
+                  <select className="form-select" value={formData.work_type} onChange={e => update('work_type', e.target.value)}>
+                    <option value="">-Select-</option>
+                    <option value="Written">Written</option>
+                    <option value="Technical">Technical</option>
+                    <option value="Both">Both</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Price Breakdown */}
+            {pricing && (
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                    {rangeType === 'flat' && pricing.flat_quantity > 1
+                      ? `${pricing.flat_quantity} x $${pricing.unit_price.toFixed(2)}`
+                      : `${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} Plan`}
+                    {rangeType === 'pages' && formData.num_pages ? ` (${formData.num_pages} pages)` : ''}
+                    {rangeType === 'weeks' ? ` (${calcWeeksFromDueDate()} weeks)` : ''}
+                  </span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>${basePrice.toFixed(2)}</span>
+                </div>
+                {urgentFee > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Urgent Fee</span>
+                    <span style={{ color: 'var(--warning)', fontWeight: 600 }}>+${urgentFee.toFixed(2)}</span>
+                  </div>
+                )}
+                {discount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Discount ({couponDiscount}%)</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 600 }}>-${discount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 16, fontWeight: 700 }}>Total</span>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent)' }}>${totalPrice.toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Options */}
+            <div className="card" style={{ marginBottom: 20 }}>
+              <h4 style={{ marginBottom: 16 }}>Options</h4>
               <div className="grid-2">
-                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label className="form-label" style={{ marginBottom: 0 }}>Are any of the items due before midnight today? (includes an extra fee of $75)</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={isUrgent} 
-                      onChange={e => setIsUrgent(e.target.checked)} 
-                      style={{ width: '18px', height: '18px', accentColor: 'var(--accent)' }}
-                    />
-                    Yes
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <label className="form-label" style={{ marginBottom: 0 }}>Are any of the items due before midnight today?</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14 }}>
+                    <input type="checkbox" checked={isUrgent} onChange={e => setIsUrgent(e.target.checked)} style={{ width: 18, height: 18, accentColor: 'var(--accent)' }} />
+                    Yes, add urgent fee
                   </label>
                 </div>
                 <div className="form-group">
@@ -367,47 +550,55 @@ export default function NewOrder() {
                   {couponValid === false && <p style={{ color: 'var(--error)', fontSize: 12, marginTop: 4 }}>✗ Invalid coupon code</p>}
                 </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Additional Instructions</label>
-                <textarea className="form-textarea" placeholder="Any special requirements or instructions..." value={formData.additional_instructions} onChange={e => update('additional_instructions', e.target.value)} />
-              </div>
             </div>
           </div>
         )}
 
-        {/* Step 4: Review & Pay */}
-        {currentStep === 3 && (
+        {/* Step 3: Review & Checkout */}
+        {currentStep === 2 && (
           <div className="step-content">
-            <div className="grid-2">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+              {/* Left column: Additional Info & Instructions */}
               <div className="card">
-                <h3 style={{ marginBottom: 20 }}>School Credentials</h3>
+                <h4 style={{ marginBottom: 16 }}>Additional Info & Instructions</h4>
                 <div className="form-group">
+                  <textarea className="form-textarea" placeholder="Any specific details about the Class, Instructions, or Login details that you want to convey us" value={formData.additional_instructions} onChange={e => update('additional_instructions', e.target.value)} rows={5} />
+                </div>
+                <div className="form-group" style={{ marginTop: 12 }}>
                   <label className="form-label">School Login URL</label>
                   <input className="form-input" placeholder="https://school.example.com" value={formData.school_url} onChange={e => update('school_url', e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Username</label>
+                  <label className="form-label">School Username</label>
                   <input className="form-input" placeholder="Your school username" value={formData.school_username} onChange={e => update('school_username', e.target.value)} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Password</label>
+                  <label className="form-label">School Password</label>
                   <input type="password" className="form-input" placeholder="Your school password" value={formData.school_password} onChange={e => update('school_password', e.target.value)} />
                 </div>
               </div>
 
+              {/* Right column: Order Summary */}
               <div className="order-summary">
                 <h3 style={{ marginBottom: 20 }}>Order Summary</h3>
-                <div className="summary-row"><span className="label">Service</span><span>{orderTypes.find(t => t.id === Number(formData.order_type_id))?.name}</span></div>
+                <div className="summary-row"><span className="label">Service</span><span>{selectedType?.name}</span></div>
                 <div className="summary-row"><span className="label">Course</span><span>{formData.course_name}</span></div>
                 <div className="summary-row"><span className="label">Subject</span><span>{formData.subject_name}</span></div>
                 <div className="summary-row"><span className="label">Level</span><span>{educationLevels.find(l => l.id === Number(formData.education_level_id))?.name}</span></div>
-                <div className="summary-row"><span className="label">Plan</span><span>{selectedPlan?.name}</span></div>
-                <div className="summary-row"><span className="label">Duration</span><span>{formData.num_weeks} weeks</span></div>
+                <div className="summary-row"><span className="label">Plan</span><span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{selectedPlan}</span></div>
+                {formData.work_type && <div className="summary-row"><span className="label">Type</span><span>{formData.work_type}</span></div>}
+                {formData.due_date && <div className="summary-row"><span className="label">Due Date</span><span>{new Date(formData.due_date + 'T00:00:00').toLocaleDateString()}</span></div>}
+                {formData.num_pages && qtyConfig.label && <div className="summary-row"><span className="label">{qtyConfig.label}</span><span>{formData.num_pages}</span></div>}
+                {qtyConfig.weeksOnly && formData.due_date && <div className="summary-row"><span className="label">Weeks</span><span>{calcWeeksFromDueDate()}</span></div>}
                 <div className="summary-row"><span className="label">Files</span><span>{files.length} file(s)</span></div>
-                <div className="summary-row"><span className="label">Plan Price</span><span>${basePrice.toFixed(2)}</span></div>
-                {urgentFee > 0 && <div className="summary-row"><span className="label">Urgent Fee</span><span style={{ color: 'var(--warning)' }}>+${urgentFee.toFixed(2)}</span></div>}
-                {discount > 0 && <div className="summary-row"><span className="label">Discount ({couponDiscount}%)</span><span style={{ color: 'var(--success)' }}>-${discount.toFixed(2)}</span></div>}
-                <div className="summary-row total"><span className="label">Total</span><span className="value">${totalPrice.toFixed(2)}</span></div>
+                {pricing && (
+                  <>
+                    <div className="summary-row"><span className="label">Base Price</span><span>${basePrice.toFixed(2)}</span></div>
+                    {urgentFee > 0 && <div className="summary-row"><span className="label">Urgent Fee</span><span style={{ color: 'var(--warning)' }}>+${urgentFee.toFixed(2)}</span></div>}
+                    {discount > 0 && <div className="summary-row"><span className="label">Discount ({couponDiscount}%)</span><span style={{ color: 'var(--success)' }}>-${discount.toFixed(2)}</span></div>}
+                    <div className="summary-row total"><span className="label">Total</span><span className="value">${totalPrice.toFixed(2)}</span></div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -416,15 +607,15 @@ export default function NewOrder() {
         {/* Navigation */}
         <div className="step-actions">
           <button className="btn btn-secondary" onClick={() => setCurrentStep(prev => prev - 1)} disabled={currentStep === 0}>
-            <FiArrowLeft size={16} /> Previous
+            <FiArrowLeft size={16} /> Back
           </button>
-          {currentStep < STEPS.length - 1 ? (
+          {currentStep < 2 ? (
             <button className="btn btn-primary" onClick={handleNext} disabled={!canProceed() || submitting}>
               {submitting ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }}></div> : <>Next <FiArrowRight size={16} /></>}
             </button>
           ) : (
-            <button className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? <div className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></div> : <><FiCheck size={18} /> Pay ${totalPrice.toFixed(2)}</>}
+            <button className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={!canProceed() || submitting}>
+              {submitting ? <div className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></div> : <><FiCheck size={18} /> Proceed to Checkout {totalPrice > 0 ? `$${totalPrice.toFixed(2)}` : ''}</>}
             </button>
           )}
         </div>

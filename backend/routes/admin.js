@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const adminController = require('../controllers/adminController');
+const pricingController = require('../controllers/pricingController');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateTutor } = require('../middleware/validate');
 
@@ -34,6 +35,13 @@ router.get('/settings', adminController.getSettings);
 router.put('/plans/:id', adminController.updatePlan);
 router.post('/coupons', adminController.createCoupon);
 router.delete('/coupons/:id', adminController.deleteCoupon);
+
+// Pricing rules
+router.get('/pricing-rules', pricingController.getPricingRules);
+router.post('/pricing-rules', pricingController.createPricingRule);
+router.put('/pricing-rules/:id', pricingController.updatePricingRule);
+router.delete('/pricing-rules/:id', pricingController.deletePricingRule);
+router.put('/urgent-fee', pricingController.updateUrgentFee);
 
 // Notifications
 router.get('/notifications', adminController.getNotifications);

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { useApi } from '../hooks/useApi';
-import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown } from 'react-icons/fi';
 
 const MENU_ITEMS = [
   { to: '/', key: 'dashboard', icon: FiGrid, label: 'Dashboard', end: true },
@@ -15,6 +15,18 @@ const MENU_ITEMS = [
   { to: '/settings', key: 'settings', icon: FiSettings, label: 'Settings' },
 ];
 
+const PRICING_SUBITEMS = [
+  { to: '/pricing/general', label: 'General Settings' },
+  { to: '/pricing/online-class', label: 'Online Class' },
+  { to: '/pricing/assignment', label: 'Assignment' },
+  { to: '/pricing/essay', label: 'Essay/Paper' },
+  { to: '/pricing/project', label: 'Project' },
+  { to: '/pricing/discussion', label: 'Discussion' },
+  { to: '/pricing/online-exam', label: 'Online Exam' },
+  { to: '/pricing/online-quiz', label: 'Online Quiz' },
+  { to: '/pricing/test', label: 'Test' },
+];
+
 export default function Layout() {
   const { logoutUser, isAdmin, isSalesUser, hasPermission, user, token } = useAuth();
   const { getUnreadCount } = useApi();
@@ -23,6 +35,7 @@ export default function Layout() {
   const [unreadOrders, setUnreadOrders] = useState(0);
   const [unreadChat, setUnreadChat] = useState(0);
   const [unreadFlagged, setUnreadFlagged] = useState(0);
+  const [pricingOpen, setPricingOpen] = useState(location.pathname.startsWith('/pricing'));
   const locationRef = useRef(location.pathname);
   useEffect(() => { locationRef.current = location.pathname; }, [location.pathname]);
 
@@ -123,6 +136,13 @@ export default function Layout() {
     }
   }, [location.pathname]);
 
+  // Auto-expand pricing menu when on a pricing route
+  useEffect(() => {
+    if (location.pathname.startsWith('/pricing')) {
+      setPricingOpen(true);
+    }
+  }, [location.pathname]);
+
   const visibleMenuItems = MENU_ITEMS.filter(item => hasPermission(item.key));
 
   const panelLabel = isSalesUser
@@ -158,6 +178,27 @@ export default function Layout() {
                 <NavLink to="/sales-team" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                   <FiUserPlus size={18} /> Sales Team
                 </NavLink>
+              )}
+              {item.key === 'reports' && hasPermission('settings') && (
+                <>
+                  <div
+                    className={`nav-link ${location.pathname.startsWith('/pricing') ? 'active' : ''}`}
+                    onClick={() => setPricingOpen(prev => !prev)}
+                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><FiDollarSign size={18} /> Pricing</span>
+                    <FiChevronDown size={14} style={{ transition: 'transform 0.2s', transform: pricingOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                  </div>
+                  {pricingOpen && (
+                    <div style={{ paddingLeft: 28 }}>
+                      {PRICING_SUBITEMS.map(sub => (
+                        <NavLink key={sub.to} to={sub.to} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`} style={{ fontSize: 13, padding: '6px 12px' }}>
+                          {sub.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </React.Fragment>
           ))}

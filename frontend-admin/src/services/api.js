@@ -66,6 +66,13 @@ export const getOrderFiles = (orderId) => api.get(`/files/order/${orderId}`);
 export const uploadFiles = (formData) => api.post('/files/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const deleteFile = (id) => api.delete(`/files/${id}`);
 
+// Pricing Rules
+export const getPricingRules = () => api.get('/admin/pricing-rules');
+export const createPricingRule = (data) => api.post('/admin/pricing-rules', data);
+export const updatePricingRule = (id, data) => api.put(`/admin/pricing-rules/${id}`, data);
+export const deletePricingRule = (id) => api.delete(`/admin/pricing-rules/${id}`);
+export const updateUrgentFee = (data) => api.put('/admin/urgent-fee', data);
+
 // Banned Words
 export const getBannedWords = () => api.get('/admin/banned-words');
 export const addBannedWord = (data) => api.post('/admin/banned-words', data);
@@ -105,6 +112,11 @@ export const salesApi = {
   deleteCoupon: (id) => api.delete(`/sales/coupons/${id}`),
   getNotifications: () => api.get('/sales/notifications'),
   markNotificationRead: (id) => api.put(`/sales/notifications/${id}/read`),
+  getPricingRules: () => api.get('/sales/pricing-rules'),
+  createPricingRule: (data) => api.post('/sales/pricing-rules', data),
+  updatePricingRule: (id, data) => api.put(`/sales/pricing-rules/${id}`, data),
+  deletePricingRule: (id) => api.delete(`/sales/pricing-rules/${id}`),
+  updateUrgentFee: (data) => api.put('/sales/urgent-fee', data),
   getBannedWords: () => api.get('/sales/banned-words'),
   addBannedWord: (data) => api.post('/sales/banned-words', data),
   deleteBannedWord: (id) => api.delete(`/sales/banned-words/${id}`),

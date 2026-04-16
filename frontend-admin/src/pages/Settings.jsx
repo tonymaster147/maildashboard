@@ -11,7 +11,7 @@ export default function Settings() {
   const [editingPlan, setEditingPlan] = useState(null);
   const [newPhrase, setNewPhrase] = useState('');
 
-  const fetchSettings = async () => { 
+  const fetchSettings = async () => {
     try {
       const [setRes, banRes] = await Promise.all([getSettings(), getBannedWords()]);
       setSettings(setRes.data);
@@ -67,7 +67,7 @@ export default function Settings() {
 
   return (
     <div>
-      <div className="page-header"><h2>Settings</h2><p>Manage plans, pricing, and coupons</p></div>
+      <div className="page-header"><h2>Settings</h2><p>Manage plans, coupons, and chat security</p></div>
 
       {/* Plans */}
       <div className="card mb-3">

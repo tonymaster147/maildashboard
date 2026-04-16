@@ -67,7 +67,7 @@ export default function OrderDetail() {
             <div className="summary-row"><span className="label"><FiBookOpen size={14} /> Type</span><span>{order.order_type_name}</span></div>
             <div className="summary-row"><span className="label">Subject</span><span>{order.subject_name}</span></div>
             <div className="summary-row"><span className="label">Level</span><span>{order.education_level_name}</span></div>
-            <div className="summary-row"><span className="label">Plan</span><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{order.plan_name}</span></div>
+            <div className="summary-row"><span className="label">Plan</span><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{order.plan_tier ? order.plan_tier.charAt(0).toUpperCase() + order.plan_tier.slice(1) : (order.plan_name || '—')}</span></div>
             <div className="summary-row"><span className="label"><FiCalendar size={14} /> Start</span><span>{new Date(order.start_date).toLocaleDateString()}</span></div>
             <div className="summary-row"><span className="label"><FiCalendar size={14} /> End</span><span>{new Date(order.end_date).toLocaleDateString()}</span></div>
             <div className="summary-row"><span className="label">Weeks</span><span>{order.num_weeks}</span></div>
