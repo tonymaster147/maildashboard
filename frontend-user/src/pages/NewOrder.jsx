@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getOrderTypes, getSubjects, getEducationLevels, validateCoupon, calculatePrice, createPaymentSession, uploadFiles, createDraftOrder, updateDraftOrder } from '../services/api';
-import { FiUpload, FiX, FiCheck, FiArrowRight, FiArrowLeft, FiTag } from 'react-icons/fi';
+import { FiUpload, FiX, FiCheck, FiArrowRight, FiArrowLeft, FiTag, FiPlus } from 'react-icons/fi';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -52,6 +52,7 @@ export default function NewOrder() {
   const [formData, setFormData] = useState({
     order_type_id: '', course_name: '', subject_id: '', subject_name: '',
     education_level_id: '', due_date: '', num_pages: '', work_type: '',
+    quiz_mode: '', class_type: '', class_start_date: '', partial_weeks: '',
     additional_instructions: '', school_url: '', school_username: '',
     school_password: '', coupon_code: ''
   });
@@ -59,6 +60,7 @@ export default function NewOrder() {
   const [file2, setFile2] = useState(null);
   const [couponValid, setCouponValid] = useState(null);
   const [couponDiscount, setCouponDiscount] = useState(0);
+  const [quizDetails, setQuizDetails] = useState([{ name: '', duration: '' }]);
 
   // Dynamic pricing state — fetch all available tiers so user can pick
   const [tierPricing, setTierPricing] = useState({});  // { essential: {...}, premium: {...}, ... }
@@ -77,13 +79,9 @@ export default function NewOrder() {
 
   const searchSubjects = useCallback(async (search) => {
     setSubjectSearch(search);
-    if (search.length >= 1) {
-      const res = await getSubjects(search);
-      setSubjects(res.data);
-      setShowSubjectDropdown(true);
-    } else {
-      setShowSubjectDropdown(false);
-    }
+    const res = await getSubjects(search);
+    setSubjects(res.data);
+    setShowSubjectDropdown(true);
   }, []);
 
   const update = (field, value) => {
@@ -122,21 +120,40 @@ export default function NewOrder() {
     return new Date(dateStr + 'T00:00:00');
   };
 
-  // Calculate weeks from today to due date
-  const calcWeeksFromDueDate = () => {
+  // Calculate weeks based on service type and class type
+  const getEffectiveWeeks = () => {
+    const typeName = orderTypes.find(t => t.id === Number(formData.order_type_id))?.name || '';
+    const isOnlineClass = typeName.toLowerCase().includes('online class');
+
+    if (isOnlineClass) {
+      if (formData.class_type === 'partial_class') {
+        return parseInt(formData.partial_weeks) || 0;
+      }
+      // Full class: calculate weeks from class start to end date
+      if (!formData.class_start_date || !formData.due_date) return 0;
+      const start = new Date(formData.class_start_date);
+      const end = new Date(formData.due_date);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      const diffMs = end - start;
+      if (diffMs <= 0) return 1;
+      return Math.max(Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000)), 1);
+    }
+
+    // Non-class types: weeks from today to due date
     if (!formData.due_date) return 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const due = new Date(formData.due_date);
     const diffMs = due - today;
-    if (diffMs <= 0) return 1; // minimum 1 week for same-day or past dates
+    if (diffMs <= 0) return 1;
     return Math.max(Math.ceil(diffMs / (7 * 24 * 60 * 60 * 1000)), 1);
   };
 
   const fetchPrice = useCallback(async () => {
     if (!formData.order_type_id) return;
 
-    const numWeeks = calcWeeksFromDueDate();
+    const numWeeks = getEffectiveWeeks();
     const numPages = formData.num_pages ? parseInt(formData.num_pages) : 0;
 
     // Need at least a due date or pages
@@ -174,7 +191,7 @@ export default function NewOrder() {
     }
 
     setPricingLoading(false);
-  }, [formData.order_type_id, formData.education_level_id, formData.due_date, formData.num_pages, isUrgent, couponValid, formData.coupon_code, orderTypes, selectedPlan]);
+  }, [formData.order_type_id, formData.education_level_id, formData.due_date, formData.num_pages, formData.class_type, formData.class_start_date, formData.partial_weeks, isUrgent, couponValid, formData.coupon_code, orderTypes, selectedPlan]);
 
   // Re-calculate price when on step 2 and inputs change
   useEffect(() => {
@@ -199,6 +216,8 @@ export default function NewOrder() {
   const selectedType = orderTypes.find(t => t.id === Number(formData.order_type_id));
   const qtyConfig = getQuantityConfig(selectedType?.name);
   const availableTiers = getTiersForType(selectedType?.name);
+  const isOnlineClass = selectedType?.name?.toLowerCase().includes('online class');
+  const isQuizExamTestType = (() => { const n = selectedType?.name?.toLowerCase() || ''; return n.includes('quiz') || n.includes('exam') || n.includes('test'); })();
 
   // Computed values from selected plan's pricing
   const pricing = tierPricing[selectedPlan] || null;
@@ -212,7 +231,13 @@ export default function NewOrder() {
   const canProceed = () => {
     switch (currentStep) {
       case 0: return formData.order_type_id && formData.course_name && formData.subject_id && formData.education_level_id;
-      case 1: return pricing && totalPrice > 0 && formData.due_date;
+      case 1: {
+        if (!pricing || totalPrice <= 0 || !formData.due_date) return false;
+        if (isQuizExamTestType && !formData.quiz_mode) return false;
+        if (isOnlineClass && (!formData.class_type || !formData.class_start_date)) return false;
+        if (isOnlineClass && formData.class_type === 'partial_class' && !formData.partial_weeks) return false;
+        return true;
+      }
       case 2: return pricing && totalPrice > 0;
       default: return false;
     }
@@ -223,11 +248,13 @@ export default function NewOrder() {
       setSubmitting(true);
       setError('');
 
+      const quizData = isQuizExamTestType ? { quiz_details: quizDetails.filter(q => q.name || q.duration) } : {};
       const payload = {
         ...formData,
-        start_date: formatDate(new Date()),
+        ...quizData,
+        start_date: isOnlineClass ? formData.class_start_date : formatDate(new Date()),
         end_date: formData.due_date,
-        num_weeks: calcWeeksFromDueDate(),
+        num_weeks: getEffectiveWeeks(),
         source_url: window.location.origin,
         // Include pricing data when leaving the schedule step
         ...(currentStep === 1 && pricing ? {
@@ -277,11 +304,13 @@ export default function NewOrder() {
       }
 
       // Update draft with final pricing data
+      const finalQuizData = isQuizExamTestType ? { quiz_details: quizDetails.filter(q => q.name || q.duration) } : {};
       await updateDraftOrder(draftOrderId, {
         ...formData,
-        start_date: formatDate(new Date()),
+        ...finalQuizData,
+        start_date: isOnlineClass ? formData.class_start_date : formatDate(new Date()),
         end_date: formData.due_date,
-        num_weeks: calcWeeksFromDueDate(),
+        num_weeks: getEffectiveWeeks(),
         num_pages: formData.num_pages ? parseInt(formData.num_pages) : null,
         urgent_fee: urgentFee,
         source_url: window.location.origin,
@@ -347,7 +376,7 @@ export default function NewOrder() {
             <div className="grid-2">
               <div className="form-group" style={{ position: 'relative' }}>
                 <label className="form-label">Subject *</label>
-                <input className="form-input" placeholder="Search subject..." value={subjectSearch || formData.subject_name} onChange={e => { searchSubjects(e.target.value); update('subject_name', ''); update('subject_id', ''); }} onFocus={() => subjectSearch && setShowSubjectDropdown(true)} />
+                <input className="form-input" placeholder="Search subject..." value={subjectSearch || formData.subject_name} onChange={e => { searchSubjects(e.target.value); update('subject_name', ''); update('subject_id', ''); }} onFocus={() => { if (subjects.length > 0) setShowSubjectDropdown(true); else searchSubjects(''); }} />
                 {showSubjectDropdown && subjects.length > 0 && (
                   <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', maxHeight: 200, overflowY: 'auto', zIndex: 50 }}>
                     {subjects.map(s => (
@@ -396,29 +425,90 @@ export default function NewOrder() {
             {/* Due Date & Quantity */}
             <div className="card" style={{ marginBottom: 20 }}>
               <h3 style={{ marginBottom: 24 }}>Schedule & Pricing</h3>
-              <div className="grid-2">
-                <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
-                  <label className="form-label">Due Date *</label>
-                  <DatePicker
-                    selected={parseDate(formData.due_date)}
-                    onChange={date => update('due_date', formatDate(date))}
-                    className="form-input"
-                    dateFormat="MM/dd/yy"
-                    placeholderText="MM/DD/YY"
-                    minDate={new Date()}
-                  />
-                </div>
-                {qtyConfig.label && (
-                  <div className="form-group">
-                    <label className="form-label">{qtyConfig.label} *</label>
-                    <input className="form-input" type="number" min="1" placeholder={qtyConfig.placeholder} value={formData.num_pages} onChange={e => update('num_pages', e.target.value)} />
-                  </div>
-                )}
-              </div>
-              {qtyConfig.weeksOnly && formData.due_date && (
-                <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Duration: ~{calcWeeksFromDueDate()} week(s) from today</p>
-              )}
 
+              {isOnlineClass ? (
+                <>
+                  {/* Class Type Selector */}
+                  <div className="form-group">
+                    <label className="form-label">Class Type *</label>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      {[{ value: 'full_class', label: 'Full Class' }, { value: 'partial_class', label: 'Partial Class' }].map(opt => (
+                        <label key={opt.value} onClick={() => { update('class_type', opt.value); if (!formData.class_start_date) update('class_start_date', formatDate(new Date())); }} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', border: formData.class_type === opt.value ? '2px solid var(--accent)' : '2px solid var(--border)', borderRadius: 8, cursor: 'pointer', background: formData.class_type === opt.value ? 'var(--bg-card-hover)' : 'transparent', transition: 'all 0.2s' }}>
+                          <div style={{ width: 18, height: 18, borderRadius: '50%', border: formData.class_type === opt.value ? '5px solid var(--accent)' : '2px solid var(--border)' }}></div>
+                          <span style={{ fontWeight: 500, fontSize: 14 }}>{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Date Fields */}
+                  <div className="grid-2">
+                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
+                      <label className="form-label">Start Date *</label>
+                      <DatePicker
+                        selected={parseDate(formData.class_start_date)}
+                        onChange={date => update('class_start_date', formatDate(date))}
+                        className="form-input"
+                        dateFormat="MM/dd/yy"
+                        placeholderText="MM/DD/YY"
+                      />
+                    </div>
+                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
+                      <label className="form-label">Last Day of Class *</label>
+                      <DatePicker
+                        selected={parseDate(formData.due_date)}
+                        onChange={date => update('due_date', formatDate(date))}
+                        className="form-input"
+                        dateFormat="MM/dd/yy"
+                        placeholderText="MM/DD/YY"
+                        minDate={parseDate(formData.class_start_date) || new Date()}
+                      />
+                    </div>
+                  </div>
+                  {/* Partial Class: Number of working weeks */}
+                  {formData.class_type === 'partial_class' && (
+                    <div className="form-group">
+                      <label className="form-label">Number of working weeks *</label>
+                      <input className="form-input" type="number" min="1" placeholder="Enter number of weeks" value={formData.partial_weeks} onChange={e => update('partial_weeks', e.target.value)} style={{ maxWidth: 300 }} />
+                    </div>
+                  )}
+                  {/* Full Class: show calculated weeks */}
+                  {formData.class_type === 'full_class' && formData.class_start_date && formData.due_date && (
+                    <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Duration: ~{getEffectiveWeeks()} week(s)</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="grid-2">
+                    <div className="form-group" style={{ display: 'flex', flexDirection: 'column' }}>
+                      <label className="form-label">Due Date *</label>
+                      <DatePicker
+                        selected={parseDate(formData.due_date)}
+                        onChange={date => update('due_date', formatDate(date))}
+                        className="form-input"
+                        dateFormat="MM/dd/yy"
+                        placeholderText="MM/DD/YY"
+                        minDate={new Date()}
+                      />
+                    </div>
+                    {qtyConfig.label && (
+                      <div className="form-group">
+                        <label className="form-label">{qtyConfig.label} *</label>
+                        <input className="form-input" type="number" min="1" placeholder={qtyConfig.placeholder} value={formData.num_pages} onChange={e => update('num_pages', e.target.value)} />
+                      </div>
+                    )}
+                  </div>
+                  {isQuizExamTestType && (
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">Mode *</label>
+                      <select className="form-select" value={formData.quiz_mode} onChange={e => update('quiz_mode', e.target.value)}>
+                        <option value="">-Select-</option>
+                        <option value="Online">Online</option>
+                        <option value="Proctored">Proctored</option>
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Plan Selection Cards */}
@@ -431,11 +521,13 @@ export default function NewOrder() {
                     const tp = tierPricing[tier];
                     if (!tp) return null;
                     const isSelected = selectedPlan === tier;
-                    const tierLabels = {
+                    const tierLabels = isOnlineClass ? {
+                      essential: { name: 'Essential Plan', desc: 'Perfect for getting started', features: ['Our Experts will work on the Class Items', '24X7 Support - Live Chat and Email', 'Highly rated writer', 'Plagiarism and AI Free Content', '1 Free Revision'] },
+                      priority: { name: 'Priority Plan', desc: 'Most Popular Choice', recommended: true, features: ['Our Experts will work on the Class Items', '24X7 Support - Live Chat, Email, Text and WhatsApp', 'Experienced Writer with 4.5* or above rating', 'Plagiarism and AI Free Content with Turnitin Reports', 'Unlimited Revisions', 'Unlimited Attempts on Quizzes/Test To Get Highest Grades', 'Direct Communication with Writer', 'Grade Guarantee of A and B'] },
+                      vip: { name: 'VIP Plan', desc: 'Premium Service with All Inclusions', features: ['Our Experts will work on the Class Items', '24X7 Support - Live Chat, Email, Text and WhatsApp', 'Experienced Writer with 4.5* or above rating', 'Plagiarism and AI Free Content with Turnitin Reports', 'Unlimited Revisions', 'Unlimited Attempts on Quizzes/Test To Get Highest Grades', 'Direct Communication with Writer', 'Dedicated Project manager', 'Multiple experts assigned to review the work', 'Grade Guarantee of A and B'] }
+                    } : {
                       essential: { name: 'Essential Plan', desc: 'Perfect for getting started', features: ['Highly Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Limited Revisions'] },
-                      premium: { name: 'Premium Plan', desc: 'Most Popular Choice', recommended: true, features: ['Highly Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Unlimited Revisions', 'Proofread by an Expert Writer'] },
-                      priority: { name: 'Priority Plan', desc: 'Faster turnaround time', recommended: true, features: ['Highly Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Priority Matching', 'Faster Turnaround'] },
-                      vip: { name: 'VIP Plan', desc: 'Best-in-class experience', features: ['Top Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Priority Matching', 'Faster Turnaround', 'Dedicated Support Agent'] }
+                      premium: { name: 'Premium Plan', desc: 'Most Popular Choice', recommended: true, features: ['Highly Rated Writer', 'Plag and AI free Content', '24X7 Support', 'Unlimited Revisions', 'Proofread by an Expert Writer'] }
                     };
                     const label = tierLabels[tier] || { name: tier, desc: '', features: [] };
                     return (
@@ -482,8 +574,8 @@ export default function NewOrder() {
               </div>
             ) : null}
 
-            {/* Type - Assignment specific */}
-            {selectedType?.name === 'Assignment' && (
+            {/* Type - Assignment & Project */}
+            {(selectedType?.name === 'Assignment' || selectedType?.name === 'Project') && (
               <div className="card" style={{ marginBottom: 20 }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Type *</label>
@@ -506,7 +598,7 @@ export default function NewOrder() {
                       ? `${pricing.flat_quantity} x $${pricing.unit_price.toFixed(2)}`
                       : `${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} Plan`}
                     {rangeType === 'pages' && formData.num_pages ? ` (${formData.num_pages} pages)` : ''}
-                    {rangeType === 'weeks' ? ` (${calcWeeksFromDueDate()} weeks)` : ''}
+                    {rangeType === 'weeks' ? ` (${getEffectiveWeeks()} weeks)` : ''}
                   </span>
                   <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>${basePrice.toFixed(2)}</span>
                 </div>
@@ -557,8 +649,45 @@ export default function NewOrder() {
         {/* Step 3: Review & Checkout */}
         {currentStep === 2 && (
           <div className="step-content">
+            {isQuizExamTestType && (
+              <div className="card" style={{ marginBottom: 20 }}>
+                <h4 style={{ marginBottom: 16 }}>{selectedType?.name?.replace('Online ', '') || 'Quiz'} Details</h4>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '8px 8px 8px 0', fontSize: 13, fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{selectedType?.name?.replace('Online ', '') || 'Quiz'} Name</th>
+                      <th style={{ textAlign: 'left', padding: '8px 8px 8px 0', fontSize: 13, fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{selectedType?.name?.replace('Online ', '') || 'Quiz'} Duration</th>
+                      <th style={{ width: 32, borderBottom: '1px solid var(--border)' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {quizDetails.map((q, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: '6px 8px 6px 0' }}>
+                          <input className="form-input" placeholder="e.g. Chapter 1 Quiz" value={q.name} onChange={e => { const arr = [...quizDetails]; arr[i] = { ...arr[i], name: e.target.value }; setQuizDetails(arr); }} />
+                        </td>
+                        <td style={{ padding: '6px 8px 6px 0' }}>
+                          <input className="form-input" placeholder="e.g. 30 mins" value={q.duration} onChange={e => { const arr = [...quizDetails]; arr[i] = { ...arr[i], duration: e.target.value }; setQuizDetails(arr); }} />
+                        </td>
+                        <td style={{ padding: '6px 0' }}>
+                          {quizDetails.length > 1 && (
+                            <button type="button" onClick={() => setQuizDetails(prev => prev.filter((_, idx) => idx !== i))} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', padding: 4, display: 'flex' }}>
+                              <FiX size={16} />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {quizDetails.length < 8 && (
+                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => setQuizDetails(prev => [...prev, { name: '', duration: '' }])} style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <FiPlus size={14} /> Add {selectedType?.name?.replace('Online ', '') || 'Quiz'}
+                  </button>
+                )}
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-              {/* Left column: Additional Info & Instructions */}
               <div className="card">
                 <h4 style={{ marginBottom: 16 }}>Additional Info & Instructions</h4>
                 <div className="form-group">
@@ -587,9 +716,12 @@ export default function NewOrder() {
                 <div className="summary-row"><span className="label">Level</span><span>{educationLevels.find(l => l.id === Number(formData.education_level_id))?.name}</span></div>
                 <div className="summary-row"><span className="label">Plan</span><span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{selectedPlan}</span></div>
                 {formData.work_type && <div className="summary-row"><span className="label">Type</span><span>{formData.work_type}</span></div>}
-                {formData.due_date && <div className="summary-row"><span className="label">Due Date</span><span>{new Date(formData.due_date + 'T00:00:00').toLocaleDateString()}</span></div>}
+                {formData.quiz_mode && <div className="summary-row"><span className="label">Mode</span><span>{formData.quiz_mode}</span></div>}
+                {isOnlineClass && formData.class_type && <div className="summary-row"><span className="label">Class Type</span><span>{formData.class_type === 'full_class' ? 'Full Class' : 'Partial Class'}</span></div>}
+                {isOnlineClass && formData.class_start_date && <div className="summary-row"><span className="label">Start Date</span><span>{new Date(formData.class_start_date + 'T00:00:00').toLocaleDateString()}</span></div>}
+                {formData.due_date && <div className="summary-row"><span className="label">{isOnlineClass ? 'Last Day of Class' : 'Due Date'}</span><span>{new Date(formData.due_date + 'T00:00:00').toLocaleDateString()}</span></div>}
                 {formData.num_pages && qtyConfig.label && <div className="summary-row"><span className="label">{qtyConfig.label}</span><span>{formData.num_pages}</span></div>}
-                {qtyConfig.weeksOnly && formData.due_date && <div className="summary-row"><span className="label">Weeks</span><span>{calcWeeksFromDueDate()}</span></div>}
+                {isOnlineClass && <div className="summary-row"><span className="label">Weeks</span><span>{getEffectiveWeeks()}</span></div>}
                 <div className="summary-row"><span className="label">Files</span><span>{files.length} file(s)</span></div>
                 {pricing && (
                   <>
