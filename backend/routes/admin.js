@@ -1,8 +1,10 @@
 const router = require('express').Router();
 const adminController = require('../controllers/adminController');
 const pricingController = require('../controllers/pricingController');
+const sitesController = require('../controllers/sitesController');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateTutor } = require('../middleware/validate');
+const { upload } = require('../middleware/upload');
 
 // All admin routes require admin role
 router.use(verifyToken, requireRole('admin'));
@@ -54,6 +56,15 @@ router.get('/reports', adminController.getReports);
 router.get('/banned-words', adminController.getBannedWords);
 router.post('/banned-words', adminController.addBannedWord);
 router.delete('/banned-words/:id', adminController.deleteBannedWord);
+
+// Sites (multi-WordPress branding)
+router.get('/sites', sitesController.listSites);
+router.get('/sites/:id', sitesController.getSite);
+router.post('/sites', sitesController.createSite);
+router.put('/sites/:id', sitesController.updateSite);
+router.delete('/sites/:id', sitesController.deleteSite);
+router.post('/sites/:id/test-email', sitesController.testEmail);
+router.post('/sites/upload-logo', upload.single('logo'), sitesController.uploadLogo);
 
 // Sales User management
 router.get('/sales-users', adminController.getAllSalesUsers);

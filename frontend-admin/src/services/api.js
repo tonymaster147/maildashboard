@@ -81,6 +81,15 @@ export const deleteBannedWord = (id) => api.delete(`/admin/banned-words/${id}`);
 // Reports
 export const getReports = (params) => api.get('/admin/reports', { params });
 
+// Sites (multi-WP branding)
+export const getSites = () => api.get('/admin/sites');
+export const getSite = (id) => api.get(`/admin/sites/${id}`);
+export const createSite = (data) => api.post('/admin/sites', data);
+export const updateSite = (id, data) => api.put(`/admin/sites/${id}`, data);
+export const deleteSite = (id) => api.delete(`/admin/sites/${id}`);
+export const sendSiteTestEmail = (id, data) => api.post(`/admin/sites/${id}/test-email`, data);
+export const uploadSiteLogo = (formData) => api.post('/admin/sites/upload-logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
 // Sales User management (admin)
 export const getAllSalesUsers = () => api.get('/admin/sales-users');
 export const createSalesUser = (data) => api.post('/admin/sales-users', data);

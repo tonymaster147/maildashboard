@@ -28,9 +28,9 @@ exports.signup = async (req, res) => {
       [username, hashedCode, email || null, 'user']
     );
 
-    // Send access code via email
+    // Send access code via email (branded to originating site)
     if (email) {
-      await sendAccessCode(email, username, rawAccessCode);
+      await sendAccessCode(email, username, rawAccessCode, req.site?.id);
     }
 
     res.status(201).json({
@@ -284,7 +284,7 @@ exports.forgotAccessCode = async (req, res) => {
     const hashedCode = await bcrypt.hash(newAccessCode, 10);
 
     await db.query('UPDATE users SET access_code = ? WHERE id = ?', [hashedCode, user.id]);
-    await sendForgotAccessCode(user.email, user.username, newAccessCode);
+    await sendForgotAccessCode(user.email, user.username, newAccessCode, req.site?.id);
 
     res.json({ message: 'If an account with that email exists, a new access code has been sent.' });
   } catch (error) {

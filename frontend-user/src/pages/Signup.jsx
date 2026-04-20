@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { signup } from '../services/api';
 import { FiUserPlus, FiCopy, FiCheck } from 'react-icons/fi';
+import { useSiteBranding } from '../context/SiteBrandingContext';
 
 export default function Signup() {
+  const brand = useSiteBranding();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -17,7 +19,7 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      const res = await signup({ username, email: email || undefined });
+      const res = await signup({ username, email });
       setResult(res.data);
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Signup failed');
@@ -64,9 +66,13 @@ export default function Signup() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="text-center mb-3">
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
+          {brand.logoUrl ? (
+            <img src={brand.logoUrl} alt={brand.name} style={{ maxHeight: 60, maxWidth: 200, objectFit: 'contain', marginBottom: 16 }} />
+          ) : (
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
+          )}
           <h1>Create Account</h1>
-          <p className="subtitle">Get started with EduPro</p>
+          <p className="subtitle">Get started with {brand.name}</p>
         </div>
 
         {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 16 }}>{error}</div>}
@@ -77,8 +83,8 @@ export default function Signup() {
             <input type="text" className="form-input" placeholder="Choose a username" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} />
           </div>
           <div className="form-group">
-            <label className="form-label">Email (Optional)</label>
-            <input type="email" className="form-input" placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} />
+            <label className="form-label">Email *</label>
+            <input type="email" className="form-input" placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Your access code will be sent to this email</p>
           </div>
           <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={loading}>

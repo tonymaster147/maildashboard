@@ -18,7 +18,8 @@ const io = new Server(server, {
     origin: [
       process.env.FRONTEND_USER_URL || 'http://localhost:5173',
       process.env.FRONTEND_ADMIN_URL || 'http://localhost:5174',
-      process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175'
+      process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175',
+      'http://localhost:5176'
     ],
     methods: ['GET', 'POST'],
     credentials: true
@@ -39,7 +40,8 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_USER_URL || 'http://localhost:5173',
     process.env.FRONTEND_ADMIN_URL || 'http://localhost:5174',
-    process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175'
+    process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175',
+    'http://localhost:5176'
   ],
   credentials: true
 }));
@@ -58,6 +60,7 @@ app.use('/api/', apiLimiter);
 app.use('/uploads', express.static('uploads'));
 
 // Routes
+app.use('/api/public', require('./routes/public'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/payments', require('./routes/payments'));

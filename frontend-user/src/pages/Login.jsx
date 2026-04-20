@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSiteBranding } from '../context/SiteBrandingContext';
 import { login } from '../services/api';
 import { FiLogIn, FiEye, FiEyeOff } from 'react-icons/fi';
 
 export default function Login() {
+  const brand = useSiteBranding();
   const [username, setUsername] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [showCode, setShowCode] = useState(false);
@@ -33,9 +35,13 @@ export default function Login() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="text-center mb-3">
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
+          {brand.logoUrl ? (
+            <img src={brand.logoUrl} alt={brand.name} style={{ maxHeight: 60, maxWidth: 200, objectFit: 'contain', marginBottom: 16 }} />
+          ) : (
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
+          )}
           <h1>Welcome Back</h1>
-          <p className="subtitle">Sign in to your EduPro account</p>
+          <p className="subtitle">Sign in to your {brand.name} account</p>
         </div>
 
         {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 16 }}>{error}</div>}

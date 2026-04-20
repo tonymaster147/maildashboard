@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { useApi } from '../hooks/useApi';
-import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown, FiGlobe } from 'react-icons/fi';
 
 const MENU_ITEMS = [
   { to: '/', key: 'dashboard', icon: FiGrid, label: 'Dashboard', end: true },
@@ -177,6 +177,11 @@ export default function Layout() {
               {item.key === 'tutors' && isAdmin && (
                 <NavLink to="/sales-team" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                   <FiUserPlus size={18} /> Sales Team
+                </NavLink>
+              )}
+              {item.key === 'settings' && isAdmin && (
+                <NavLink to="/sites" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                  <FiGlobe size={18} /> Sites
                 </NavLink>
               )}
               {item.key === 'reports' && hasPermission('settings') && (

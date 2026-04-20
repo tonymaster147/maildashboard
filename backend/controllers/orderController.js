@@ -295,11 +295,12 @@ exports.createDraftOrder = async (req, res) => {
     const userId = req.user.id;
     const { order_type_id, course_name, subject_id, education_level_id, source_url } = req.body;
 
+    const siteId = req.site?.id || null;
     const [result] = await db.query(
       `INSERT INTO orders
-       (user_id, order_type_id, course_name, subject_id, education_level_id, price, total_price, start_date, end_date, status, source_url)
-       VALUES (?, ?, ?, ?, ?, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?)`,
-      [userId, order_type_id, course_name, subject_id, education_level_id, source_url || null]
+       (user_id, order_type_id, course_name, subject_id, education_level_id, price, total_price, start_date, end_date, status, source_url, site_id)
+       VALUES (?, ?, ?, ?, ?, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?, ?)`,
+      [userId, order_type_id, course_name, subject_id, education_level_id, source_url || null, siteId]
     );
 
     // Fetch enriched data for email
@@ -317,7 +318,8 @@ exports.createDraftOrder = async (req, res) => {
       educationLevel: levelData[0]?.name,
       status: 'incomplete',
       sourceUrl: source_url,
-      paymentStatus: 'unpaid'
+      paymentStatus: 'unpaid',
+      siteId
     };
 
     // Send emails (non-blocking)

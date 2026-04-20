@@ -14,7 +14,7 @@ const handleValidation = (req, res, next) => {
 // Auth validation chains
 const validateSignup = [
   body('username').trim().isLength({ min: 3, max: 50 }).withMessage('Username must be 3-50 characters'),
-  body('email').optional().isEmail().withMessage('Invalid email format'),
+  body('email').trim().isEmail().withMessage('A valid email is required'),
   handleValidation
 ];
 

@@ -31,6 +31,9 @@ api.interceptors.response.use(
   }
 );
 
+// Public site branding (for login/signup page logo + name)
+export const getPublicSite = () => api.get('/public/site');
+
 // Auth
 export const signup = (data) => api.post('/auth/signup', data);
 export const login = (data) => api.post('/auth/login', data);

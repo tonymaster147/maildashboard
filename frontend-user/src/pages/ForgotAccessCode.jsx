@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { forgotAccessCode } from '../services/api';
+import { useSiteBranding } from '../context/SiteBrandingContext';
 import { FiMail, FiArrowLeft } from 'react-icons/fi';
 
 export default function ForgotAccessCode() {
+  const brand = useSiteBranding();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -29,9 +31,13 @@ export default function ForgotAccessCode() {
     <div className="auth-container">
       <div className="auth-card">
         <div className="text-center mb-3">
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🔑</div>
+          {brand.logoUrl ? (
+            <img src={brand.logoUrl} alt={brand.name} style={{ maxHeight: 60, maxWidth: 200, objectFit: 'contain', marginBottom: 16 }} />
+          ) : (
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🔑</div>
+          )}
           <h1>Forgot Access Code</h1>
-          <p className="subtitle">Enter your email to receive a new access code</p>
+          <p className="subtitle">Enter your {brand.name} email to receive a new access code</p>
         </div>
 
         {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 16 }}>{error}</div>}
