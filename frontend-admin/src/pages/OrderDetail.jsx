@@ -4,6 +4,63 @@ import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile } from '../servi
 import { useApi } from '../hooks/useApi';
 import { FiArrowLeft, FiUpload, FiTrash2, FiDownload, FiUserPlus, FiX } from 'react-icons/fi';
 
+function ServiceDetails({ order }) {
+  const type = (order.order_type_name || '').toLowerCase();
+  const rows = [];
+
+  if (type.includes('online class')) {
+    const classType = order.class_type
+      ? (order.class_type === 'full' ? 'Full Class' : 'Partial Class')
+      : null;
+    if (classType) rows.push(['Class Scope', classType]);
+    if (order.class_type === 'partial' && order.partial_weeks) {
+      rows.push(['Partial Weeks', order.partial_weeks]);
+    }
+  } else if (type.includes('quiz') || type.includes('exam') || type.includes('test')) {
+    if (order.num_pages) rows.push([`# of ${order.order_type_name}s`, order.num_pages]);
+    if (order.quiz_mode) {
+      rows.push(['Mode', order.quiz_mode.charAt(0).toUpperCase() + order.quiz_mode.slice(1)]);
+    }
+  } else if (type.includes('assignment') || type.includes('project')) {
+    if (order.num_pages) rows.push(['Pages', order.num_pages]);
+    if (order.work_type) {
+      rows.push(['Work Type', order.work_type.charAt(0).toUpperCase() + order.work_type.slice(1)]);
+    }
+  } else if (order.num_pages) {
+    rows.push(['Pages', order.num_pages]);
+  }
+
+  const hasQuizItems = Array.isArray(order.quiz_items) && order.quiz_items.length > 0;
+
+  if (rows.length === 0 && !hasQuizItems) return null;
+
+  return (
+    <div className="card mt-2">
+      <h4 style={{ marginBottom: 16 }}>Service Details</h4>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map(([l, v]) => (
+          <div key={l} className="summary-row"><span className="label">{l}</span><span>{v}</span></div>
+        ))}
+      </div>
+      {hasQuizItems && (
+        <div style={{ marginTop: rows.length ? 16 : 0 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+            {order.order_type_name || 'Item'} List
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {order.quiz_items.map((q, i) => (
+              <div key={q.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-input)', borderRadius: 8, fontSize: 13 }}>
+                <span><strong>{i + 1}.</strong> {q.name || <em style={{ color: 'var(--text-muted)' }}>(no name)</em>}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{q.duration || '—'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OrderDetail() {
   const { id } = useParams();
   const [order, setOrder] = useState(null);
@@ -88,7 +145,17 @@ export default function OrderDetail() {
         <div className="card">
           <h4 style={{ marginBottom: 16 }}>Order Info</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[['Source', order.source_url || 'Direct'], ['Type', order.order_type_name], ['Subject', order.subject_name], ['Level', order.education_level_name], ['Plan', order.plan_tier ? order.plan_tier.charAt(0).toUpperCase() + order.plan_tier.slice(1) : (order.plan_name || '—')], ['Start', new Date(order.start_date).toLocaleDateString()], ['End', new Date(order.end_date).toLocaleDateString()], ['Weeks', order.num_weeks]].map(([l, v]) => (
+            {[
+              ['Source', order.source_url || 'Direct'],
+              ['Type', order.order_type_name],
+              ['Course', order.course_name || '—'],
+              ['Subject', order.subject_name],
+              ['Level', order.education_level_name],
+              ['Plan', order.plan_tier ? order.plan_tier.charAt(0).toUpperCase() + order.plan_tier.slice(1) : (order.plan_name || '—')],
+              ['Start', new Date(order.start_date).toLocaleDateString()],
+              ['End', new Date(order.end_date).toLocaleDateString()],
+              ['Weeks', order.num_weeks]
+            ].map(([l, v]) => (
               <div key={l} className="summary-row"><span className="label">{l}</span><span>{v}</span></div>
             ))}
           </div>
@@ -117,6 +184,8 @@ export default function OrderDetail() {
           )}
         </div>
       </div>
+      <ServiceDetails order={order} />
+
       {order.additional_instructions && <div className="card mt-2"><h4 style={{ marginBottom: 8 }}>Instructions</h4><p style={{ color: 'var(--text-secondary)' }}>{order.additional_instructions}</p></div>}
 
       {/* Files section with upload */}

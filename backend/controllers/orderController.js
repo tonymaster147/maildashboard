@@ -245,6 +245,13 @@ exports.getOrderDetail = async (req, res) => {
     const [files] = await db.query('SELECT * FROM files WHERE order_id = ? ORDER BY created_at DESC', [id]);
     order.files = files;
 
+    // Get quiz/exam/test items
+    const [quizItems] = await db.query(
+      'SELECT id, name, duration, position FROM order_quiz_items WHERE order_id = ? ORDER BY position ASC, id ASC',
+      [id]
+    );
+    order.quiz_items = quizItems;
+
     // Remove sensitive info for tutor role
     if (role === 'tutor') {
       delete order.school_url;
@@ -355,7 +362,7 @@ exports.updateDraftOrder = async (req, res) => {
     const params = [];
     
     // Whitelist fields
-    const validFields = ['start_date', 'end_date', 'num_weeks', 'num_pages', 'plan_id', 'pricing_rule_id', 'urgent_fee', 'additional_instructions', 'school_url', 'school_username', 'school_password', 'source_url', 'price', 'total_price', 'coupon_id', 'discount_amount'];
+    const validFields = ['start_date', 'end_date', 'num_weeks', 'num_pages', 'plan_id', 'pricing_rule_id', 'urgent_fee', 'additional_instructions', 'school_url', 'school_username', 'school_password', 'source_url', 'price', 'total_price', 'coupon_id', 'discount_amount', 'class_type', 'partial_weeks', 'quiz_mode', 'work_type'];
 
     validFields.forEach(field => {
       if (updateData[field] !== undefined) {
@@ -368,14 +375,26 @@ exports.updateDraftOrder = async (req, res) => {
     if (params.length > 0) {
       // Remove last comma and space
       query = query.slice(0, -2);
-      
+
       query += ' WHERE id = ? AND user_id = ? AND status = "incomplete"';
       params.push(id, userId);
 
       const [result] = await db.query(query, params);
-      
+
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: 'Draft order not found or unauthorized' });
+      }
+    }
+
+    // Replace quiz items when provided (Quiz/Exam/Test orders)
+    if (Array.isArray(updateData.quiz_details)) {
+      await db.query('DELETE FROM order_quiz_items WHERE order_id = ?', [id]);
+      const items = updateData.quiz_details.filter(q => q && (q.name || q.duration));
+      for (let i = 0; i < items.length; i++) {
+        await db.query(
+          'INSERT INTO order_quiz_items (order_id, name, duration, position) VALUES (?, ?, ?, ?)',
+          [id, items[i].name || null, items[i].duration || null, i]
+        );
       }
     }
 

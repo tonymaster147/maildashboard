@@ -97,7 +97,7 @@ export default function Orders() {
                   <td>{o.username}</td>
                   <td style={{ fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.course_name}</td>
                   <td>{o.order_type_name}</td>
-                  <td>{o.plan_name || '—'}</td>
+                  <td>{o.plan_tier ? o.plan_tier.charAt(0).toUpperCase() + o.plan_tier.slice(1) : (o.plan_name || '—')}</td>
                   <td style={{ color: 'var(--accent)', fontWeight: 600 }}>${parseFloat(o.total_price).toFixed(2)}</td>
                   <td style={{ fontSize: 13 }}>{o.tutor_names || <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}</td>
                   <td>

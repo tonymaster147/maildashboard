@@ -161,13 +161,15 @@ exports.getAllOrders = async (req, res) => {
     const offset = (page - 1) * limit;
     let query = `
       SELECT o.*, u.username, ot.name as order_type_name, s.name as subject_name,
-        p.name as plan_name, GROUP_CONCAT(DISTINCT t.name) as tutor_names,
+        p.name as plan_name, pr.plan_tier,
+        GROUP_CONCAT(DISTINCT t.name) as tutor_names,
         GROUP_CONCAT(DISTINCT t.id) as tutor_ids
       FROM orders o
       JOIN users u ON o.user_id = u.id
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
       LEFT JOIN plans p ON o.plan_id = p.id
+      LEFT JOIN pricing_rules pr ON o.pricing_rule_id = pr.id
       LEFT JOIN order_tutors otr ON o.id = otr.order_id
       LEFT JOIN tutors t ON otr.tutor_id = t.id
       WHERE 1=1
