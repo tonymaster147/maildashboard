@@ -19,7 +19,9 @@ const io = new Server(server, {
       process.env.FRONTEND_USER_URL || 'http://localhost:5173',
       process.env.FRONTEND_ADMIN_URL || 'http://localhost:5174',
       process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175',
-      'http://localhost:5176'
+      'http://localhost:5176',
+      'https://make-tutors.com',
+      'https://www.make-tutors.com'
     ],
     methods: ['GET', 'POST'],
     credentials: true
@@ -41,7 +43,9 @@ app.use(cors({
     process.env.FRONTEND_USER_URL || 'http://localhost:5173',
     process.env.FRONTEND_ADMIN_URL || 'http://localhost:5174',
     process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175',
-    'http://localhost:5176'
+    'http://localhost:5176',
+    'https://make-tutors.com',
+    'https://www.make-tutors.com'
   ],
   credentials: true
 }));
