@@ -1,0 +1,78 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: tutoring_platform
+      MYSQL_USER: dashboard
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - dashboard
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    env_file: ./backend/.env
+    depends_on:
+      - mysql
+    networks:
+      - dashboard
+      - n8n_default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=n8n_default
+      - traefik.http.routers.dashboard-api.rule=Host(`thetranslations.cc`) && PathPrefix(`/api`)
+      - traefik.http.routers.dashboard-api.entrypoints=websecure
+      - traefik.http.routers.dashboard-api.tls=true
+      - traefik.http.routers.dashboard-api.tls.certresolver=mytlschallenge
+      - traefik.http.middlewares.dashboard-api-strip.stripprefix.prefixes=/api
+      - traefik.http.routers.dashboard-api.middlewares=dashboard-api-strip
+      - traefik.http.services.dashboard-api.loadbalancer.server.port=5000
+
+  admin:
+    image: nginx:alpine
+    restart: always
+    volumes:
+      - ./frontend-admin/dist:/usr/share/nginx/html/admin:ro
+      - ./nginx/admin.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - n8n_default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=n8n_default
+      - traefik.http.routers.dashboard-admin.rule=Host(`thetranslations.cc`) && PathPrefix(`/admin`)
+      - traefik.http.routers.dashboard-admin.entrypoints=websecure
+      - traefik.http.routers.dashboard-admin.tls=true
+      - traefik.http.routers.dashboard-admin.tls.certresolver=mytlschallenge
+      - traefik.http.services.dashboard-admin.loadbalancer.server.port=80
+
+  tutor:
+    image: nginx:alpine
+    restart: always
+    volumes:
+      - ./frontend-tutor/dist:/usr/share/nginx/html/tutor:ro
+      - ./nginx/tutor.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - n8n_default
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=n8n_default
+      - traefik.http.routers.dashboard-tutor.rule=Host(`thetranslations.cc`) && PathPrefix(`/tutor`)
+      - traefik.http.routers.dashboard-tutor.entrypoints=websecure
+      - traefik.http.routers.dashboard-tutor.tls=true
+      - traefik.http.routers.dashboard-tutor.tls.certresolver=mytlschallenge
+      - traefik.http.services.dashboard-tutor.loadbalancer.server.port=80
+
+networks:
+  dashboard:
+    driver: bridge
+  n8n_default:
+    external: true
+
+volumes:
+  mysql_data:
