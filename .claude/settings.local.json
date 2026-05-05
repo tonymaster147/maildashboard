@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Test-NetConnection -ComputerName s16.wpxhosting.com -Port 465 -InformationLevel Quiet; Test-NetConnection -ComputerName s16.wpxhosting.com -Port 587 -InformationLevel Quiet; Test-NetConnection -ComputerName s16.wpxhosting.com -Port 25 -InformationLevel Quiet\")",
+      "Bash(powershell -Command \"Test-NetConnection -ComputerName smtp.gmail.com -Port 465 -InformationLevel Quiet; Test-NetConnection -ComputerName smtp.gmail.com -Port 587 -InformationLevel Quiet\")",
+      "Bash(git push *)",
+      "Read(//c/xampp/**)",
+      "Bash(taskkill //PID 18044 //F)",
+      "Bash(\"/c/xampp/mysql/bin/mysql.exe\" -u root tutoring_platform -e \"SELECT id, order_type_id, course_name, num_pages, class_type, partial_weeks, quiz_mode, work_type FROM orders WHERE id = 61\")",
+      "Bash(\"/c/xampp/mysql/bin/mysql.exe\" -u root tutoring_platform -e \"UPDATE orders SET class_type='partial', partial_weeks=1 WHERE id=61; SELECT id, class_type, partial_weeks FROM orders WHERE id=61\")",
+      "Bash(\"/c/xampp/mysql/bin/mysql.exe\" -u root tutoring_platform -e \"SELECT o.id, o.plan_id, p.name as plan_name, o.pricing_rule_id, pr.plan_tier FROM orders o LEFT JOIN plans p ON o.plan_id=p.id LEFT JOIN pricing_rules pr ON o.pricing_rule_id=pr.id WHERE o.id IN \\(60,61,62,63,64,65,66\\) ORDER BY o.id\")",
+      "Bash(taskkill //PID 6224 //F)"
+    ]
+  }
+}
