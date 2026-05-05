@@ -32,10 +32,18 @@ services:
       - traefik.http.routers.dashboard-api.entrypoints=websecure
       - traefik.http.routers.dashboard-api.tls=true
       - traefik.http.routers.dashboard-api.tls.certresolver=mytlschallenge
-      - traefik.http.routers.dashboard-api.middlewares=
-      - traefik.http.services.dashboard-api.loadbalancer.server.port=5000
-      - traefik.http.services.dashboard-api.loadbalancer.server.scheme=http
-      - traefik.http.middlewares.dashboard-ws.headers.customrequestheaders.X-Forwarded-Proto=https
+      - traefik.http.routers.dashboard-api.service=dashboard-backend
+      - traefik.http.routers.dashboard-uploads.rule=Host(`thetranslations.cc`) && PathPrefix(`/uploads`)
+      - traefik.http.routers.dashboard-uploads.entrypoints=websecure
+      - traefik.http.routers.dashboard-uploads.tls=true
+      - traefik.http.routers.dashboard-uploads.tls.certresolver=mytlschallenge
+      - traefik.http.routers.dashboard-uploads.service=dashboard-backend
+      - traefik.http.routers.dashboard-ws.rule=Host(`thetranslations.cc`) && PathPrefix(`/socket.io`)
+      - traefik.http.routers.dashboard-ws.entrypoints=websecure
+      - traefik.http.routers.dashboard-ws.tls=true
+      - traefik.http.routers.dashboard-ws.tls.certresolver=mytlschallenge
+      - traefik.http.routers.dashboard-ws.service=dashboard-backend
+      - traefik.http.services.dashboard-backend.loadbalancer.server.port=5000
 
   admin:
     image: nginx:alpine
