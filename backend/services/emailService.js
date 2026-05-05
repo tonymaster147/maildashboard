@@ -58,7 +58,7 @@ async function getSiteContext(siteId) {
     return {
       transporter: tx,
       from: from || MASTER_FROM,
-      brand: { name: s.name, logoUrl: s.logo_url }
+      brand: { name: s.name, logoUrl: s.logo_url ? `https://thetranslations.cc${s.logo_url}` : null }
     };
   } catch (e) {
     console.error('getSiteContext error:', e.message);
