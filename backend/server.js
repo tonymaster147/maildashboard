@@ -34,6 +34,9 @@ setupSocket(io);
 // Make io accessible to routes
 app.set('io', io);
 
+// Trust Traefik reverse proxy
+app.set('trust proxy', 1);
+
 // Security
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
