@@ -257,7 +257,7 @@ export default function NewOrder() {
         start_date: isOnlineClass ? formData.class_start_date : formatDate(new Date()),
         end_date: formData.due_date,
         num_weeks: getEffectiveWeeks(),
-        source_url: window.location.origin,
+        source_url: window.location.origin + (import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '')),
         // Include pricing data when leaving the schedule step
         ...(currentStep === 1 && pricing ? {
           num_pages: formData.num_pages ? parseInt(formData.num_pages) : null,
@@ -315,7 +315,7 @@ export default function NewOrder() {
         num_weeks: getEffectiveWeeks(),
         num_pages: formData.num_pages ? parseInt(formData.num_pages) : null,
         urgent_fee: urgentFee,
-        source_url: window.location.origin,
+        source_url: window.location.origin + (import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '')),
         price: basePrice,
         total_price: totalPrice,
         discount_amount: discount,
