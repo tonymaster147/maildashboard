@@ -260,6 +260,18 @@ exports.handleWebhook = async (req, res) => {
     }
   }
 
+  if (event.type === 'payment_intent.succeeded') {
+    const intent = event.data.object;
+    if (intent.metadata && intent.metadata.order_id) {
+      try {
+        const io = req.app.get('io');
+        await fulfillOrder({ id: intent.id, payment_intent: intent.id, metadata: intent.metadata }, io);
+      } catch (error) {
+        console.error('PaymentIntent fulfillment failed:', error);
+      }
+    }
+  }
+
   res.json({ received: true });
 };
 
@@ -287,7 +299,147 @@ exports.getPaymentHistory = async (req, res) => {
 };
 
 /**
- * User pays remaining balance on a partial-paid order
+ * Create PaymentIntent for embedded checkout (Stripe Elements)
+ */
+exports.createPaymentIntent = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { order_id, payment_type } = req.body;
+
+    const [orders] = await db.query('SELECT * FROM orders WHERE id = ? AND user_id = ? AND status = "incomplete"', [order_id, userId]);
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found or not in draft state' });
+
+    const order_data = orders[0];
+    let price = parseFloat(order_data.price || 0);
+    const urgentFee = parseFloat(order_data.urgent_fee || 0);
+    const discountAmount = parseFloat(order_data.discount_amount || 0);
+
+    if (price === 0 && order_data.plan_id) {
+      const [plans] = await db.query('SELECT price FROM plans WHERE id = ?', [order_data.plan_id]);
+      if (plans.length > 0) price = parseFloat(plans[0].price);
+    }
+
+    const fullTotal = price + urgentFee - discountAmount;
+
+    let isPartial = false;
+    if (payment_type === 'partial') {
+      const [orderType] = await db.query('SELECT name FROM order_types WHERE id = ?', [order_data.order_type_id]);
+      const orderTypeName = orderType.length > 0 ? orderType[0].name : '';
+      if (isPartialEligible(order_data, orderTypeName) && fullTotal > PARTIAL_PAYMENT_AMOUNT) {
+        isPartial = true;
+      }
+    }
+
+    const chargeAmount = isPartial ? PARTIAL_PAYMENT_AMOUNT : fullTotal;
+    const amountCents = Math.round(chargeAmount * 100);
+
+    if (amountCents <= 0) return res.status(400).json({ error: 'Invalid order total' });
+
+    const intent = await stripe.paymentIntents.create({
+      amount: amountCents,
+      currency: 'usd',
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        user_id: userId.toString(),
+        order_id: order_id.toString(),
+        payment_type: isPartial ? 'partial' : 'full',
+        full_total: fullTotal.toFixed(2),
+        charge_amount: chargeAmount.toFixed(2)
+      }
+    });
+
+    await db.query(
+      'INSERT INTO payments (order_id, user_id, stripe_session_id, amount, status) VALUES (?, ?, ?, ?, ?)',
+      [order_id, userId, intent.id, chargeAmount, 'pending']
+    );
+
+    res.json({
+      client_secret: intent.client_secret,
+      amount: chargeAmount,
+      full_total: fullTotal,
+      is_partial: isPartial
+    });
+  } catch (error) {
+    console.error('PaymentIntent error:', error);
+    res.status(500).json({ error: 'Payment setup failed' });
+  }
+};
+
+/**
+ * Create PaymentIntent for remaining balance (embedded)
+ */
+exports.createRemainingPaymentIntent = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { order_id } = req.body;
+
+    const [orders] = await db.query(
+      'SELECT * FROM orders WHERE id = ? AND user_id = ? AND payment_type = "partial" AND amount_remaining > 0',
+      [order_id, userId]
+    );
+    if (orders.length === 0) return res.status(404).json({ error: 'No outstanding balance' });
+
+    const order = orders[0];
+    const remaining = parseFloat(order.amount_remaining);
+    const amountCents = Math.round(remaining * 100);
+
+    const intent = await stripe.paymentIntents.create({
+      amount: amountCents,
+      currency: 'usd',
+      automatic_payment_methods: { enabled: true },
+      metadata: {
+        user_id: userId.toString(),
+        order_id: order_id.toString(),
+        payment_type: 'remaining',
+        remaining_payment: 'true',
+        charge_amount: remaining.toFixed(2),
+        full_total: order.total_price.toString()
+      }
+    });
+
+    await db.query(
+      'INSERT INTO payments (order_id, user_id, stripe_session_id, amount, status) VALUES (?, ?, ?, ?, ?)',
+      [order_id, userId, intent.id, remaining, 'pending']
+    );
+
+    res.json({ client_secret: intent.client_secret, amount: remaining });
+  } catch (error) {
+    console.error('Remaining PaymentIntent error:', error);
+    res.status(500).json({ error: 'Payment setup failed' });
+  }
+};
+
+/**
+ * Fulfill order from a PaymentIntent (after client-side confirmation)
+ * Mirrors fulfillOrder logic but takes a PaymentIntent shape
+ */
+exports.fulfillPaymentIntent = async (req, res) => {
+  try {
+    const { payment_intent_id } = req.body;
+    const intent = await stripe.paymentIntents.retrieve(payment_intent_id);
+
+    if (intent.status !== 'succeeded') {
+      return res.status(400).json({ error: 'Payment not succeeded yet' });
+    }
+
+    // Build a session-like shape for fulfillOrder
+    const sessionLike = {
+      id: intent.id,
+      payment_intent: intent.id,
+      metadata: intent.metadata
+    };
+
+    const io = req.app.get('io');
+    const orderId = await fulfillOrder(sessionLike, io);
+    res.json({ success: true, order_id: orderId });
+  } catch (error) {
+    console.error('Fulfill PaymentIntent error:', error);
+    res.status(500).json({ error: 'Fulfillment failed' });
+  }
+};
+
+/**
+ * User pays remaining balance on a partial-paid order (legacy hosted checkout)
  */
 exports.payRemainingBalance = async (req, res) => {
   try {

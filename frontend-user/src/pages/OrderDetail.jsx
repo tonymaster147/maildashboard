@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, uploadFiles, createPaymentSession, payRemainingBalance } from '../services/api';
+import { getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent } from '../services/api';
+import EmbeddedCheckout from '../components/EmbeddedCheckout';
 import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones } from 'react-icons/fi';
 
 export default function OrderDetail() {
@@ -9,6 +10,7 @@ export default function OrderDetail() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [checkout, setCheckout] = useState(null);
 
   const fetchOrder = () => {
     getOrderDetail(id).then(res => { setOrder(res.data); setLoading(false); }).catch(() => setLoading(false));
@@ -38,15 +40,41 @@ export default function OrderDetail() {
   const handleCompletePayment = async () => {
     setPaymentLoading(true);
     try {
-      const res = await createPaymentSession({ order_id: order.id });
-      window.location.href = res.data.url;
+      const res = await createPaymentIntent({ order_id: order.id, payment_type: 'full' });
+      setCheckout({ clientSecret: res.data.client_secret, amount: res.data.amount, isPartial: false, fullTotal: res.data.full_total });
     } catch (err) {
-      alert(err.response?.data?.error || 'Payment session failed');
-      setPaymentLoading(false);
+      alert(err.response?.data?.error || 'Payment setup failed');
     }
+    setPaymentLoading(false);
+  };
+
+  const handlePayRemaining = async () => {
+    setPaymentLoading(true);
+    try {
+      const res = await createRemainingPaymentIntent({ order_id: order.id });
+      setCheckout({ clientSecret: res.data.client_secret, amount: res.data.amount, isPartial: false, fullTotal: res.data.amount });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Payment setup failed');
+    }
+    setPaymentLoading(false);
   };
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
+
+  if (checkout) {
+    return (
+      <div style={{ padding: '40px 20px' }}>
+        <EmbeddedCheckout
+          clientSecret={checkout.clientSecret}
+          amount={checkout.amount}
+          isPartial={checkout.isPartial}
+          fullTotal={checkout.fullTotal}
+          onSuccess={() => { setCheckout(null); fetchOrder(); }}
+          onCancel={() => setCheckout(null)}
+        />
+      </div>
+    );
+  }
   if (!order) return <div className="card text-center"><h3>Order not found</h3></div>;
 
   return (
@@ -94,16 +122,7 @@ export default function OrderDetail() {
             </button>
           )}
           {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && order.status !== 'incomplete' && (
-            <button className="btn btn-primary mt-2" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 20px', fontSize: 15, background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={async () => {
-              setPaymentLoading(true);
-              try {
-                const res = await payRemainingBalance({ order_id: order.id });
-                window.location.href = res.data.url;
-              } catch (err) {
-                alert(err.response?.data?.error || 'Failed to start payment');
-                setPaymentLoading(false);
-              }
-            }} disabled={paymentLoading}>
+            <button className="btn btn-primary mt-2" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 20px', fontSize: 15, background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={handlePayRemaining} disabled={paymentLoading}>
               {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : <><FiCreditCard size={18} /> Pay Remaining ${parseFloat(order.amount_remaining).toFixed(2)}</>}
             </button>
           )}

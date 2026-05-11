@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getOrderTypes, getSubjects, getEducationLevels, validateCoupon, calculatePrice, createPaymentSession, uploadFiles, createDraftOrder, updateDraftOrder } from '../services/api';
+import { getOrderTypes, getSubjects, getEducationLevels, validateCoupon, calculatePrice, createPaymentIntent, uploadFiles, createDraftOrder, updateDraftOrder } from '../services/api';
+import EmbeddedCheckout from '../components/EmbeddedCheckout';
 import { FiUpload, FiX, FiCheck, FiArrowRight, FiArrowLeft, FiTag, FiPlus } from 'react-icons/fi';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -41,6 +42,7 @@ export default function NewOrder() {
   const [draftOrderId, setDraftOrderId] = useState(null);
   const [isUrgent, setIsUrgent] = useState(false);
   const [paymentType, setPaymentType] = useState('full');
+  const [checkout, setCheckout] = useState(null); // { clientSecret, amount, isPartial, fullTotal }
   const PARTIAL_AMOUNT = 150;
 
   // Lookup data
@@ -323,13 +325,19 @@ export default function NewOrder() {
         temp_file_ids: tempFileIds
       });
 
-      // 2. Proceed to Stripe Checkout
-      const res = await createPaymentSession({
+      // 2. Create PaymentIntent and switch to embedded checkout
+      const res = await createPaymentIntent({
         order_id: draftOrderId,
         payment_type: paymentType
       });
 
-      window.location.href = res.data.url;
+      setCheckout({
+        clientSecret: res.data.client_secret,
+        amount: res.data.amount,
+        isPartial: res.data.is_partial,
+        fullTotal: res.data.full_total
+      });
+      setSubmitting(false);
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.error || 'Failed to process order');
@@ -337,7 +345,26 @@ export default function NewOrder() {
     }
   };
 
+  const handlePaymentSuccess = (data) => {
+    navigate('/payment/success?order_id=' + (data?.order_id || draftOrderId));
+  };
+
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
+
+  if (checkout) {
+    return (
+      <div style={{ padding: '40px 20px' }}>
+        <EmbeddedCheckout
+          clientSecret={checkout.clientSecret}
+          amount={checkout.amount}
+          isPartial={checkout.isPartial}
+          fullTotal={checkout.fullTotal}
+          onSuccess={handlePaymentSuccess}
+          onCancel={() => setCheckout(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
