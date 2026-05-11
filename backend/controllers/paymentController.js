@@ -6,10 +6,39 @@ require('dotenv').config();
 /**
  * Create Stripe Checkout session
  */
+const PARTIAL_PAYMENT_AMOUNT = 150;
+
+function isPartialEligible(order, orderTypeName) {
+  if (!orderTypeName || !orderTypeName.toLowerCase().includes('online class')) return false;
+  if (!order.start_date || !order.end_date) return false;
+  const start = new Date(order.start_date);
+  const end = new Date(order.end_date);
+  const days = (end - start) / (1000 * 60 * 60 * 24);
+  return days >= 45;
+}
+
+exports.checkPartialEligibility = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { order_id } = req.query;
+    const [orders] = await db.query(
+      `SELECT o.*, ot.name as order_type_name FROM orders o
+       JOIN order_types ot ON o.order_type_id = ot.id
+       WHERE o.id = ? AND o.user_id = ?`, [order_id, userId]
+    );
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
+    const eligible = isPartialEligible(orders[0], orders[0].order_type_name);
+    res.json({ eligible, partial_amount: PARTIAL_PAYMENT_AMOUNT, total_price: orders[0].total_price });
+  } catch (error) {
+    console.error('Partial eligibility error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 exports.createCheckoutSession = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { order_id } = req.body;
+    const { order_id, payment_type } = req.body;
 
     // Fetch the draft order
     const [orders] = await db.query('SELECT * FROM orders WHERE id = ? AND user_id = ? AND status = "incomplete"', [order_id, userId]);
@@ -32,7 +61,20 @@ exports.createCheckoutSession = async (req, res) => {
       }
     }
 
-    const totalAmount = Math.round((price + urgentFee - discountAmount) * 100); // Stripe uses cents
+    const fullTotal = price + urgentFee - discountAmount;
+
+    // Determine if partial payment is being requested
+    let isPartial = false;
+    if (payment_type === 'partial') {
+      const [orderType] = await db.query('SELECT name FROM order_types WHERE id = ?', [order_data.order_type_id]);
+      const orderTypeName = orderType.length > 0 ? orderType[0].name : '';
+      if (isPartialEligible(order_data, orderTypeName) && fullTotal > PARTIAL_PAYMENT_AMOUNT) {
+        isPartial = true;
+      }
+    }
+
+    const chargeAmount = isPartial ? PARTIAL_PAYMENT_AMOUNT : fullTotal;
+    const totalAmount = Math.round(chargeAmount * 100); // Stripe uses cents
 
     if (totalAmount <= 0) {
       return res.status(400).json({ error: 'Invalid order total' });
@@ -52,8 +94,8 @@ exports.createCheckoutSession = async (req, res) => {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `${productName} - ${order_data.course_name}`,
-              description: `Order #${order_id}`
+              name: `${productName} - ${order_data.course_name}${isPartial ? ' (Partial Payment)' : ''}`,
+              description: isPartial ? `Order #${order_id} - Partial Payment $${PARTIAL_PAYMENT_AMOUNT} of $${fullTotal.toFixed(2)}` : `Order #${order_id}`
             },
             unit_amount: totalAmount
           },
@@ -65,7 +107,10 @@ exports.createCheckoutSession = async (req, res) => {
       cancel_url: `${process.env.STRIPE_CANCEL_URL}?order_id=${order_id}`,
       metadata: {
         user_id: userId.toString(),
-        order_id: order_id.toString()
+        order_id: order_id.toString(),
+        payment_type: isPartial ? 'partial' : 'full',
+        full_total: fullTotal.toFixed(2),
+        charge_amount: chargeAmount.toFixed(2)
       }
     };
 
@@ -99,12 +144,31 @@ const fulfillOrder = async (session, io) => {
   );
 
   const orderId = parseInt(session.metadata.order_id);
+  const paymentType = session.metadata.payment_type || 'full';
+  const chargeAmount = parseFloat(session.metadata.charge_amount || '0');
+  const fullTotal = parseFloat(session.metadata.full_total || '0');
 
-  // Mark order as active
-  await db.query(
-    'UPDATE orders SET status = "active" WHERE id = ?',
-    [orderId]
-  );
+  // Check if this is paying remaining balance on an already-active order
+  const isRemainingPayment = session.metadata.remaining_payment === 'true';
+
+  if (isRemainingPayment) {
+    // Add to amount_paid, reduce remaining
+    await db.query(
+      `UPDATE orders
+       SET amount_paid = amount_paid + ?,
+           amount_remaining = GREATEST(amount_remaining - ?, 0),
+           payment_type = CASE WHEN amount_remaining - ? <= 0 THEN 'full' ELSE 'partial' END
+       WHERE id = ?`,
+      [chargeAmount, chargeAmount, chargeAmount, orderId]
+    );
+  } else {
+    // First payment for this order
+    const amountRemaining = paymentType === 'partial' ? Math.max(fullTotal - chargeAmount, 0) : 0;
+    await db.query(
+      'UPDATE orders SET status = "active", payment_type = ?, amount_paid = ?, amount_remaining = ? WHERE id = ?',
+      [paymentType, chargeAmount, amountRemaining, orderId]
+    );
+  }
 
   // Create notification
   await db.query(
@@ -142,7 +206,10 @@ const fulfillOrder = async (session, io) => {
         totalPrice: od.total_price,
         sourceUrl: od.source_url,
         status: 'active',
-        paymentStatus: 'completed'
+        paymentStatus: od.payment_type === 'partial' ? 'partial' : 'completed',
+        paymentType: od.payment_type,
+        amountPaid: od.amount_paid,
+        amountRemaining: od.amount_remaining
       };
       sendNewOrderAdmin(details).catch(e => console.error('Admin payment email error:', e));
       if (od.email) {
@@ -206,6 +273,107 @@ exports.getPaymentHistory = async (req, res) => {
     res.json(payments);
   } catch (error) {
     console.error('Get payment history error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
+ * User pays remaining balance on a partial-paid order
+ */
+exports.payRemainingBalance = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { order_id } = req.body;
+
+    const [orders] = await db.query(
+      'SELECT * FROM orders WHERE id = ? AND user_id = ? AND payment_type = "partial" AND amount_remaining > 0',
+      [order_id, userId]
+    );
+    if (orders.length === 0) {
+      return res.status(404).json({ error: 'No outstanding balance for this order' });
+    }
+
+    const order = orders[0];
+    const remaining = parseFloat(order.amount_remaining);
+    const totalAmount = Math.round(remaining * 100);
+
+    const [users] = await db.query('SELECT email FROM users WHERE id = ?', [userId]);
+    const userEmail = users.length > 0 ? users[0].email : null;
+
+    const sessionParams = {
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `Remaining Balance - Order #${order_id}`,
+            description: `Final payment of $${remaining.toFixed(2)}`
+          },
+          unit_amount: totalAmount
+        },
+        quantity: 1
+      }],
+      mode: 'payment',
+      success_url: `${process.env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.STRIPE_CANCEL_URL}?order_id=${order_id}`,
+      metadata: {
+        user_id: userId.toString(),
+        order_id: order_id.toString(),
+        payment_type: 'remaining',
+        remaining_payment: 'true',
+        charge_amount: remaining.toFixed(2),
+        full_total: order.total_price.toString()
+      }
+    };
+
+    if (userEmail) sessionParams.customer_email = userEmail;
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
+
+    await db.query(
+      'INSERT INTO payments (order_id, user_id, stripe_session_id, amount, status) VALUES (?, ?, ?, ?, ?)',
+      [order_id, userId, session.id, remaining, 'pending']
+    );
+
+    res.json({ sessionId: session.id, url: session.url });
+  } catch (error) {
+    console.error('Pay remaining error:', error);
+    res.status(500).json({ error: 'Payment session creation failed' });
+  }
+};
+
+/**
+ * Admin marks remaining balance as paid (offline payment)
+ */
+exports.markRemainingPaid = async (req, res) => {
+  try {
+    const { order_id } = req.params;
+    const [orders] = await db.query(
+      'SELECT * FROM orders WHERE id = ? AND payment_type = "partial" AND amount_remaining > 0',
+      [order_id]
+    );
+    if (orders.length === 0) {
+      return res.status(404).json({ error: 'No outstanding balance' });
+    }
+    const order = orders[0];
+    const remaining = parseFloat(order.amount_remaining);
+
+    await db.query(
+      `UPDATE orders
+       SET amount_paid = amount_paid + ?, amount_remaining = 0, payment_type = 'full'
+       WHERE id = ?`,
+      [remaining, order_id]
+    );
+
+    // Log offline payment
+    await db.query(
+      'INSERT INTO payments (order_id, user_id, amount, status, stripe_session_id) VALUES (?, ?, ?, ?, ?)',
+      [order_id, order.user_id, remaining, 'completed', `offline-${Date.now()}`]
+    );
+
+    res.json({ message: 'Remaining balance marked as paid', amount: remaining });
+  } catch (error) {
+    console.error('Mark remaining paid error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };

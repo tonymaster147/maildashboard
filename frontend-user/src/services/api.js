@@ -56,6 +56,7 @@ export const updateDraftOrder = (id, data) => api.put(`/orders/draft/${id}`, dat
 
 // Payments
 export const createPaymentSession = (data) => api.post('/payments/create-session', data);
+export const payRemainingBalance = (data) => api.post('/payments/pay-remaining', data);
 export const getPaymentHistory = () => api.get('/payments/history');
 export const verifyPayment = (sessionId) => api.get(`/payments/verify?session_id=${sessionId}`);
 

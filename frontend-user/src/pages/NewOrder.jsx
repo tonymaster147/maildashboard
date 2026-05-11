@@ -40,6 +40,8 @@ export default function NewOrder() {
   const [error, setError] = useState('');
   const [draftOrderId, setDraftOrderId] = useState(null);
   const [isUrgent, setIsUrgent] = useState(false);
+  const [paymentType, setPaymentType] = useState('full');
+  const PARTIAL_AMOUNT = 150;
 
   // Lookup data
   const [orderTypes, setOrderTypes] = useState([]);
@@ -323,7 +325,8 @@ export default function NewOrder() {
 
       // 2. Proceed to Stripe Checkout
       const res = await createPaymentSession({
-        order_id: draftOrderId
+        order_id: draftOrderId,
+        payment_type: paymentType
       });
 
       window.location.href = res.data.url;
@@ -731,6 +734,26 @@ export default function NewOrder() {
                     <div className="summary-row total"><span className="label">Total</span><span className="value">${totalPrice.toFixed(2)}</span></div>
                   </>
                 )}
+                {(() => {
+                  if (!isOnlineClass || !formData.class_start_date || !formData.due_date) return null;
+                  const start = new Date(formData.class_start_date);
+                  const end = new Date(formData.due_date);
+                  const days = (end - start) / (1000 * 60 * 60 * 24);
+                  if (days < 45 || totalPrice <= PARTIAL_AMOUNT) return null;
+                  return (
+                    <div style={{ marginTop: 20, padding: 16, background: 'rgba(132,194,37,0.06)', border: '1px solid var(--accent)', borderRadius: 10 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--accent)' }}>💳 Payment Option</div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: paymentType === 'full' ? 'rgba(132,194,37,0.15)' : 'transparent', borderRadius: 8, cursor: 'pointer', marginBottom: 6 }}>
+                        <input type="radio" name="payType" value="full" checked={paymentType === 'full'} onChange={() => setPaymentType('full')} />
+                        <div><div style={{ fontWeight: 600 }}>Pay Full Now</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>${totalPrice.toFixed(2)}</div></div>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, background: paymentType === 'partial' ? 'rgba(132,194,37,0.15)' : 'transparent', borderRadius: 8, cursor: 'pointer' }}>
+                        <input type="radio" name="payType" value="partial" checked={paymentType === 'partial'} onChange={() => setPaymentType('partial')} />
+                        <div><div style={{ fontWeight: 600 }}>Pay Partial</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>${PARTIAL_AMOUNT} now &middot; ${(totalPrice - PARTIAL_AMOUNT).toFixed(2)} later</div></div>
+                      </label>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -747,7 +770,7 @@ export default function NewOrder() {
             </button>
           ) : (
             <button className="btn btn-primary btn-lg" onClick={handleSubmit} disabled={!canProceed() || submitting}>
-              {submitting ? <div className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></div> : <><FiCheck size={18} /> Proceed to Checkout {totalPrice > 0 ? `$${totalPrice.toFixed(2)}` : ''}</>}
+              {submitting ? <div className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></div> : <><FiCheck size={18} /> Proceed to Checkout {totalPrice > 0 ? `$${(paymentType === 'partial' ? PARTIAL_AMOUNT : totalPrice).toFixed(2)}` : ''}</>}
             </button>
           )}
         </div>

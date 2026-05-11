@@ -42,6 +42,7 @@ export const getAllOrders = (params) => api.get('/admin/orders', { params });
 export const updateOrderStatus = (id, data) => api.put(`/admin/orders/${id}/status`, data);
 export const assignTutors = (id, data) => api.put(`/admin/orders/${id}/assign`, data);
 export const reopenChat = (id) => api.put(`/admin/orders/${id}/reopen-chat`);
+export const markRemainingPaid = (orderId) => api.post(`/admin/orders/${orderId}/mark-remaining-paid`);
 
 // Chat
 export const getAllChats = () => api.get('/admin/chats');

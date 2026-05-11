@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile } from '../services/api';
+import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile, markRemainingPaid } from '../services/api';
 import { useApi } from '../hooks/useApi';
 import { FiArrowLeft, FiUpload, FiTrash2, FiDownload, FiUserPlus, FiX } from 'react-icons/fi';
 
@@ -167,7 +167,27 @@ export default function OrderDetail() {
             {parseFloat(order.urgent_fee) > 0 && <div className="summary-row"><span className="label">Urgent</span><span>+${parseFloat(order.urgent_fee).toFixed(2)}</span></div>}
             {parseFloat(order.discount_amount) > 0 && <div className="summary-row"><span className="label">Discount</span><span style={{ color: 'var(--success)' }}>-${parseFloat(order.discount_amount).toFixed(2)}</span></div>}
             <div className="summary-row total"><span className="label">Total</span><span className="value">${parseFloat(order.total_price).toFixed(2)}</span></div>
+            {order.payment_type === 'partial' && (
+              <>
+                <div className="summary-row" style={{ color: 'var(--success)' }}><span className="label">Paid</span><span>${parseFloat(order.amount_paid || 0).toFixed(2)}</span></div>
+                <div className="summary-row" style={{ color: 'var(--warning)', fontWeight: 600 }}><span className="label">Remaining</span><span>${parseFloat(order.amount_remaining || 0).toFixed(2)}</span></div>
+              </>
+            )}
           </div>
+          {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(217,119,6,0.15))', border: '1px solid #f59e0b', borderRadius: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#f59e0b', marginBottom: 8 }}>⚠️ PARTIAL PAYMENT — ${parseFloat(order.amount_remaining).toFixed(2)} outstanding</div>
+              <button className="btn btn-sm btn-primary" style={{ background: '#f59e0b', width: '100%' }} onClick={async () => {
+                if (!confirm(`Mark remaining $${parseFloat(order.amount_remaining).toFixed(2)} as paid?`)) return;
+                try {
+                  await markRemainingPaid(order.id);
+                  fetchOrder();
+                } catch (e) {
+                  alert(e.response?.data?.error || 'Failed to mark paid');
+                }
+              }}>Mark Remaining Paid</button>
+            </div>
+          )}
           <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>Payment Status</span>
             <span className={`badge-status ${order.payment_status === 'completed' ? 'badge-active' : order.payment_status === 'pending' ? 'badge-in_progress' : order.payment_status === 'cancelled' ? 'badge-cancelled' : 'badge-incomplete'}`} style={{ fontSize: 12, padding: '4px 12px', textTransform: 'capitalize' }}>

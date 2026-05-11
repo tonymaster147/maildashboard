@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, uploadFiles, createPaymentSession } from '../services/api';
+import { getOrderDetail, uploadFiles, createPaymentSession, payRemainingBalance } from '../services/api';
 import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones } from 'react-icons/fi';
 
 export default function OrderDetail() {
@@ -81,10 +81,30 @@ export default function OrderDetail() {
             {parseFloat(order.urgent_fee) > 0 && <div className="summary-row"><span className="label">Urgent Fee</span><span style={{ color: 'var(--warning)' }}>+${parseFloat(order.urgent_fee).toFixed(2)}</span></div>}
             {parseFloat(order.discount_amount) > 0 && <div className="summary-row"><span className="label">Discount</span><span style={{ color: 'var(--success)' }}>-${parseFloat(order.discount_amount).toFixed(2)}</span></div>}
             <div className="summary-row total"><span className="label">Total</span><span className="value">${parseFloat(order.total_price).toFixed(2)}</span></div>
+            {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && (
+              <>
+                <div className="summary-row" style={{ color: 'var(--success)' }}><span className="label">Paid</span><span>${parseFloat(order.amount_paid).toFixed(2)}</span></div>
+                <div className="summary-row" style={{ color: 'var(--warning)', fontWeight: 600 }}><span className="label">Remaining</span><span>${parseFloat(order.amount_remaining).toFixed(2)}</span></div>
+              </>
+            )}
           </div>
           {order.status === 'incomplete' && parseFloat(order.total_price) > 0 && (
             <button className="btn btn-primary mt-2" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 20px', fontSize: 15 }} onClick={handleCompletePayment} disabled={paymentLoading}>
               {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : <><FiCreditCard size={18} /> Complete Payment</>}
+            </button>
+          )}
+          {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && order.status !== 'incomplete' && (
+            <button className="btn btn-primary mt-2" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 20px', fontSize: 15, background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={async () => {
+              setPaymentLoading(true);
+              try {
+                const res = await payRemainingBalance({ order_id: order.id });
+                window.location.href = res.data.url;
+              } catch (err) {
+                alert(err.response?.data?.error || 'Failed to start payment');
+                setPaymentLoading(false);
+              }
+            }} disabled={paymentLoading}>
+              {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : <><FiCreditCard size={18} /> Pay Remaining ${parseFloat(order.amount_remaining).toFixed(2)}</>}
             </button>
           )}
           {order.tutors?.length > 0 && (

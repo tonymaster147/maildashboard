@@ -2,6 +2,7 @@ const router = require('express').Router();
 const adminController = require('../controllers/adminController');
 const pricingController = require('../controllers/pricingController');
 const sitesController = require('../controllers/sitesController');
+const paymentController = require('../controllers/paymentController');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateTutor } = require('../middleware/validate');
 const { upload } = require('../middleware/upload');
@@ -25,6 +26,7 @@ router.delete('/tutors/:id', adminController.deleteTutor);
 // Order management
 router.get('/orders', adminController.getAllOrders);
 router.put('/orders/:id/status', adminController.updateOrderStatus);
+router.post('/orders/:order_id/mark-remaining-paid', paymentController.markRemainingPaid);
 router.put('/orders/:id/assign', adminController.assignTutors);
 router.put('/orders/:id/reopen-chat', adminController.reopenChat);
 

@@ -98,7 +98,12 @@ export default function Orders() {
                   <td style={{ fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.course_name}</td>
                   <td>{o.order_type_name}</td>
                   <td>{o.plan_tier ? o.plan_tier.charAt(0).toUpperCase() + o.plan_tier.slice(1) : (o.plan_name || '—')}</td>
-                  <td style={{ color: 'var(--accent)', fontWeight: 600 }}>${parseFloat(o.total_price).toFixed(2)}</td>
+                  <td style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                    ${parseFloat(o.total_price).toFixed(2)}
+                    {o.payment_type === 'partial' && parseFloat(o.amount_remaining) > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: '#f59e0b', padding: '2px 6px', borderRadius: 4, marginLeft: 6, letterSpacing: 0.3 }} title={`Paid $${parseFloat(o.amount_paid).toFixed(2)} | Remaining $${parseFloat(o.amount_remaining).toFixed(2)}`}>PARTIAL</span>
+                    )}
+                  </td>
                   <td style={{ fontSize: 13 }}>{o.tutor_names || <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}</td>
                   <td>
                     <select className="form-select" value={o.status} onChange={e => handleStatusChange(o.id, e.target.value)} style={{ padding: '4px 8px', fontSize: 12, minWidth: 110 }}>

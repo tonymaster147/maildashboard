@@ -211,6 +211,13 @@ exports.updateOrderStatus = async (req, res) => {
 
     const oldStatus = orders.length > 0 ? orders[0].status : null;
 
+    // Block completion if there's an outstanding balance
+    if (status === 'completed' && orders.length > 0 && parseFloat(orders[0].amount_remaining) > 0) {
+      return res.status(400).json({
+        error: `Cannot mark as completed. Outstanding balance: $${parseFloat(orders[0].amount_remaining).toFixed(2)}`
+      });
+    }
+
     await db.query('UPDATE orders SET status = ? WHERE id = ?', [status, id]);
 
     // Disable chat if completed

@@ -174,16 +174,23 @@ async function sendForgotAccessCode(email, username, newAccessCode, siteId) {
 }
 
 async function sendNewOrderAdmin(orderDetails) {
-  const { orderId, courseName, username, orderType, subject, educationLevel, status, sourceUrl, planName, totalPrice, paymentStatus, siteId } = orderDetails;
+  const { orderId, courseName, username, orderType, subject, educationLevel, status, sourceUrl, planName, totalPrice, paymentStatus, paymentType, amountPaid, amountRemaining, siteId } = orderDetails;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
 
   const pStatus = paymentStatus || 'unpaid';
-  const paymentColors = { completed: { bg: '#dcfce7', text: '#16a34a' }, pending: { bg: '#fef3c7', text: '#d97706' }, cancelled: { bg: '#fee2e2', text: '#dc2626' }, unpaid: { bg: '#f1f5f9', text: '#64748b' } };
+  const paymentColors = { completed: { bg: '#dcfce7', text: '#16a34a' }, pending: { bg: '#fef3c7', text: '#d97706' }, cancelled: { bg: '#fee2e2', text: '#dc2626' }, unpaid: { bg: '#f1f5f9', text: '#64748b' }, partial: { bg: '#fef3c7', text: '#d97706' } };
   const pColor = paymentColors[pStatus] || paymentColors.unpaid;
+
+  const partialBanner = paymentType === 'partial' && parseFloat(amountRemaining || 0) > 0 ? `
+    <div style="background: linear-gradient(135deg, #fbbf24, #f59e0b); padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #d97706;">
+      <p style="margin: 0 0 6px 0; color: #ffffff; font-weight: 700; font-size: 15px;">⚠️ PARTIAL PAYMENT RECEIVED</p>
+      <p style="margin: 0; color: #ffffff; font-size: 13px;">Paid: <strong>$${parseFloat(amountPaid || 0).toFixed(2)}</strong> &nbsp;|&nbsp; Remaining: <strong>$${parseFloat(amountRemaining || 0).toFixed(2)}</strong></p>
+    </div>` : '';
 
   const html = `
     ${header(ctx.brand, '📋 New Order Notification')}
       <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">A new order has been ${status === 'incomplete' ? 'started' : 'updated'}.</p>
+      ${partialBanner}
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
         <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Order ID</td><td style="padding: 10px 0; color: #334155; font-weight: 600; text-align: right;">#${orderId}</td></tr>
         <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">User</td><td style="padding: 10px 0; color: #334155; font-weight: 500; text-align: right;">${username || 'N/A'}</td></tr>
@@ -209,13 +216,22 @@ async function sendNewOrderAdmin(orderDetails) {
 
 async function sendOrderConfirmationUser(email, orderDetails) {
   if (!email) return;
-  const { orderId, courseName, status, planName, totalPrice, siteId } = orderDetails;
+  const { orderId, courseName, status, planName, totalPrice, paymentType, amountPaid, amountRemaining, siteId } = orderDetails;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
 
   const isPaid = status === 'active';
+  const isPartial = paymentType === 'partial' && parseFloat(amountRemaining || 0) > 0;
+  const partialBanner = isPartial ? `
+    <div style="background: linear-gradient(135deg, #fbbf24, #f59e0b); padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #d97706;">
+      <p style="margin: 0 0 6px 0; color: #ffffff; font-weight: 700; font-size: 15px;">⚠️ PARTIAL PAYMENT</p>
+      <p style="margin: 0 0 4px 0; color: #ffffff; font-size: 13px;">Paid: <strong>$${parseFloat(amountPaid || 0).toFixed(2)}</strong></p>
+      <p style="margin: 0; color: #ffffff; font-size: 13px;">Remaining: <strong>$${parseFloat(amountRemaining || 0).toFixed(2)}</strong> &mdash; Pay anytime from your dashboard.</p>
+    </div>` : '';
+
   const html = `
-    ${header(ctx.brand, isPaid ? '✅ Payment Confirmed!' : '📝 Order Started')}
-      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">${isPaid ? 'Your payment has been processed and your order is now active!' : 'Your order has been started. Complete the remaining steps to proceed to payment.'}</p>
+    ${header(ctx.brand, isPaid ? (isPartial ? '✅ Partial Payment Received' : '✅ Payment Confirmed!') : '📝 Order Started')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">${isPaid ? (isPartial ? 'We received your partial payment. Your order is now active. Please pay the remaining balance at your convenience.' : 'Your payment has been processed and your order is now active!') : 'Your order has been started. Complete the remaining steps to proceed to payment.'}</p>
+      ${partialBanner}
       <div style="background: ${isPaid ? '#f0fdf4' : '#f0f9ff'}; padding: 20px; border-radius: 8px; border-left: 4px solid ${isPaid ? '#22c55e' : '#3b82f6'}; margin-bottom: 20px;">
         <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> #${orderId}</p>
         <p style="margin: 5px 0; color: #334155;"><strong>Course:</strong> ${courseName || 'N/A'}</p>
