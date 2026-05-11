@@ -1,12 +1,14 @@
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useSiteBranding } from '../context/SiteBrandingContext';
 import { getUnreadCount } from '../services/api';
 import { connectSocket } from '../services/socket';
 import { FiHome, FiPlusCircle, FiList, FiMessageSquare, FiDollarSign, FiUser, FiLogOut } from 'react-icons/fi';
 
 export default function Layout() {
   const { user, token, logoutUser } = useAuth();
+  const brand = useSiteBranding();
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadChat, setUnreadChat] = useState(0);
@@ -82,8 +84,14 @@ export default function Layout() {
     <div className="app-layout">
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="logo-icon">📚</div>
-          <h1>EduPro</h1>
+          {brand.logoUrl ? (
+            <img src={brand.logoUrl} alt={brand.name} style={{ maxHeight: 40, maxWidth: 160, objectFit: 'contain' }} />
+          ) : (
+            <>
+              <div className="logo-icon">📚</div>
+              <h1>{brand.name}</h1>
+            </>
+          )}
         </div>
         <nav className="sidebar-nav">
           <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
