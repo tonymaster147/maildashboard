@@ -61,7 +61,7 @@ function PayForm({ amount, onSuccess, isPartial, fullTotal }) {
       )}
       <PaymentElement options={{ layout: 'tabs' }} />
       <div style={{ marginTop: 16, fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Billing Address</div>
-      <AddressElement options={{ mode: 'billing' }} />
+      <AddressElement options={{ mode: 'billing', autocomplete: { mode: 'disabled' } }} />
       {error && <div style={{ color: 'var(--error)', marginTop: 12, fontSize: 13 }}>{error}</div>}
       <button
         type="submit"
