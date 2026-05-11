@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getUserOrders } from '../services/api';
 import { FiTrendingUp, FiClock, FiCheckCircle, FiPlus, FiArrowRight } from 'react-icons/fi';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +50,7 @@ export default function Dashboard() {
           <div className="stat-value">{completedOrders.length}</div>
           <div className="stat-label">Completed</div>
         </div>
-        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => window.location.href = '/new-order'}>
+        <div className="stat-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/new-order')}>
           <div className="stat-icon" style={{ background: 'rgba(132, 194, 37, 0.15)', color: 'var(--accent)' }}>
             <FiPlus />
           </div>
