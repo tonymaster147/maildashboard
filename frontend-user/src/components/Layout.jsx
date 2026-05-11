@@ -2,13 +2,32 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSiteBranding } from '../context/SiteBrandingContext';
-import { getUnreadCount } from '../services/api';
+import { getUnreadCount, getPublicSite } from '../services/api';
 import { connectSocket } from '../services/socket';
 import { FiHome, FiPlusCircle, FiList, FiMessageSquare, FiDollarSign, FiUser, FiLogOut } from 'react-icons/fi';
 
+const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+
 export default function Layout() {
   const { user, token, logoutUser } = useAuth();
-  const brand = useSiteBranding();
+  const ctxBrand = useSiteBranding();
+  const [localBrand, setLocalBrand] = useState(null);
+  const brand = localBrand || ctxBrand;
+
+  useEffect(() => {
+    if (!ctxBrand.resolved) {
+      getPublicSite().then(res => {
+        const s = res.data?.site;
+        if (s) {
+          setLocalBrand({
+            name: s.name,
+            logoUrl: s.logo_url ? (s.logo_url.startsWith('http') ? s.logo_url : `${API_ORIGIN}${s.logo_url}`) : null,
+            resolved: true
+          });
+        }
+      }).catch(() => {});
+    }
+  }, [ctxBrand.resolved]);
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadChat, setUnreadChat] = useState(0);
