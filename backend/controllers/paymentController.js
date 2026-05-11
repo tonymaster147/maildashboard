@@ -87,6 +87,15 @@ exports.createCheckoutSession = async (req, res) => {
     const [orderType] = await db.query('SELECT name FROM order_types WHERE id = ?', [order_data.order_type_id]);
     const productName = orderType.length > 0 ? orderType[0].name : 'Order';
 
+    // Resolve redirect base from order source_url, fallback to env
+    const sourceBase = order_data.source_url ? order_data.source_url.replace(/\/$/, '') : null;
+    const successUrl = sourceBase
+      ? `${sourceBase}/payment/success?session_id={CHECKOUT_SESSION_ID}`
+      : `${process.env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = sourceBase
+      ? `${sourceBase}/payment/cancel?order_id=${order_id}`
+      : `${process.env.STRIPE_CANCEL_URL}?order_id=${order_id}`;
+
     const sessionParams = {
       payment_method_types: ['card'],
       line_items: [
@@ -103,8 +112,8 @@ exports.createCheckoutSession = async (req, res) => {
         }
       ],
       mode: 'payment',
-      success_url: `${process.env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.STRIPE_CANCEL_URL}?order_id=${order_id}`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         user_id: userId.toString(),
         order_id: order_id.toString(),
@@ -314,8 +323,8 @@ exports.payRemainingBalance = async (req, res) => {
         quantity: 1
       }],
       mode: 'payment',
-      success_url: `${process.env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.STRIPE_CANCEL_URL}?order_id=${order_id}`,
+      success_url: order.source_url ? `${order.source_url.replace(/\/$/, '')}/payment/success?session_id={CHECKOUT_SESSION_ID}` : `${process.env.STRIPE_SUCCESS_URL}?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: order.source_url ? `${order.source_url.replace(/\/$/, '')}/payment/cancel?order_id=${order_id}` : `${process.env.STRIPE_CANCEL_URL}?order_id=${order_id}`,
       metadata: {
         user_id: userId.toString(),
         order_id: order_id.toString(),
