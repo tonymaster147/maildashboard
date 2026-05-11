@@ -335,9 +335,14 @@ exports.createPaymentIntent = async (req, res) => {
 
     if (amountCents <= 0) return res.status(400).json({ error: 'Invalid order total' });
 
+    const [orderType] = await db.query('SELECT name FROM order_types WHERE id = ?', [order_data.order_type_id]);
+    const typeName = orderType.length > 0 ? orderType[0].name : 'Tutoring service';
+    const description = `${typeName} - ${order_data.course_name || 'Order'} (#${order_id})${isPartial ? ' - Partial' : ''}`;
+
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: 'usd',
+      description,
       automatic_payment_methods: { enabled: true },
       metadata: {
         user_id: userId.toString(),
@@ -386,6 +391,7 @@ exports.createRemainingPaymentIntent = async (req, res) => {
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: 'usd',
+      description: `Remaining Balance - Order #${order_id}`,
       automatic_payment_methods: { enabled: true },
       metadata: {
         user_id: userId.toString(),

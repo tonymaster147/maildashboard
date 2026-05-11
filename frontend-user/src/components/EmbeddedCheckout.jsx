@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { Elements, PaymentElement, AddressElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { fulfillPaymentIntent } from '../services/api';
 import { FiLock } from 'react-icons/fi';
 
@@ -60,6 +60,8 @@ function PayForm({ amount, onSuccess, isPartial, fullTotal }) {
         </div>
       )}
       <PaymentElement options={{ layout: 'tabs' }} />
+      <div style={{ marginTop: 16, fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Billing Address</div>
+      <AddressElement options={{ mode: 'billing' }} />
       {error && <div style={{ color: 'var(--error)', marginTop: 12, fontSize: 13 }}>{error}</div>}
       <button
         type="submit"
