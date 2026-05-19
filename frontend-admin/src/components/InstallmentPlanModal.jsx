@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FiX, FiPlus, FiTrash2 } from 'react-icons/fi';
-import { createInstallmentPlan } from '../services/api';
+import { useApi } from '../hooks/useApi';
 
 const todayPlusDays = (days) => {
   const d = new Date();
@@ -9,6 +9,7 @@ const todayPlusDays = (days) => {
 };
 
 export default function InstallmentPlanModal({ order, onClose, onCreated }) {
+  const { createInstallmentPlan } = useApi();
   const remaining = parseFloat(order.amount_remaining || 0);
   const [count, setCount] = useState(2);
   const [splitMode, setSplitMode] = useState('equal');

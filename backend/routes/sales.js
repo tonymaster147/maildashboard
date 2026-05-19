@@ -44,6 +44,16 @@ router.put('/orders/:id/status', requirePermission('orders'), adminController.up
 router.put('/orders/:id/assign', requirePermission('orders'), adminController.assignTutors);
 router.put('/orders/:id/reopen-chat', requirePermission('orders'), adminController.reopenChat);
 
+// Installment plan management (orders permission)
+const paymentController = require('../controllers/paymentController');
+const installmentsController = require('../controllers/installmentsController');
+router.post('/orders/:order_id/mark-remaining-paid', requirePermission('orders'), paymentController.markRemainingPaid);
+router.post('/orders/:id/installments', requirePermission('orders'), installmentsController.createInstallmentPlan);
+router.get('/orders/:id/installments', requirePermission('orders'), installmentsController.getInstallments);
+router.delete('/orders/:id/installments', requirePermission('orders'), installmentsController.deleteInstallmentPlan);
+router.post('/installments/:installment_id/mark-paid', requirePermission('orders'), installmentsController.markInstallmentPaid);
+router.post('/orders/:id/installments/mark-all-paid', requirePermission('orders'), installmentsController.markAllInstallmentsPaid);
+
 // Chat monitoring (if permitted)
 router.get('/chats', requirePermission('chats'), adminController.getAllChats);
 router.get('/chats/flagged', requirePermission('chats'), adminController.getFlaggedMessages);

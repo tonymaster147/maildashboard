@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile, markRemainingPaid, getInstallments, deleteInstallmentPlan, markInstallmentPaid, markAllInstallmentsPaid } from '../services/api';
+import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile } from '../services/api';
 import InstallmentPlanModal from '../components/InstallmentPlanModal';
 import { useApi } from '../hooks/useApi';
 import { FiArrowLeft, FiUpload, FiTrash2, FiDownload, FiUserPlus, FiX } from 'react-icons/fi';
@@ -74,7 +74,7 @@ export default function OrderDetail() {
   const [installments, setInstallments] = useState([]);
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
   const fileInputRef = useRef(null);
-  const { assignTutors, getAllTutors } = useApi();
+  const { assignTutors, getAllTutors, markRemainingPaid, getInstallments, deleteInstallmentPlan, markInstallmentPaid, markAllInstallmentsPaid } = useApi();
 
   const fetchInstallments = (orderId) => {
     getInstallments(orderId).then(res => setInstallments(res.data || [])).catch(() => setInstallments([]));
