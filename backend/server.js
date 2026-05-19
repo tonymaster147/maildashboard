@@ -5,8 +5,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 require('dotenv').config();
 
+const cron = require('node-cron');
 const { apiLimiter } = require('./middleware/rateLimiter');
 const paymentController = require('./controllers/paymentController');
+const installmentsController = require('./controllers/installmentsController');
 const setupSocket = require('./socket/chatHandler');
 
 const app = express();
@@ -99,6 +101,13 @@ server.listen(PORT, () => {
   ║  📝 Environment: ${process.env.NODE_ENV || 'development'}            ║
   ╚══════════════════════════════════════════════╝
   `);
+
+  // Schedule daily installment reminder at 09:00 server time
+  cron.schedule('0 9 * * *', () => {
+    console.log('[Cron] Running installment reminder job...');
+    installmentsController.runReminderCron();
+  });
+  console.log('⏰ Installment reminder cron scheduled (daily 09:00)');
 });
 
 module.exports = { app, server, io };

@@ -364,4 +364,85 @@ async function sendOrderStatusChangeEmail(email, orderDetails) {
   if (ok) console.log(`✅ Status change email sent to ${email} for order #${orderId}`);
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail };
+// ───────────────────────── installment emails ─────────────────────────
+
+async function sendInstallmentPlanCreated(email, details) {
+  if (!email) return;
+  const { orderId, username, installments, convenienceFee, siteId } = details;
+  const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+
+  const rows = installments.map(i => `
+    <tr style="border-bottom: 1px solid #e2e8f0;">
+      <td style="padding: 10px; color: #334155;">Installment ${i.installment_number}</td>
+      <td style="padding: 10px; color: #334155; text-align: center;">${new Date(i.due_date).toLocaleDateString()}</td>
+      <td style="padding: 10px; color: #84C225; font-weight: 700; text-align: right;">$${parseFloat(i.amount).toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  const html = `
+    ${header(ctx.brand, '📅 Installment Plan Created')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${username || 'there'}, an installment plan has been set up for Order #${orderId}.</p>
+      ${convenienceFee > 0 ? `<p style="color: #d97706; font-size: 14px; margin-bottom: 16px;">Convenience fee: <strong>$${parseFloat(convenienceFee).toFixed(2)}</strong></p>` : ''}
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; background: #f8fafc; border-radius: 8px;">
+        <thead><tr style="background: #0C2D64;"><th style="padding: 12px; color: #fff; text-align: left;">Installment</th><th style="padding: 12px; color: #fff; text-align: center;">Due Date</th><th style="padding: 12px; color: #fff; text-align: right;">Amount</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="color: #64748b; font-size: 14px;">Pay each installment from your dashboard. You can also pay all installments at once anytime.</p>
+    ${footer(ctx.brand)}
+  `;
+  const ok = await sendViaContext(ctx, { to: email, subject: `Installment Plan - Order #${orderId} - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Installment plan email sent to ${email} for order #${orderId}`);
+}
+
+async function sendInstallmentReminder(email, details) {
+  const { orderId, username, installmentNumber, amount, dueDate, daysUntilDue, siteId, recipient } = details;
+  const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const to = recipient === 'admin' ? ADMIN_EMAIL : email;
+  if (!to) return;
+
+  const isOverdue = daysUntilDue < 0;
+  const title = isOverdue ? '⚠️ Installment Overdue' : '⏰ Installment Reminder';
+  const urgency = isOverdue ? `<strong>OVERDUE by ${Math.abs(daysUntilDue)} day(s)</strong>` :
+                  daysUntilDue === 0 ? '<strong>DUE TODAY</strong>' :
+                  `Due in <strong>${daysUntilDue} day(s)</strong>`;
+
+  const html = `
+    ${header(ctx.brand, title)}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">
+        ${recipient === 'admin' ? `${username}'s installment is ${isOverdue ? 'overdue' : 'coming up'}.` : `Your installment is ${isOverdue ? 'overdue' : 'coming up'}.`}
+      </p>
+      <div style="background: ${isOverdue ? '#fee2e2' : '#fef3c7'}; padding: 20px; border-radius: 8px; border-left: 4px solid ${isOverdue ? '#dc2626' : '#d97706'}; margin-bottom: 20px;">
+        <p style="margin: 5px 0; color: #334155;"><strong>Order:</strong> #${orderId}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Installment:</strong> ${installmentNumber}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Amount:</strong> <span style="color: #84C225; font-weight: 700;">$${parseFloat(amount).toFixed(2)}</span></p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Due Date:</strong> ${new Date(dueDate).toLocaleDateString()}</p>
+        <p style="margin: 12px 0 0 0; color: ${isOverdue ? '#dc2626' : '#d97706'}; font-size: 14px;">${urgency}</p>
+      </div>
+      <p style="color: #64748b; font-size: 14px;">Log in to your dashboard to pay this installment.</p>
+    ${footer(ctx.brand)}
+  `;
+  const ok = await sendViaContext(ctx, { to, subject: `${title} - Order #${orderId}`, html });
+  if (ok) console.log(`✅ Installment reminder sent to ${to} for order #${orderId} installment ${installmentNumber}`);
+}
+
+async function sendInstallmentPaid(email, details) {
+  if (!email) return;
+  const { orderId, username, paidInstallments, siteId } = details;
+  const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const total = paidInstallments.reduce((s, i) => s + parseFloat(i.amount), 0);
+
+  const html = `
+    ${header(ctx.brand, '✅ Installment Payment Received')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${username || 'there'}, we received your installment payment for Order #${orderId}.</p>
+      <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #22c55e; margin-bottom: 20px;">
+        ${paidInstallments.map(i => `<p style="margin: 5px 0; color: #334155;">Installment ${i.installment_number}: <strong>$${parseFloat(i.amount).toFixed(2)}</strong></p>`).join('')}
+        <p style="margin: 12px 0 0 0; padding-top: 12px; border-top: 1px solid #d1fae5; color: #16a34a; font-weight: 700; font-size: 18px;">Paid: $${total.toFixed(2)}</p>
+      </div>
+      <p style="color: #64748b; font-size: 14px;">Thank you for your payment!</p>
+    ${footer(ctx.brand)}
+  `;
+  const ok = await sendViaContext(ctx, { to: email, subject: `Payment Received - Order #${orderId} - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Installment paid email sent to ${email} for order #${orderId}`);
+}
+
+module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid };

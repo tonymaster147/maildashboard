@@ -11,4 +11,9 @@ router.get('/partial-eligibility', verifyToken, paymentController.checkPartialEl
 router.get('/history', verifyToken, paymentController.getPaymentHistory);
 router.get('/verify', verifyToken, paymentController.verifyPayment);
 
+// Installment payments
+const installmentsController = require('../controllers/installmentsController');
+router.post('/pay-installment/:installment_id', verifyToken, installmentsController.payInstallment);
+router.post('/pay-all-installments/:id', verifyToken, installmentsController.payAllInstallments);
+
 module.exports = router;

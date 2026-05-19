@@ -27,6 +27,14 @@ router.delete('/tutors/:id', adminController.deleteTutor);
 router.get('/orders', adminController.getAllOrders);
 router.put('/orders/:id/status', adminController.updateOrderStatus);
 router.post('/orders/:order_id/mark-remaining-paid', paymentController.markRemainingPaid);
+
+// Installment plan management
+const installmentsController = require('../controllers/installmentsController');
+router.post('/orders/:id/installments', installmentsController.createInstallmentPlan);
+router.get('/orders/:id/installments', installmentsController.getInstallments);
+router.delete('/orders/:id/installments', installmentsController.deleteInstallmentPlan);
+router.post('/installments/:installment_id/mark-paid', installmentsController.markInstallmentPaid);
+router.post('/orders/:id/installments/mark-all-paid', installmentsController.markAllInstallmentsPaid);
 router.put('/orders/:id/assign', adminController.assignTutors);
 router.put('/orders/:id/reopen-chat', adminController.reopenChat);
 

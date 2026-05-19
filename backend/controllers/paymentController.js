@@ -1,15 +1,19 @@
 const stripe = require('../config/stripe');
 const db = require('../config/db');
 const { sendNewOrderAdmin, sendOrderConfirmationUser } = require('../services/emailService');
+const { fulfillInstallmentIntent } = require('./installmentsController');
 require('dotenv').config();
 
 /**
  * Create Stripe Checkout session
  */
 const PARTIAL_PAYMENT_AMOUNT = 150;
+const PARTIAL_PRICE_THRESHOLD = 455;
 
 function isPartialEligible(order, orderTypeName) {
   if (!orderTypeName || !orderTypeName.toLowerCase().includes('online class')) return false;
+  const total = parseFloat(order.total_price || 0);
+  if (total >= PARTIAL_PRICE_THRESHOLD) return true;
   if (!order.start_date || !order.end_date) return false;
   const start = new Date(order.start_date);
   const end = new Date(order.end_date);
@@ -146,6 +150,11 @@ exports.createCheckoutSession = async (req, res) => {
  * Extracted fulfillment logic
  */
 const fulfillOrder = async (session, io) => {
+  // Installment payments have their own fulfillment path
+  if (session.metadata && (session.metadata.payment_type === 'installment' || session.metadata.payment_type === 'installment_all')) {
+    return await fulfillInstallmentIntent({ id: session.id, metadata: session.metadata });
+  }
+
   // Update payment status
   await db.query(
     'UPDATE payments SET stripe_payment_id = ?, status = "completed" WHERE stripe_session_id = ?',

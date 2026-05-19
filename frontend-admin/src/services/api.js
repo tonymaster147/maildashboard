@@ -43,6 +43,11 @@ export const updateOrderStatus = (id, data) => api.put(`/admin/orders/${id}/stat
 export const assignTutors = (id, data) => api.put(`/admin/orders/${id}/assign`, data);
 export const reopenChat = (id) => api.put(`/admin/orders/${id}/reopen-chat`);
 export const markRemainingPaid = (orderId) => api.post(`/admin/orders/${orderId}/mark-remaining-paid`);
+export const createInstallmentPlan = (orderId, data) => api.post(`/admin/orders/${orderId}/installments`, data);
+export const getInstallments = (orderId) => api.get(`/admin/orders/${orderId}/installments`);
+export const deleteInstallmentPlan = (orderId) => api.delete(`/admin/orders/${orderId}/installments`);
+export const markInstallmentPaid = (installmentId) => api.post(`/admin/installments/${installmentId}/mark-paid`);
+export const markAllInstallmentsPaid = (orderId) => api.post(`/admin/orders/${orderId}/installments/mark-all-paid`);
 
 // Chat
 export const getAllChats = () => api.get('/admin/chats');

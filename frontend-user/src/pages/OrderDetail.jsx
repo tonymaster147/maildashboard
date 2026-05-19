@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent } from '../services/api';
+import { getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent, getOrderInstallments, payInstallment, payAllInstallments } from '../services/api';
 import EmbeddedCheckout from '../components/EmbeddedCheckout';
 import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones } from 'react-icons/fi';
 
@@ -11,14 +11,45 @@ export default function OrderDetail() {
   const [uploading, setUploading] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [checkout, setCheckout] = useState(null);
+  const [installments, setInstallments] = useState([]);
 
   const fetchOrder = () => {
-    getOrderDetail(id).then(res => { setOrder(res.data); setLoading(false); }).catch(() => setLoading(false));
+    getOrderDetail(id).then(res => {
+      setOrder(res.data);
+      setLoading(false);
+      if (res.data?.has_installments) {
+        getOrderInstallments(id).then(r => setInstallments(r.data || [])).catch(() => {});
+      } else {
+        setInstallments([]);
+      }
+    }).catch(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchOrder();
   }, [id]);
+
+  const handlePayInstallment = async (instId) => {
+    setPaymentLoading(true);
+    try {
+      const res = await payInstallment(instId);
+      setCheckout({ clientSecret: res.data.client_secret, amount: res.data.amount, isPartial: false, fullTotal: res.data.amount });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Payment setup failed');
+    }
+    setPaymentLoading(false);
+  };
+
+  const handlePayAllInstallments = async () => {
+    setPaymentLoading(true);
+    try {
+      const res = await payAllInstallments(id);
+      setCheckout({ clientSecret: res.data.client_secret, amount: res.data.amount, isPartial: false, fullTotal: res.data.amount });
+    } catch (err) {
+      alert(err.response?.data?.error || 'Payment setup failed');
+    }
+    setPaymentLoading(false);
+  };
 
   const handleFileUpload = async (e) => {
     const files = e.target.files;
@@ -112,6 +143,9 @@ export default function OrderDetail() {
             {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && (
               <>
                 <div className="summary-row" style={{ color: 'var(--success)' }}><span className="label">Paid</span><span>${parseFloat(order.amount_paid).toFixed(2)}</span></div>
+                {parseFloat(order.convenience_fee || 0) > 0 && (
+                  <div className="summary-row" style={{ color: 'var(--warning)' }}><span className="label">Convenience Fee</span><span>+${parseFloat(order.convenience_fee).toFixed(2)}</span></div>
+                )}
                 <div className="summary-row" style={{ color: 'var(--warning)', fontWeight: 600 }}><span className="label">Remaining</span><span>${parseFloat(order.amount_remaining).toFixed(2)}</span></div>
               </>
             )}
@@ -121,10 +155,36 @@ export default function OrderDetail() {
               {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : <><FiCreditCard size={18} /> Complete Payment</>}
             </button>
           )}
-          {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && order.status !== 'incomplete' && (
+          {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && order.status !== 'incomplete' && !order.has_installments && (
             <button className="btn btn-primary mt-2" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 20px', fontSize: 15, background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={handlePayRemaining} disabled={paymentLoading}>
               {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : <><FiCreditCard size={18} /> Pay Remaining ${parseFloat(order.amount_remaining).toFixed(2)}</>}
             </button>
+          )}
+          {!!order.has_installments && installments.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>📅 Installment Plan</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {installments.map(i => (
+                  <div key={i.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: i.status === 'paid' ? 'rgba(34,197,94,0.08)' : i.status === 'overdue' ? 'rgba(220,38,38,0.08)' : 'var(--bg-input)', border: `1px solid ${i.status === 'paid' ? '#22c55e' : i.status === 'overdue' ? '#dc2626' : 'var(--border)'}`, borderRadius: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>Installment {i.installment_number}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Due {new Date(i.due_date).toLocaleDateString()} · <span style={{ textTransform: 'uppercase', fontWeight: 600, color: i.status === 'paid' ? '#16a34a' : i.status === 'overdue' ? '#dc2626' : 'var(--warning)' }}>{i.status}</span></div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <strong style={{ fontSize: 15 }}>${parseFloat(i.amount).toFixed(2)}</strong>
+                      {i.status !== 'paid' && (
+                        <button className="btn btn-sm btn-primary" onClick={() => handlePayInstallment(i.id)} disabled={paymentLoading}>Pay</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {installments.some(i => i.status !== 'paid') && (
+                <button className="btn btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={handlePayAllInstallments} disabled={paymentLoading}>
+                  {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : `Pay All Remaining $${installments.filter(i => i.status !== 'paid').reduce((s, i) => s + parseFloat(i.amount), 0).toFixed(2)}`}
+                </button>
+              )}
+            </div>
           )}
           {order.tutors?.length > 0 && (
             <div style={{ marginTop: 20, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>

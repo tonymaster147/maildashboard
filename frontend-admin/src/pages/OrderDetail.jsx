@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile, markRemainingPaid } from '../services/api';
+import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile, markRemainingPaid, getInstallments, deleteInstallmentPlan, markInstallmentPaid, markAllInstallmentsPaid } from '../services/api';
+import InstallmentPlanModal from '../components/InstallmentPlanModal';
 import { useApi } from '../hooks/useApi';
 import { FiArrowLeft, FiUpload, FiTrash2, FiDownload, FiUserPlus, FiX } from 'react-icons/fi';
 
@@ -70,8 +71,14 @@ export default function OrderDetail() {
   const [tutors, setTutors] = useState([]);
   const [showAssign, setShowAssign] = useState(false);
   const [selectedTutors, setSelectedTutors] = useState([]);
+  const [installments, setInstallments] = useState([]);
+  const [showInstallmentModal, setShowInstallmentModal] = useState(false);
   const fileInputRef = useRef(null);
   const { assignTutors, getAllTutors } = useApi();
+
+  const fetchInstallments = (orderId) => {
+    getInstallments(orderId).then(res => setInstallments(res.data || [])).catch(() => setInstallments([]));
+  };
 
   const fetchOrder = () => {
     Promise.all([
@@ -81,6 +88,8 @@ export default function OrderDetail() {
       setOrder(orderRes.data);
       setFiles(filesRes.data || []);
       setLoading(false);
+      if (orderRes.data?.has_installments) fetchInstallments(id);
+      else setInstallments([]);
     }).catch(() => setLoading(false));
   };
 
@@ -170,6 +179,9 @@ export default function OrderDetail() {
             {order.payment_type === 'partial' && (
               <>
                 <div className="summary-row" style={{ color: 'var(--success)' }}><span className="label">Paid</span><span>${parseFloat(order.amount_paid || 0).toFixed(2)}</span></div>
+                {parseFloat(order.convenience_fee || 0) > 0 && (
+                  <div className="summary-row" style={{ color: 'var(--warning)' }}><span className="label">Convenience Fee</span><span>+${parseFloat(order.convenience_fee).toFixed(2)}</span></div>
+                )}
                 <div className="summary-row" style={{ color: 'var(--warning)', fontWeight: 600 }}><span className="label">Remaining</span><span>${parseFloat(order.amount_remaining || 0).toFixed(2)}</span></div>
               </>
             )}
@@ -177,16 +189,78 @@ export default function OrderDetail() {
           {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && (
             <div style={{ marginTop: 12, padding: '10px 14px', background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(217,119,6,0.15))', border: '1px solid #f59e0b', borderRadius: 8 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#f59e0b', marginBottom: 8 }}>⚠️ PARTIAL PAYMENT — ${parseFloat(order.amount_remaining).toFixed(2)} outstanding</div>
-              <button className="btn btn-sm btn-primary" style={{ background: '#f59e0b', width: '100%' }} onClick={async () => {
-                if (!confirm(`Mark remaining $${parseFloat(order.amount_remaining).toFixed(2)} as paid?`)) return;
-                try {
-                  await markRemainingPaid(order.id);
-                  fetchOrder();
-                } catch (e) {
-                  alert(e.response?.data?.error || 'Failed to mark paid');
-                }
-              }}>Mark Remaining Paid</button>
+              {!order.has_installments && (
+                <>
+                  <button className="btn btn-sm btn-primary" style={{ background: '#f59e0b', width: '100%', marginBottom: 6 }} onClick={() => setShowInstallmentModal(true)}>Split into Installments</button>
+                  <button className="btn btn-sm btn-secondary" style={{ width: '100%' }} onClick={async () => {
+                    if (!confirm(`Mark remaining $${parseFloat(order.amount_remaining).toFixed(2)} as paid?`)) return;
+                    try {
+                      await markRemainingPaid(order.id);
+                      fetchOrder();
+                    } catch (e) {
+                      alert(e.response?.data?.error || 'Failed to mark paid');
+                    }
+                  }}>Mark Remaining Paid</button>
+                </>
+              )}
+              {!!order.has_installments && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>INSTALLMENT PLAN ({installments.length} installments)</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+                    {installments.map(i => (
+                      <div key={i.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', background: 'var(--bg-input)', borderRadius: 6, fontSize: 13 }}>
+                        <span style={{ minWidth: 0 }}>#{i.installment_number} · {new Date(i.due_date).toLocaleDateString()}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <strong>${parseFloat(i.amount).toFixed(2)}</strong>
+                          <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: i.status === 'paid' ? '#16a34a' : i.status === 'overdue' ? '#dc2626' : '#d97706', color: '#fff' }}>{i.status}</span>
+                          {i.status !== 'paid' && (
+                            <button className="btn btn-sm" style={{ background: '#16a34a', color: '#fff', padding: '2px 8px', fontSize: 11 }} onClick={async () => {
+                              if (!confirm(`Mark installment #${i.installment_number} ($${parseFloat(i.amount).toFixed(2)}) as paid?`)) return;
+                              try {
+                                await markInstallmentPaid(i.id);
+                                fetchOrder();
+                              } catch (e) {
+                                alert(e.response?.data?.error || 'Failed to mark paid');
+                              }
+                            }}>Mark Paid</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {installments.some(i => i.status !== 'paid') && (
+                    <button className="btn btn-sm btn-primary" style={{ width: '100%', background: '#16a34a', marginBottom: 6 }} onClick={async () => {
+                      const pendingSum = installments.filter(i => i.status !== 'paid').reduce((s, i) => s + parseFloat(i.amount), 0);
+                      if (!confirm(`Mark ALL remaining installments ($${pendingSum.toFixed(2)}) as paid?`)) return;
+                      try {
+                        await markAllInstallmentsPaid(order.id);
+                        fetchOrder();
+                      } catch (e) {
+                        alert(e.response?.data?.error || 'Failed to mark all paid');
+                      }
+                    }}>Mark All Remaining Paid</button>
+                  )}
+                  {installments.every(i => i.status !== 'paid') && (
+                    <button className="btn btn-sm btn-secondary" style={{ width: '100%' }} onClick={async () => {
+                      if (!confirm('Delete installment plan? Outstanding balance reverts to single remaining amount.')) return;
+                      try {
+                        await deleteInstallmentPlan(order.id);
+                        fetchOrder();
+                      } catch (e) {
+                        alert(e.response?.data?.error || 'Failed to delete plan');
+                      }
+                    }}>Delete Plan</button>
+                  )}
+                </div>
+              )}
             </div>
+          )}
+          {showInstallmentModal && (
+            <InstallmentPlanModal
+              order={order}
+              onClose={() => setShowInstallmentModal(false)}
+              onCreated={() => { setShowInstallmentModal(false); fetchOrder(); }}
+            />
           )}
           <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>Payment Status</span>

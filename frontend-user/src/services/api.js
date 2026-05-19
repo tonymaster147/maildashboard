@@ -59,6 +59,9 @@ export const createPaymentSession = (data) => api.post('/payments/create-session
 export const createPaymentIntent = (data) => api.post('/payments/create-intent', data);
 export const createRemainingPaymentIntent = (data) => api.post('/payments/create-remaining-intent', data);
 export const fulfillPaymentIntent = (data) => api.post('/payments/fulfill-intent', data);
+export const getOrderInstallments = (orderId) => api.get(`/orders/${orderId}/installments`);
+export const payInstallment = (installmentId) => api.post(`/payments/pay-installment/${installmentId}`);
+export const payAllInstallments = (orderId) => api.post(`/payments/pay-all-installments/${orderId}`);
 export const payRemainingBalance = (data) => api.post('/payments/pay-remaining', data);
 export const getPaymentHistory = () => api.get('/payments/history');
 export const verifyPayment = (sessionId) => api.get(`/payments/verify?session_id=${sessionId}`);

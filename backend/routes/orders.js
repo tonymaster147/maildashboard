@@ -17,4 +17,8 @@ router.post('/', verifyToken, validateOrder, orderController.createOrder);
 router.get('/', verifyToken, orderController.getUserOrders);
 router.get('/:id', verifyToken, orderController.getOrderDetail);
 
+// Installment endpoints (user view)
+const installmentsController = require('../controllers/installmentsController');
+router.get('/:id/installments', verifyToken, installmentsController.getInstallments);
+
 module.exports = router;
