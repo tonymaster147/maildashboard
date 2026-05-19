@@ -1,0 +1,12 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /dashboard-test/
+
+  # Don't rewrite if requesting an actual file or directory
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Route everything else to index.html (SPA fallback)
+  RewriteRule ^ index.html [L]
+</IfModule>
