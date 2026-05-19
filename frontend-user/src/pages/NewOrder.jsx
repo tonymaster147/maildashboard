@@ -762,11 +762,17 @@ export default function NewOrder() {
                   </>
                 )}
                 {(() => {
-                  if (!isOnlineClass || !formData.class_start_date || !formData.due_date) return null;
-                  const start = new Date(formData.class_start_date);
-                  const end = new Date(formData.due_date);
-                  const days = (end - start) / (1000 * 60 * 60 * 24);
-                  if (days < 45 || totalPrice <= PARTIAL_AMOUNT) return null;
+                  if (!isOnlineClass) return null;
+                  if (totalPrice <= PARTIAL_AMOUNT) return null;
+                  const eligibleByPrice = totalPrice >= 455;
+                  let eligibleByDays = false;
+                  if (formData.class_start_date && formData.due_date) {
+                    const start = new Date(formData.class_start_date);
+                    const end = new Date(formData.due_date);
+                    const days = (end - start) / (1000 * 60 * 60 * 24);
+                    eligibleByDays = days >= 45;
+                  }
+                  if (!eligibleByPrice && !eligibleByDays) return null;
                   return (
                     <div style={{ marginTop: 20, padding: 16, background: 'rgba(132,194,37,0.06)', border: '1px solid var(--accent)', borderRadius: 10 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--accent)' }}>💳 Payment Option</div>
