@@ -31,6 +31,7 @@ router.post('/orders/:order_id/mark-remaining-paid', paymentController.markRemai
 // Installment plan management
 const installmentsController = require('../controllers/installmentsController');
 router.post('/orders/:id/installments', installmentsController.createInstallmentPlan);
+router.put('/orders/:id/installments', installmentsController.updateInstallmentPlan);
 router.get('/orders/:id/installments', installmentsController.getInstallments);
 router.delete('/orders/:id/installments', installmentsController.deleteInstallmentPlan);
 router.post('/installments/:installment_id/mark-paid', installmentsController.markInstallmentPaid);

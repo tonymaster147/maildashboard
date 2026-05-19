@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile } from '../services/api';
 import InstallmentPlanModal from '../components/InstallmentPlanModal';
+import EditInstallmentModal from '../components/EditInstallmentModal';
 import { useApi } from '../hooks/useApi';
 import { FiArrowLeft, FiUpload, FiTrash2, FiDownload, FiUserPlus, FiX } from 'react-icons/fi';
 
@@ -73,6 +74,7 @@ export default function OrderDetail() {
   const [selectedTutors, setSelectedTutors] = useState([]);
   const [installments, setInstallments] = useState([]);
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
+  const [showEditInstallmentModal, setShowEditInstallmentModal] = useState(false);
   const fileInputRef = useRef(null);
   const { assignTutors, getAllTutors, markRemainingPaid, getInstallments, deleteInstallmentPlan, markInstallmentPaid, markAllInstallmentsPaid } = useApi();
 
@@ -229,6 +231,9 @@ export default function OrderDetail() {
                     ))}
                   </div>
                   {installments.some(i => i.status !== 'paid') && (
+                    <button className="btn btn-sm btn-secondary" style={{ width: '100%', marginBottom: 6 }} onClick={() => setShowEditInstallmentModal(true)}>Edit Plan</button>
+                  )}
+                  {installments.some(i => i.status !== 'paid') && (
                     <button className="btn btn-sm btn-primary" style={{ width: '100%', background: '#16a34a', marginBottom: 6 }} onClick={async () => {
                       const pendingSum = installments.filter(i => i.status !== 'paid').reduce((s, i) => s + parseFloat(i.amount), 0);
                       if (!confirm(`Mark ALL remaining installments ($${pendingSum.toFixed(2)}) as paid?`)) return;
@@ -260,6 +265,14 @@ export default function OrderDetail() {
               order={order}
               onClose={() => setShowInstallmentModal(false)}
               onCreated={() => { setShowInstallmentModal(false); fetchOrder(); }}
+            />
+          )}
+          {showEditInstallmentModal && (
+            <EditInstallmentModal
+              orderId={order.id}
+              installments={installments}
+              onClose={() => setShowEditInstallmentModal(false)}
+              onSaved={() => { setShowEditInstallmentModal(false); fetchOrder(); }}
             />
           )}
           <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

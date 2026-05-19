@@ -131,6 +131,85 @@ exports.getInstallments = async (req, res) => {
 };
 
 /**
+ * Admin/Sales: Update existing installment plan
+ * Body: { installments: [{ id, amount, due_date }, ...] } for unpaid installments only
+ */
+exports.updateInstallmentPlan = async (req, res) => {
+  try {
+    const { id: orderId } = req.params;
+    const { installments } = req.body;
+    if (!Array.isArray(installments) || installments.length === 0) {
+      return res.status(400).json({ error: 'installments required' });
+    }
+
+    const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
+
+    // Fetch all existing installments
+    const [existing] = await db.query(
+      'SELECT id, amount, status FROM order_installments WHERE order_id = ?',
+      [orderId]
+    );
+    const existingMap = new Map(existing.map(e => [e.id, e]));
+
+    // Validate: all submitted ids exist, none are already paid
+    for (const upd of installments) {
+      const inst = existingMap.get(parseInt(upd.id));
+      if (!inst) return res.status(400).json({ error: `Installment ${upd.id} not found in this order` });
+      if (inst.status === 'paid') return res.status(400).json({ error: `Installment #${upd.id} is already paid and cannot be edited` });
+      if (!upd.amount || !upd.due_date) return res.status(400).json({ error: 'Each installment requires amount and due_date' });
+      if (parseFloat(upd.amount) <= 0) return res.status(400).json({ error: 'Amount must be > 0' });
+    }
+
+    // Sum check: new unpaid sum must equal old unpaid sum
+    const oldUnpaidSum = existing
+      .filter(e => e.status !== 'paid')
+      .reduce((s, e) => s + parseFloat(e.amount), 0);
+    const newUnpaidSum = installments.reduce((s, i) => s + parseFloat(i.amount), 0);
+    if (Math.abs(oldUnpaidSum - newUnpaidSum) > 0.5) {
+      return res.status(400).json({
+        error: `Sum of unpaid installments must equal $${oldUnpaidSum.toFixed(2)} (got $${newUnpaidSum.toFixed(2)})`
+      });
+    }
+
+    // Make sure all unpaid installments are covered
+    const submittedIds = new Set(installments.map(i => parseInt(i.id)));
+    const unpaidIds = existing.filter(e => e.status !== 'paid').map(e => e.id);
+    for (const id of unpaidIds) {
+      if (!submittedIds.has(id)) {
+        return res.status(400).json({ error: `Missing installment id ${id} in update payload` });
+      }
+    }
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      for (const upd of installments) {
+        await conn.query(
+          'UPDATE order_installments SET amount = ?, due_date = ?, reminder_sent_dates = NULL WHERE id = ?',
+          [parseFloat(upd.amount), upd.due_date, parseInt(upd.id)]
+        );
+      }
+      await conn.commit();
+    } catch (e) {
+      await conn.rollback();
+      throw e;
+    } finally {
+      conn.release();
+    }
+
+    const [rows] = await db.query(
+      'SELECT id, installment_number, amount, due_date, status FROM order_installments WHERE order_id = ? ORDER BY installment_number',
+      [orderId]
+    );
+    res.json({ message: 'Installment plan updated', installments: rows });
+  } catch (error) {
+    console.error('Update installment plan error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
  * Admin/Sales: Delete installment plan (only if nothing paid yet)
  */
 exports.deleteInstallmentPlan = async (req, res) => {

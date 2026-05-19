@@ -49,6 +49,7 @@ const paymentController = require('../controllers/paymentController');
 const installmentsController = require('../controllers/installmentsController');
 router.post('/orders/:order_id/mark-remaining-paid', requirePermission('orders'), paymentController.markRemainingPaid);
 router.post('/orders/:id/installments', requirePermission('orders'), installmentsController.createInstallmentPlan);
+router.put('/orders/:id/installments', requirePermission('orders'), installmentsController.updateInstallmentPlan);
 router.get('/orders/:id/installments', requirePermission('orders'), installmentsController.getInstallments);
 router.delete('/orders/:id/installments', requirePermission('orders'), installmentsController.deleteInstallmentPlan);
 router.post('/installments/:installment_id/mark-paid', requirePermission('orders'), installmentsController.markInstallmentPaid);
