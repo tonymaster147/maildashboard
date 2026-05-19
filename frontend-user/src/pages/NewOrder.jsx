@@ -546,7 +546,7 @@ export default function NewOrder() {
               <div className="flex-center" style={{ padding: 30 }}><div className="loading-spinner" style={{ width: 28, height: 28 }}></div></div>
             ) : hasTierPricing ? (
               availableTiers.length > 1 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${availableTiers.length}, 1fr)`, gap: 16, marginBottom: 20 }}>
+                <div className="plans-grid" style={{ '--tier-count': availableTiers.length, gridTemplateColumns: `repeat(${availableTiers.length}, 1fr)`, gap: 16, marginBottom: 20 }}>
                   {availableTiers.map(tier => {
                     const tp = tierPricing[tier];
                     if (!tp) return null;
@@ -717,7 +717,7 @@ export default function NewOrder() {
                 )}
               </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+            <div className="grid-2" style={{ gap: 24 }}>
               <div className="card">
                 <h4 style={{ marginBottom: 16 }}>Additional Info & Instructions</h4>
                 <div className="form-group">

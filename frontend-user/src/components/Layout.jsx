@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSiteBranding } from '../context/SiteBrandingContext';
 import { getUnreadCount, getPublicSite } from '../services/api';
 import { connectSocket } from '../services/socket';
-import { FiHome, FiPlusCircle, FiList, FiMessageSquare, FiDollarSign, FiUser, FiLogOut } from 'react-icons/fi';
+import { FiHome, FiPlusCircle, FiList, FiMessageSquare, FiDollarSign, FiUser, FiLogOut, FiMenu, FiX } from 'react-icons/fi';
 
 const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
@@ -31,8 +31,12 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadChat, setUnreadChat] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const locationRef = useRef(location.pathname);
   useEffect(() => { locationRef.current = location.pathname; }, [location.pathname]);
+
+  // Close drawer on route change
+  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
 
   const playNotificationSound = useCallback(() => {
     try {
@@ -101,7 +105,18 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
-      <aside className="sidebar">
+      <button
+        type="button"
+        className="mobile-menu-toggle"
+        aria-label="Open menu"
+        onClick={() => setSidebarOpen(true)}
+      >
+        <FiMenu size={22} />
+      </button>
+      {sidebarOpen && (
+        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
+      )}
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           {brand.logoUrl ? (
             <img src={brand.logoUrl} alt={brand.name} style={{ maxHeight: 40, maxWidth: 160, objectFit: 'contain' }} />
@@ -111,6 +126,14 @@ export default function Layout() {
               <h1>{brand.name}</h1>
             </>
           )}
+          <button
+            type="button"
+            className="sidebar-close-btn"
+            aria-label="Close menu"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <FiX size={20} />
+          </button>
         </div>
         <nav className="sidebar-nav">
           <NavLink to="/" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
