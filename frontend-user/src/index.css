@@ -688,15 +688,29 @@ tr:hover td {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 12px 16px;
   background: var(--bg-input);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
 }
 
+.file-item > div:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .file-item .file-name {
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-item > a, .file-item > button {
+  flex-shrink: 0;
 }
 
 .file-item .file-size {
