@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getUserOrders } from '../services/api';
 import { FiTrendingUp, FiClock, FiCheckCircle, FiPlus, FiArrowRight } from 'react-icons/fi';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export default function Dashboard() {
+  usePageMeta('dashboard');
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);

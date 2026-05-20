@@ -10,7 +10,11 @@ const EMPTY_FORM = {
   from_name: '', from_email: '',
   smtp_host: '', smtp_port: 587, smtp_secure: false,
   smtp_user: '', smtp_pass: '',
-  is_active: true
+  is_active: true,
+  meta_title_login: '', meta_desc_login: '',
+  meta_title_signup: '', meta_desc_signup: '',
+  meta_title_dashboard: '', meta_desc_dashboard: '',
+  head_scripts: '', body_scripts: ''
 };
 
 export default function Sites() {
@@ -58,7 +62,15 @@ export default function Sites() {
       smtp_secure: !!site.smtp_secure,
       smtp_user: site.smtp_user || '',
       smtp_pass: '',
-      is_active: !!site.is_active
+      is_active: !!site.is_active,
+      meta_title_login: site.meta_title_login || '',
+      meta_desc_login: site.meta_desc_login || '',
+      meta_title_signup: site.meta_title_signup || '',
+      meta_desc_signup: site.meta_desc_signup || '',
+      meta_title_dashboard: site.meta_title_dashboard || '',
+      meta_desc_dashboard: site.meta_desc_dashboard || '',
+      head_scripts: site.head_scripts || '',
+      body_scripts: site.body_scripts || ''
     });
     setPassTouched(false);
     setShowModal(true);
@@ -293,6 +305,55 @@ export default function Sites() {
                   <label className="form-label">SMTP Password{editingId && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 11, marginLeft: 6 }}>(leave blank to keep)</span>}</label>
                   <input type="password" className="form-input" value={form.smtp_pass} onChange={e => { setForm(f => ({ ...f, smtp_pass: e.target.value })); setPassTouched(true); }} placeholder={editingId ? '••••••••' : 'App password or SMTP key'} />
                 </div>
+              </div>
+
+              <h4 style={{ margin: '20px 0 12px', fontSize: 13, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>SEO Meta Tags (per page)</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ padding: 12, background: 'var(--bg-input)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Login Page</div>
+                  <div className="form-group" style={{ marginBottom: 8 }}>
+                    <label className="form-label">Meta Title</label>
+                    <input className="form-input" value={form.meta_title_login} maxLength={255} onChange={e => setForm(f => ({ ...f, meta_title_login: e.target.value }))} placeholder="Sign in to DreamGrades" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Meta Description</label>
+                    <textarea className="form-input" rows="2" maxLength={500} value={form.meta_desc_login} onChange={e => setForm(f => ({ ...f, meta_desc_login: e.target.value }))} placeholder="Access your DreamGrades account..." />
+                  </div>
+                </div>
+                <div style={{ padding: 12, background: 'var(--bg-input)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Signup Page</div>
+                  <div className="form-group" style={{ marginBottom: 8 }}>
+                    <label className="form-label">Meta Title</label>
+                    <input className="form-input" value={form.meta_title_signup} maxLength={255} onChange={e => setForm(f => ({ ...f, meta_title_signup: e.target.value }))} placeholder="Create your DreamGrades account" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Meta Description</label>
+                    <textarea className="form-input" rows="2" maxLength={500} value={form.meta_desc_signup} onChange={e => setForm(f => ({ ...f, meta_desc_signup: e.target.value }))} placeholder="Join thousands of students..." />
+                  </div>
+                </div>
+                <div style={{ padding: 12, background: 'var(--bg-input)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Dashboard Page</div>
+                  <div className="form-group" style={{ marginBottom: 8 }}>
+                    <label className="form-label">Meta Title</label>
+                    <input className="form-input" value={form.meta_title_dashboard} maxLength={255} onChange={e => setForm(f => ({ ...f, meta_title_dashboard: e.target.value }))} placeholder="My DreamGrades Dashboard" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Meta Description</label>
+                    <textarea className="form-input" rows="2" maxLength={500} value={form.meta_desc_dashboard} onChange={e => setForm(f => ({ ...f, meta_desc_dashboard: e.target.value }))} placeholder="Manage your orders, tutors, and payments..." />
+                  </div>
+                </div>
+              </div>
+
+              <h4 style={{ margin: '20px 0 12px', fontSize: 13, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Custom Tracking Scripts</h4>
+              <div className="form-group">
+                <label className="form-label">Head Scripts <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 11 }}>(Google Analytics, GSC verification, Tag Manager)</span></label>
+                <textarea className="form-input" rows="4" value={form.head_scripts} onChange={e => setForm(f => ({ ...f, head_scripts: e.target.value }))} placeholder={'<script src="https://www.googletagmanager.com/gtag/js?id=G-XXX"></script>\n<script>...</script>'} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Inserted into &lt;head&gt;. Paste raw HTML tags as Google/Facebook provide them.</div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Body Scripts <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 11 }}>(Tawk.to, Crisp, LiveChat widgets)</span></label>
+                <textarea className="form-input" rows="4" value={form.body_scripts} onChange={e => setForm(f => ({ ...f, body_scripts: e.target.value }))} placeholder={'<script>(function(d){...})();</script>'} style={{ fontFamily: 'monospace', fontSize: 12 }} />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Inserted at end of &lt;body&gt;. Used for chat widgets and pixels.</div>
               </div>
 
               <div className="form-group">

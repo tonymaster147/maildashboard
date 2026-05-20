@@ -26,9 +26,49 @@ export const SiteBrandingProvider = ({ children }) => {
             logoUrl: s.logo_url ? (s.logo_url.startsWith('http') ? s.logo_url : `${API_ORIGIN}${s.logo_url}`) : null,
             resolved: true,
             siteKey: s.site_key,
-            siteId: s.id
+            siteId: s.id,
+            meta: {
+              login: { title: s.meta_title_login, desc: s.meta_desc_login },
+              signup: { title: s.meta_title_signup, desc: s.meta_desc_signup },
+              dashboard: { title: s.meta_title_dashboard, desc: s.meta_desc_dashboard }
+            }
           });
           document.title = s.name;
+
+          // Inject head scripts (once)
+          if (s.head_scripts && !document.getElementById('site-head-scripts')) {
+            const container = document.createElement('div');
+            container.id = 'site-head-scripts';
+            container.innerHTML = s.head_scripts;
+            // Move scripts/meta from container into <head>
+            Array.from(container.children).forEach(node => {
+              if (node.tagName === 'SCRIPT') {
+                const s2 = document.createElement('script');
+                Array.from(node.attributes).forEach(a => s2.setAttribute(a.name, a.value));
+                s2.text = node.textContent;
+                document.head.appendChild(s2);
+              } else {
+                document.head.appendChild(node.cloneNode(true));
+              }
+            });
+          }
+
+          // Inject body scripts (once)
+          if (s.body_scripts && !document.getElementById('site-body-scripts')) {
+            const container = document.createElement('div');
+            container.id = 'site-body-scripts';
+            container.innerHTML = s.body_scripts;
+            Array.from(container.children).forEach(node => {
+              if (node.tagName === 'SCRIPT') {
+                const s2 = document.createElement('script');
+                Array.from(node.attributes).forEach(a => s2.setAttribute(a.name, a.value));
+                s2.text = node.textContent;
+                document.body.appendChild(s2);
+              } else {
+                document.body.appendChild(node.cloneNode(true));
+              }
+            });
+          }
         }
       })
       .catch(() => { /* keep default */ });

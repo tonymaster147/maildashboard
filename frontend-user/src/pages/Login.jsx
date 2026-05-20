@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSiteBranding } from '../context/SiteBrandingContext';
+import { usePageMeta } from '../hooks/usePageMeta';
 import { login } from '../services/api';
 import { FiLogIn, FiEye, FiEyeOff } from 'react-icons/fi';
 
 export default function Login() {
+  usePageMeta('login');
   const brand = useSiteBranding();
   const [username, setUsername] = useState('');
   const [accessCode, setAccessCode] = useState('');

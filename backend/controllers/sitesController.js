@@ -45,7 +45,11 @@ exports.createSite = async (req, res) => {
       name, url, nickname, logo_url, site_key,
       from_name, from_email,
       smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass,
-      is_active
+      is_active,
+      meta_title_login, meta_desc_login,
+      meta_title_signup, meta_desc_signup,
+      meta_title_dashboard, meta_desc_dashboard,
+      head_scripts, body_scripts
     } = req.body;
 
     if (!name || !url) return res.status(400).json({ error: 'name and url are required' });
@@ -61,8 +65,10 @@ exports.createSite = async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO sites
        (site_key, name, url, nickname, logo_url, from_name, from_email,
-        smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, is_active,
+        meta_title_login, meta_desc_login, meta_title_signup, meta_desc_signup,
+        meta_title_dashboard, meta_desc_dashboard, head_scripts, body_scripts)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         key, name, url, nickname || null, logo_url || null,
         from_name || null, from_email || null,
@@ -70,7 +76,11 @@ exports.createSite = async (req, res) => {
         smtp_port ? parseInt(smtp_port) : 587,
         smtp_secure ? 1 : 0,
         smtp_user || null, encPass,
-        is_active === false ? 0 : 1
+        is_active === false ? 0 : 1,
+        meta_title_login || null, meta_desc_login || null,
+        meta_title_signup || null, meta_desc_signup || null,
+        meta_title_dashboard || null, meta_desc_dashboard || null,
+        head_scripts || null, body_scripts || null
       ]
     );
 
@@ -90,7 +100,11 @@ exports.updateSite = async (req, res) => {
     const updates = [];
     const params = [];
     const assignable = ['name', 'url', 'nickname', 'logo_url', 'from_name', 'from_email',
-      'smtp_host', 'smtp_port', 'smtp_user'];
+      'smtp_host', 'smtp_port', 'smtp_user',
+      'meta_title_login', 'meta_desc_login',
+      'meta_title_signup', 'meta_desc_signup',
+      'meta_title_dashboard', 'meta_desc_dashboard',
+      'head_scripts', 'body_scripts'];
 
     assignable.forEach(f => {
       if (body[f] !== undefined) {
@@ -188,6 +202,16 @@ exports.testEmail = async (req, res) => {
 exports.getPublicBranding = async (req, res) => {
   try {
     if (!req.site) return res.json({ site: null });
+    // Fetch meta + script fields directly (not in cache)
+    const [rows] = await db.query(
+      `SELECT meta_title_login, meta_desc_login,
+              meta_title_signup, meta_desc_signup,
+              meta_title_dashboard, meta_desc_dashboard,
+              head_scripts, body_scripts
+       FROM sites WHERE id = ?`,
+      [req.site.id]
+    );
+    const extras = rows[0] || {};
     res.json({
       site: {
         id: req.site.id,
@@ -195,7 +219,15 @@ exports.getPublicBranding = async (req, res) => {
         name: req.site.name,
         nickname: req.site.nickname || null,
         logo_url: req.site.logo_url || null,
-        url: req.site.url
+        url: req.site.url,
+        meta_title_login: extras.meta_title_login || null,
+        meta_desc_login: extras.meta_desc_login || null,
+        meta_title_signup: extras.meta_title_signup || null,
+        meta_desc_signup: extras.meta_desc_signup || null,
+        meta_title_dashboard: extras.meta_title_dashboard || null,
+        meta_desc_dashboard: extras.meta_desc_dashboard || null,
+        head_scripts: extras.head_scripts || null,
+        body_scripts: extras.body_scripts || null
       }
     });
   } catch (error) {

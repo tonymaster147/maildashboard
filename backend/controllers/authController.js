@@ -113,7 +113,7 @@ exports.adminLogin = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, role: 'admin' },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '365d' }
     );
 
     res.json({
@@ -151,7 +151,7 @@ exports.tutorLogin = async (req, res) => {
     const token = jwt.sign(
       { id: tutor.id, name: tutor.name, role: 'tutor' },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '365d' }
     );
 
     res.json({
@@ -196,7 +196,7 @@ exports.salesLogin = async (req, res) => {
     const token = jwt.sign(
       { id: salesUser.id, name: salesUser.name, role: salesUser.role },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '365d' }
     );
 
     res.json({

@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { signup } from '../services/api';
 import { FiUserPlus, FiCopy, FiCheck } from 'react-icons/fi';
 import { useSiteBranding } from '../context/SiteBrandingContext';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 export default function Signup() {
+  usePageMeta('signup');
   const brand = useSiteBranding();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
