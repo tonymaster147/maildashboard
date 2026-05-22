@@ -14,17 +14,26 @@ const setupSocket = require('./socket/chatHandler');
 const app = express();
 const server = http.createServer(app);
 
+// Build allowed CORS origins from env vars.
+// ALLOWED_ORIGINS is a comma-separated list of extra origins (e.g. production WP sites).
+// FRONTEND_*_URL provide the dashboard origins. Localhost dev ports are always included.
+const extraOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+const allowedOrigins = Array.from(new Set([
+  process.env.FRONTEND_USER_URL || 'http://localhost:5173',
+  process.env.FRONTEND_ADMIN_URL || 'http://localhost:5174',
+  process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175',
+  'http://localhost:5176',
+  ...extraOrigins
+]));
+
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: [
-      process.env.FRONTEND_USER_URL || 'http://localhost:5173',
-      process.env.FRONTEND_ADMIN_URL || 'http://localhost:5174',
-      process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175',
-      'http://localhost:5176',
-      'https://make-tutors.com',
-      'https://www.make-tutors.com'
-    ],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -44,14 +53,7 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 // CORS
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_USER_URL || 'http://localhost:5173',
-    process.env.FRONTEND_ADMIN_URL || 'http://localhost:5174',
-    process.env.FRONTEND_TUTOR_URL || 'http://localhost:5175',
-    'http://localhost:5176',
-    'https://make-tutors.com',
-    'https://www.make-tutors.com'
-  ],
+  origin: allowedOrigins,
   credentials: true
 }));
 
