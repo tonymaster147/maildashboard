@@ -1,19 +1,30 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { signup } from '../services/api';
-import { FiUserPlus, FiCopy, FiCheck } from 'react-icons/fi';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { signup, getPublicGeo } from '../services/api';
+import { FiUserPlus } from 'react-icons/fi';
 import { useSiteBranding } from '../context/SiteBrandingContext';
 import { usePageMeta } from '../hooks/usePageMeta';
+import { COUNTRY_CODES, DEFAULT_DIAL, findByIso } from '../utils/countryCodes';
 
 export default function Signup() {
   usePageMeta('signup');
   const brand = useSiteBranding();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [dialCode, setDialCode] = useState(DEFAULT_DIAL);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    getPublicGeo()
+      .then(({ data }) => {
+        const match = findByIso(data?.countryCode);
+        if (match) setDialCode(match.dial);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,48 +32,17 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      const res = await signup({ username, email });
-      setResult(res.data);
+      const fullPhone = `${dialCode} ${phone}`.trim();
+      await signup({ username, email, phone: fullPhone });
+      navigate('/login', {
+        state: { signupSuccess: true, message: 'Account created! Your access code has been emailed to you.' },
+        replace: true
+      });
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Signup failed');
-    } finally {
       setLoading(false);
     }
   };
-
-  const copyCode = () => {
-    navigator.clipboard.writeText(result.access_code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  if (result) {
-    return (
-      <div className="auth-container">
-        <div className="auth-card text-center">
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-          <h1>Account Created!</h1>
-          <p className="subtitle">Save your access code securely</p>
-          
-          <div style={{ background: 'var(--bg-input)', padding: 24, borderRadius: 'var(--radius)', margin: '24px 0', border: '1px solid var(--border)' }}>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 8, fontSize: 14 }}>Your Access Code</p>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-              <span style={{ fontSize: 28, fontWeight: 700, fontFamily: 'monospace', color: 'var(--accent)', letterSpacing: 2 }}>{result.access_code}</span>
-              <button onClick={copyCode} className="btn btn-sm btn-secondary">
-                {copied ? <FiCheck size={16} /> : <FiCopy size={16} />}
-              </button>
-            </div>
-          </div>
-
-          <div style={{ background: 'rgba(245, 158, 11, 0.1)', padding: 16, borderRadius: 'var(--radius-sm)', marginBottom: 24, border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-            <p style={{ color: 'var(--warning)', fontSize: 13 }}>⚠️ Please save this code. You will need it to login.</p>
-          </div>
-
-          <Link to="/login" className="btn btn-primary btn-lg" style={{ width: '100%' }}>Go to Login</Link>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="auth-container">
@@ -88,6 +68,33 @@ export default function Signup() {
             <label className="form-label">Email *</label>
             <input type="email" className="form-input" placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Your access code will be sent to this email</p>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Phone Number *</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select
+                className="form-input"
+                value={dialCode}
+                onChange={e => setDialCode(e.target.value)}
+                style={{ flex: '0 0 110px', paddingRight: 4 }}
+                aria-label="Country code"
+              >
+                {COUNTRY_CODES.map(c => (
+                  <option key={c.iso} value={c.dial}>{c.iso} {c.dial}</option>
+                ))}
+              </select>
+              <input
+                type="tel"
+                className="form-input"
+                placeholder="555 123 4567"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                required
+                pattern="^[0-9\s\-()]{6,18}$"
+                title="Enter a valid phone number (digits, spaces, -, parentheses)"
+                style={{ flex: 1 }}
+              />
+            </div>
           </div>
           <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={loading}>
             {loading ? <div className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></div> : <><FiUserPlus size={18} /> Create Account</>}

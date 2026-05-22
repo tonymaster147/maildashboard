@@ -15,6 +15,10 @@ const handleValidation = (req, res, next) => {
 const validateSignup = [
   body('username').trim().isLength({ min: 3, max: 50 }).withMessage('Username must be 3-50 characters'),
   body('email').trim().isEmail().withMessage('A valid email is required'),
+  body('phone')
+    .trim()
+    .notEmpty().withMessage('Phone number is required')
+    .matches(/^\+?[0-9\s\-()]{7,20}$/).withMessage('A valid phone number is required'),
   handleValidation
 ];
 

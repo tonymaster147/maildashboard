@@ -61,11 +61,11 @@ exports.getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 20, search } = req.query;
     const offset = (page - 1) * limit;
-    let query = 'SELECT id, username, email, role, is_active, created_at FROM users WHERE role = "user"';
+    let query = 'SELECT id, username, email, phone, country, signup_ip, role, is_active, created_at FROM users WHERE role = "user"';
     const params = [];
     if (search) {
-      query += ' AND (username LIKE ? OR email LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      query += ' AND (username LIKE ? OR email LIKE ? OR phone LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));

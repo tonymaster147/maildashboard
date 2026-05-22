@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSiteBranding } from '../context/SiteBrandingContext';
 import { usePageMeta } from '../hooks/usePageMeta';
@@ -16,6 +16,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const { loginUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const successMessage = location.state?.signupSuccess ? location.state.message : null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,6 +48,7 @@ export default function Login() {
           <p className="subtitle">Sign in to your {brand.name} account</p>
         </div>
 
+        {successMessage && <div className="toast toast-success" style={{ position: 'relative', marginBottom: 16 }}>{successMessage}</div>}
         {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 16 }}>{error}</div>}
 
         <form onSubmit={handleSubmit}>

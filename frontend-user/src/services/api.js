@@ -33,6 +33,7 @@ api.interceptors.response.use(
 
 // Public site branding (for login/signup page logo + name)
 export const getPublicSite = () => api.get('/public/site');
+export const getPublicGeo = () => api.get('/public/geo');
 
 // Auth
 export const signup = (data) => api.post('/auth/signup', data);

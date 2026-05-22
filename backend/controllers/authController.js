@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../config/db');
 const { sendAccessCode, sendForgotAccessCode } = require('../services/emailService');
+const { getClientIp, normalizeIp, lookupCountry } = require('../utils/geoip');
 require('dotenv').config();
 
 /**
@@ -10,7 +11,7 @@ require('dotenv').config();
  */
 exports.signup = async (req, res) => {
   try {
-    const { username, email } = req.body;
+    const { username, email, phone } = req.body;
 
     // Check if username exists
     const [existing] = await db.query('SELECT id FROM users WHERE username = ?', [username]);
@@ -22,10 +23,14 @@ exports.signup = async (req, res) => {
     const rawAccessCode = uuidv4().slice(0, 8).toUpperCase();
     const hashedCode = await bcrypt.hash(rawAccessCode, 10);
 
+    // Capture signup IP and resolve country (best-effort, non-blocking failure)
+    const signupIp = normalizeIp(getClientIp(req));
+    const country = await lookupCountry(signupIp);
+
     // Insert user
     const [result] = await db.query(
-      'INSERT INTO users (username, access_code, email, role) VALUES (?, ?, ?, ?)',
-      [username, hashedCode, email || null, 'user']
+      'INSERT INTO users (username, access_code, email, phone, country, signup_ip, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [username, hashedCode, email || null, phone, country, signupIp, 'user']
     );
 
     // Send access code via email (branded to originating site)
@@ -249,7 +254,7 @@ exports.changePassword = async (req, res) => {
 exports.getProfile = async (req, res) => {
   try {
     const [users] = await db.query(
-      'SELECT id, username, email, role, created_at FROM users WHERE id = ?',
+      'SELECT id, username, email, phone, country, role, created_at FROM users WHERE id = ?',
       [req.user.id]
     );
 
