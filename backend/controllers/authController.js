@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../config/db');
-const { sendAccessCode, sendForgotAccessCode } = require('../services/emailService');
+const { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode } = require('../services/emailService');
 const { getClientIp, normalizeIp, lookupCountry } = require('../utils/geoip');
 require('dotenv').config();
 
@@ -294,6 +294,83 @@ exports.forgotAccessCode = async (req, res) => {
     res.json({ message: 'If an account with that email exists, a new access code has been sent.' });
   } catch (error) {
     console.error('Forgot access code error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
+ * Request email change — sends a 6-digit code to the new email.
+ */
+exports.requestEmailChange = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const newEmail = String(req.body.new_email || '').trim().toLowerCase();
+
+    if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      return res.status(400).json({ error: 'A valid email address is required' });
+    }
+
+    const [users] = await db.query('SELECT id, username, email FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+    const user = users[0];
+
+    if (user.email && user.email.toLowerCase() === newEmail) {
+      return res.status(400).json({ error: 'This is already your current email address' });
+    }
+
+    const [taken] = await db.query('SELECT id FROM users WHERE LOWER(email) = ? AND id <> ?', [newEmail, userId]);
+    if (taken.length > 0) return res.status(400).json({ error: 'This email is already in use' });
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    await db.query(
+      'UPDATE users SET pending_email = ?, email_change_code = ?, email_change_expires_at = DATE_ADD(NOW(), INTERVAL 15 MINUTE) WHERE id = ?',
+      [newEmail, code, userId]
+    );
+
+    await sendEmailChangeCode(newEmail, user.username, code, req.site?.id);
+
+    res.json({ message: 'Verification code sent to the new email address.' });
+  } catch (error) {
+    console.error('Request email change error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
+ * Verify email change — applies the new email if the code matches and hasn't expired.
+ */
+exports.verifyEmailChange = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const code = String(req.body.code || '').trim();
+    if (!code) return res.status(400).json({ error: 'Verification code is required' });
+
+    const [rows] = await db.query(
+      'SELECT pending_email, email_change_code, email_change_expires_at FROM users WHERE id = ?',
+      [userId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const row = rows[0];
+
+    if (!row.pending_email || !row.email_change_code) {
+      return res.status(400).json({ error: 'No pending email change. Request a new code.' });
+    }
+    if (new Date(row.email_change_expires_at).getTime() < Date.now()) {
+      await db.query('UPDATE users SET pending_email = NULL, email_change_code = NULL, email_change_expires_at = NULL WHERE id = ?', [userId]);
+      return res.status(400).json({ error: 'Verification code expired. Request a new one.' });
+    }
+    if (row.email_change_code !== code) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    await db.query(
+      'UPDATE users SET email = ?, pending_email = NULL, email_change_code = NULL, email_change_expires_at = NULL WHERE id = ?',
+      [row.pending_email, userId]
+    );
+
+    res.json({ message: 'Email updated successfully', email: row.pending_email });
+  } catch (error) {
+    console.error('Verify email change error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FiX, FiPlus, FiTrash2 } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+import Notice from './Notice';
 
 const todayPlusDays = (days) => {
   const d = new Date();
@@ -133,7 +134,7 @@ export default function InstallmentPlanModal({ order, onClose, onCreated }) {
           </div>
         </div>
 
-        {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 12 }}>{error}</div>}
+        {error && <Notice type="error" style={{ marginBottom: 12 }}>{error}</Notice>}
 
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={submit} disabled={!isValid || submitting}>
           {submitting ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : `Create ${count} Installments`}

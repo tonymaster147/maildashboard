@@ -173,6 +173,23 @@ async function sendForgotAccessCode(email, username, newAccessCode, siteId) {
   if (ok) console.log(`✅ Forgot access code email sent to ${email}`);
 }
 
+async function sendEmailChangeCode(newEmail, username, code, siteId) {
+  if (!newEmail) return;
+  const ctx = await resolveContext(siteId);
+  const html = `
+    ${header(ctx.brand, 'Verify your new email')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hi ${username}, please use the code below to confirm this email address for your ${ctx.brand.name} account.</p>
+      <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #84C225; margin-bottom: 20px; text-align: center;">
+        <p style="margin: 0 0 8px 0; color: #64748b; font-size: 13px;">Your verification code</p>
+        <p style="margin: 0; font-family: monospace; font-size: 32px; letter-spacing: 8px; color: #84C225; font-weight: 700;">${code}</p>
+      </div>
+      <p style="color: #64748b; font-size: 14px;">This code expires in 15 minutes. If you did not request this change, you can safely ignore this email — your current email will remain unchanged.</p>
+    ${footer(ctx.brand)}
+  `;
+  const ok = await sendViaContext(ctx, { to: newEmail, subject: `Verify your new email - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Email-change code sent to ${newEmail}`);
+}
+
 async function sendNewOrderAdmin(orderDetails) {
   const { orderId, courseName, username, orderType, subject, educationLevel, status, sourceUrl, planName, totalPrice, paymentStatus, paymentType, amountPaid, amountRemaining, siteId } = orderDetails;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
@@ -445,4 +462,4 @@ async function sendInstallmentPaid(email, details) {
   if (ok) console.log(`✅ Installment paid email sent to ${email} for order #${orderId}`);
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid };
+module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid };

@@ -41,6 +41,8 @@ export const login = (data) => api.post('/auth/login', data);
 export const getProfile = () => api.get('/auth/profile');
 export const changePassword = (data) => api.put('/auth/change-password', data);
 export const forgotAccessCode = (data) => api.post('/auth/forgot-access-code', data);
+export const requestEmailChange = (data) => api.post('/auth/request-email-change', data);
+export const verifyEmailChange = (data) => api.post('/auth/verify-email-change', data);
 
 // Orders
 export const getOrderTypes = () => api.get('/orders/types');

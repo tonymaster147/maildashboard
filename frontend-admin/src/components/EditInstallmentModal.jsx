@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FiX } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+import Notice from './Notice';
 
 export default function EditInstallmentModal({ orderId, installments, onClose, onSaved }) {
   const { updateInstallmentPlan } = useApi();
@@ -84,7 +85,7 @@ export default function EditInstallmentModal({ orderId, installments, onClose, o
           Sum: ${sumNow.toFixed(2)} / Expected: ${fixedUnpaidSum.toFixed(2)}
         </div>
 
-        {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 12 }}>{error}</div>}
+        {error && <Notice type="error" style={{ marginBottom: 12 }}>{error}</Notice>}
 
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={submit} disabled={!isValid || submitting}>
           {submitting ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : 'Save Changes'}

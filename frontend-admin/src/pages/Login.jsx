@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { adminLogin, salesLogin } from '../services/api';
 import { FiLogIn, FiShield, FiUsers } from 'react-icons/fi';
+import Notice from '../components/Notice';
 
 export default function Login() {
   const [loginType, setLoginType] = useState('admin'); // 'admin' or 'sales'
@@ -79,7 +80,7 @@ export default function Login() {
           </button>
         </div>
 
-        {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 16 }}>{error}</div>}
+        {error && <Notice type="error">{error}</Notice>}
         <form onSubmit={handleSubmit}>
           {loginType === 'admin' ? (
             <div className="form-group"><label className="form-label">Username</label><input type="text" className="form-input" value={username} onChange={e => setUsername(e.target.value)} required /></div>

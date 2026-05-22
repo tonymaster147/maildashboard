@@ -5,6 +5,7 @@ import { FiUserPlus } from 'react-icons/fi';
 import { useSiteBranding } from '../context/SiteBrandingContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { COUNTRY_CODES, DEFAULT_DIAL, findByIso } from '../utils/countryCodes';
+import Notice from '../components/Notice';
 
 export default function Signup() {
   usePageMeta('signup');
@@ -57,7 +58,7 @@ export default function Signup() {
           <p className="subtitle">Get started with {brand.name}</p>
         </div>
 
-        {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 16 }}>{error}</div>}
+        {error && <Notice type="error">{error}</Notice>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">

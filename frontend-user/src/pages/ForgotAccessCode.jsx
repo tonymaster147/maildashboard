@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { forgotAccessCode } from '../services/api';
 import { useSiteBranding } from '../context/SiteBrandingContext';
 import { FiMail, FiArrowLeft } from 'react-icons/fi';
+import Notice from '../components/Notice';
 
 export default function ForgotAccessCode() {
   const brand = useSiteBranding();
@@ -40,8 +41,8 @@ export default function ForgotAccessCode() {
           <p className="subtitle">Enter your {brand.name} email to receive a new access code</p>
         </div>
 
-        {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 16 }}>{error}</div>}
-        {message && <div className="toast toast-success" style={{ position: 'relative', marginBottom: 16, background: 'rgba(34, 197, 94, 0.15)', color: 'var(--success)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>{message}</div>}
+        {error && <Notice type="error">{error}</Notice>}
+        {message && <Notice type="success">{message}</Notice>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">

@@ -13,5 +13,7 @@ router.post('/sales/login', authLimiter, validateTutorLogin, authController.sale
 router.post('/forgot-access-code', authLimiter, resolveSite, authController.forgotAccessCode);
 router.put('/change-password', verifyToken, authController.changePassword);
 router.get('/profile', verifyToken, authController.getProfile);
+router.post('/request-email-change', verifyToken, resolveSite, authController.requestEmailChange);
+router.post('/verify-email-change', verifyToken, authController.verifyEmailChange);
 
 module.exports = router;

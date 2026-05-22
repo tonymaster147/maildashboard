@@ -5,6 +5,7 @@ import { useSiteBranding } from '../context/SiteBrandingContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { login } from '../services/api';
 import { FiLogIn, FiEye, FiEyeOff } from 'react-icons/fi';
+import Notice from '../components/Notice';
 
 export default function Login() {
   usePageMeta('login');
@@ -48,8 +49,8 @@ export default function Login() {
           <p className="subtitle">Sign in to your {brand.name} account</p>
         </div>
 
-        {successMessage && <div className="toast toast-success" style={{ position: 'relative', marginBottom: 16 }}>{successMessage}</div>}
-        {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 16 }}>{error}</div>}
+        {successMessage && <Notice type="success">{successMessage}</Notice>}
+        {error && <Notice type="error">{error}</Notice>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">

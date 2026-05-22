@@ -5,6 +5,7 @@ import EmbeddedCheckout from '../components/EmbeddedCheckout';
 import { FiUpload, FiX, FiCheck, FiArrowRight, FiArrowLeft, FiTag, FiPlus } from 'react-icons/fi';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import Notice from '../components/Notice';
 
 const STEPS = ['Service Details', 'Schedule & Plan', 'Review & Checkout'];
 
@@ -384,7 +385,7 @@ export default function NewOrder() {
           ))}
         </div>
 
-        {error && <div className="toast toast-error" style={{ position: 'relative', marginBottom: 20 }}>{error}</div>}
+        {error && <Notice type="error" style={{ marginBottom: 20 }}>{error}</Notice>}
 
         {/* Step 1: Service Details */}
         {currentStep === 0 && (
