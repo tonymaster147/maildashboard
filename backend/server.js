@@ -104,6 +104,9 @@ server.listen(PORT, () => {
   ╚══════════════════════════════════════════════╝
   `);
 
+  // Preload status code → id maps so controllers can resolve them synchronously
+  require('./utils/statuses').load().catch(err => console.error('Status preload failed:', err.message));
+
   // Schedule daily installment reminder at 09:00 server time
   cron.schedule('0 9 * * *', () => {
     console.log('[Cron] Running installment reminder job...');

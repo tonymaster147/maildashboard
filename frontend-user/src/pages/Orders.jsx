@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getUserOrders } from '../services/api';
+import { getUserOrders, getPublicStatuses } from '../services/api';
 import { FiEye, FiUser, FiHeadphones, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 const PER_PAGE = 25;
@@ -8,15 +8,18 @@ const PER_PAGE = 25;
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState('');   // admin_status_code
+  const [adminStatuses, setAdminStatuses] = useState([]);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    getUserOrders(filter).then(res => {
+    setLoading(true);
+    getUserOrders(filter ? { admin_status_code: filter } : {}).then(res => {
       setOrders(res.data);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [filter]);
+  useEffect(() => { getPublicStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))).catch(() => {}); }, []);
 
   const totalPages = Math.ceil(orders.length / PER_PAGE);
   const paged = orders.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -30,10 +33,11 @@ export default function Orders() {
         <p>View and manage all your orders</p>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        {['', 'active', 'in_progress', 'pending', 'completed', 'cancelled'].map(s => (
-          <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s); setPage(1); }}>
-            {s || 'All'}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+        <button key="all" className={`btn btn-sm ${filter === '' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(''); setPage(1); }}>All</button>
+        {adminStatuses.map(s => (
+          <button key={s.code} className={`btn btn-sm ${filter === s.code ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s.code); setPage(1); }}>
+            {s.name}
           </button>
         ))}
       </div>
@@ -72,7 +76,7 @@ export default function Orders() {
                     <td>{order.subject_name}</td>
                     <td>{order.plan_name || '—'}</td>
                     <td style={{ color: 'var(--accent)', fontWeight: 600 }}>${parseFloat(order.total_price).toFixed(2)}</td>
-                    <td><span className={`badge-status badge-${order.status}`}>{order.status}</span></td>
+                    <td><span className={`badge-status badge-${order.status}`}>{order.admin_status_name || order.status}</span></td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{new Date(order.created_at).toLocaleDateString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>

@@ -43,7 +43,7 @@ exports.createSite = async (req, res) => {
   try {
     const {
       name, url, nickname, logo_url, site_key,
-      from_name, from_email,
+      from_name, from_email, contact_email,
       smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass,
       is_active,
       meta_title_login, meta_desc_login,
@@ -64,14 +64,14 @@ exports.createSite = async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO sites
-       (site_key, name, url, nickname, logo_url, from_name, from_email,
+       (site_key, name, url, nickname, logo_url, from_name, from_email, contact_email,
         smtp_host, smtp_port, smtp_secure, smtp_user, smtp_pass, is_active,
         meta_title_login, meta_desc_login, meta_title_signup, meta_desc_signup,
         meta_title_dashboard, meta_desc_dashboard, head_scripts, body_scripts)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         key, name, url, nickname || null, logo_url || null,
-        from_name || null, from_email || null,
+        from_name || null, from_email || null, contact_email || null,
         smtp_host || null,
         smtp_port ? parseInt(smtp_port) : 587,
         smtp_secure ? 1 : 0,
@@ -99,7 +99,7 @@ exports.updateSite = async (req, res) => {
 
     const updates = [];
     const params = [];
-    const assignable = ['name', 'url', 'nickname', 'logo_url', 'from_name', 'from_email',
+    const assignable = ['name', 'url', 'nickname', 'logo_url', 'from_name', 'from_email', 'contact_email',
       'smtp_host', 'smtp_port', 'smtp_user',
       'meta_title_login', 'meta_desc_login',
       'meta_title_signup', 'meta_desc_signup',

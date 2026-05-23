@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getTaskDetail, completeTask, uploadWorkFiles } from '../services/api';
+import { getTaskDetail, updateTutorTaskStatus, uploadWorkFiles, getPublicStatuses } from '../services/api';
 import { FiArrowLeft, FiCheckCircle, FiUpload, FiMessageSquare, FiDownload } from 'react-icons/fi';
 
 export default function TaskDetail() {
@@ -8,10 +8,12 @@ export default function TaskDetail() {
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [completing, setCompleting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [tutorStatuses, setTutorStatuses] = useState([]);
 
   const fetchTask = () => { getTaskDetail(id).then(res => { setTask(res.data); setLoading(false); }).catch(() => setLoading(false)); };
   useEffect(() => { fetchTask(); }, [id]);
+  useEffect(() => { getPublicStatuses('tutor').then(res => setTutorStatuses((res.data.statuses || []).filter(s => s.is_active))).catch(() => {}); }, []);
 
   const handleFileUpload = async (e) => {
     const files = e.target.files;
@@ -28,27 +30,41 @@ export default function TaskDetail() {
     setUploading(false);
   };
 
-  const handleComplete = async () => {
-    if (!confirm('Mark this task as completed? Chat will be disabled.')) return;
-    setCompleting(true);
+  const handleStatusChange = async (newCode) => {
+    if (!newCode || newCode === task.tutor_status_code) return;
+    if (newCode === 'completed' && !confirm('Mark this task as completed? Chat will be disabled.')) return;
+    setSaving(true);
     try {
-      await completeTask(id);
+      await updateTutorTaskStatus(id, newCode);
       fetchTask();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed');
     }
-    setCompleting(false);
+    setSaving(false);
   };
+
+  const isCompleted = task?.tutor_status_code === 'completed';
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
   if (!task) return <div className="card text-center"><h3>Task not found</h3></div>;
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
         <Link to="/" className="btn btn-sm btn-secondary"><FiArrowLeft size={14} /></Link>
         <div><h2>Task #{task.id}</h2><p style={{ color: 'var(--text-secondary)' }}>{task.course_name}</p></div>
-        <span className={`badge-status badge-${task.status}`} style={{ marginLeft: 'auto', fontSize: 14, padding: '6px 16px' }}>{task.status}</span>
+        {task.tutor_status_code && (
+          <span
+            style={{
+              marginLeft: 'auto', fontSize: 13, fontWeight: 600, padding: '6px 14px', borderRadius: 999,
+              background: task.tutor_status_code === 'completed' ? 'rgba(34,197,94,0.12)' : task.tutor_status_code === 'work_stopped' ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.12)',
+              color:      task.tutor_status_code === 'completed' ? '#16a34a'             : task.tutor_status_code === 'work_stopped' ? '#d97706'             : '#2563eb',
+              border: '1px solid currentColor'
+            }}
+          >
+            {task.tutor_status_name}
+          </span>
+        )}
       </div>
 
       <div className="grid-2">
@@ -60,28 +76,41 @@ export default function TaskDetail() {
         </div>
         <div className="card">
           <h4 style={{ marginBottom: 16 }}>Actions</h4>
-          {task.status !== 'completed' && (
-            <>
-              <div className="form-group">
-                <label className="form-label">Upload Work Files</label>
-                <div className="file-upload-zone" onClick={() => document.getElementById('work-files').click()}>
-                  {uploading ? <div className="loading-spinner"></div> : <><FiUpload size={24} style={{ marginBottom: 8 }} /><p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Click to upload files</p></>}
-                </div>
-                <input id="work-files" type="file" multiple style={{ display: 'none' }} onChange={handleFileUpload} />
+          {!isCompleted && (
+            <div className="form-group">
+              <label className="form-label">Upload Work Files</label>
+              <div className="file-upload-zone" onClick={() => document.getElementById('work-files').click()}>
+                {uploading ? <div className="loading-spinner"></div> : <><FiUpload size={24} style={{ marginBottom: 8 }} /><p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Click to upload files</p></>}
               </div>
-              <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleComplete} disabled={completing}>
-                {completing ? <div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></div> : <><FiCheckCircle size={16} /> Mark as Completed</>}
-              </button>
-            </>
+              <input id="work-files" type="file" multiple style={{ display: 'none' }} onChange={handleFileUpload} />
+            </div>
           )}
+
+          <div className="form-group">
+            <label className="form-label">Work Status</label>
+            <select
+              className="form-input"
+              value={task.tutor_status_code || ''}
+              onChange={e => handleStatusChange(e.target.value)}
+              disabled={saving || isCompleted}
+              style={{ padding: '10px 12px', fontSize: 14, fontWeight: 600 }}
+            >
+              {!task.tutor_status_code && <option value="" disabled>Select status…</option>}
+              {tutorStatuses.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+            </select>
+            {saving && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Saving…</p>}
+            {isCompleted && <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>This task is completed and locked.</p>}
+          </div>
+
           {task.chat_enabled && (
-            <Link to={`/chat/${task.id}`} className="btn btn-secondary mt-2" style={{ width: '100%' }}>
+            <Link to={`/chat/${task.id}`} className="btn btn-secondary" style={{ width: '100%' }}>
               <FiMessageSquare size={16} /> Open Chat
             </Link>
           )}
-          {task.status === 'completed' && (
-            <div className="text-center" style={{ padding: 24, color: 'var(--success)' }}>
-              <FiCheckCircle size={48} /><h3 style={{ marginTop: 12 }}>Task Completed</h3>
+          {isCompleted && (
+            <div className="text-center" style={{ padding: 16, color: 'var(--success)' }}>
+              <FiCheckCircle size={36} />
+              <div style={{ marginTop: 6, fontWeight: 600 }}>Task Completed</div>
             </div>
           )}
         </div>

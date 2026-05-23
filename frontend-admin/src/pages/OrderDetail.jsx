@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile } from '../services/api';
+import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile, getStatuses } from '../services/api';
 import InstallmentPlanModal from '../components/InstallmentPlanModal';
 import EditInstallmentModal from '../components/EditInstallmentModal';
+import CancelOrderModal from '../components/CancelOrderModal';
 import { useApi } from '../hooks/useApi';
 import { FiArrowLeft, FiUpload, FiTrash2, FiDownload, FiUserPlus, FiX } from 'react-icons/fi';
 
@@ -75,8 +76,9 @@ export default function OrderDetail() {
   const [installments, setInstallments] = useState([]);
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
   const [showEditInstallmentModal, setShowEditInstallmentModal] = useState(false);
+  const [adminStatuses, setAdminStatuses] = useState([]);
   const fileInputRef = useRef(null);
-  const { assignTutors, getAllTutors, markRemainingPaid, getInstallments, deleteInstallmentPlan, markInstallmentPaid, markAllInstallmentsPaid } = useApi();
+  const { assignTutors, getAllTutors, markRemainingPaid, getInstallments, deleteInstallmentPlan, markInstallmentPaid, markAllInstallmentsPaid, updateOrderStatus } = useApi();
 
   const fetchInstallments = (orderId) => {
     getInstallments(orderId).then(res => setInstallments(res.data || [])).catch(() => setInstallments([]));
@@ -97,6 +99,33 @@ export default function OrderDetail() {
 
   useEffect(() => { fetchOrder(); }, [id]);
   useEffect(() => { getAllTutors().then(res => setTutors(res.data)).catch(() => {}); }, []);
+  useEffect(() => { getStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))).catch(() => {}); }, []);
+
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+
+  const handleAdminStatusChange = async (code) => {
+    if (code === 'cancelled') { setCancelOpen(true); return; }
+    try {
+      await updateOrderStatus(id, { admin_status_code: code });
+      fetchOrder();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update status');
+    }
+  };
+
+  const confirmCancel = async (note) => {
+    setCancelSubmitting(true);
+    try {
+      await updateOrderStatus(id, { admin_status_code: 'cancelled', cancellation_note: note });
+      setCancelOpen(false);
+      fetchOrder();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to cancel');
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
 
   const openAssign = () => {
     setSelectedTutors(order.tutors ? order.tutors.map(t => t.id) : []);
@@ -147,11 +176,46 @@ export default function OrderDetail() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
         <Link to="/orders" className="btn btn-sm btn-secondary"><FiArrowLeft size={14} /></Link>
         <div><h2>Order #{order.id}</h2><p style={{ color: 'var(--text-secondary)' }}>{order.course_name} by {order.username}</p></div>
-        <span className={`badge-status badge-${order.status}`} style={{ marginLeft: 'auto', fontSize: 14, padding: '6px 16px' }}>{order.status}</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select
+            className="form-select"
+            value={order.admin_status_code || ''}
+            onChange={e => handleAdminStatusChange(e.target.value)}
+            style={{ padding: '6px 10px', fontSize: 13, fontWeight: 600, minWidth: 180 }}
+          >
+            {!order.admin_status_code && <option value="" disabled>Set status…</option>}
+            {adminStatuses.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+          </select>
+          {order.tutor_status_code && (
+            <span
+              title="Tutor work status (set by tutor)"
+              style={{
+                padding: '6px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+                background: order.tutor_status_code === 'completed' ? 'rgba(34,197,94,0.12)' : order.tutor_status_code === 'work_stopped' ? 'rgba(245,158,11,0.12)' : 'rgba(59,130,246,0.12)',
+                color:      order.tutor_status_code === 'completed' ? '#16a34a'             : order.tutor_status_code === 'work_stopped' ? '#d97706'             : '#2563eb',
+                border: '1px solid currentColor'
+              }}
+            >
+              Tutor: {order.tutor_status_name}
+            </span>
+          )}
+        </div>
       </div>
+      {order.admin_status_code === 'cancelled' && order.cancellation_note && (
+        <div style={{
+          marginBottom: 20, padding: '12px 16px',
+          background: 'rgba(220, 38, 38, 0.08)',
+          border: '1px solid rgba(220, 38, 38, 0.25)',
+          borderRadius: 'var(--radius-sm, 8px)',
+          color: 'var(--text-primary)'
+        }}>
+          <div style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Cancellation Note</div>
+          <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.5 }}>{order.cancellation_note}</div>
+        </div>
+      )}
       <div className="grid-2">
         <div className="card">
           <h4 style={{ marginBottom: 16 }}>Order Info</h4>
@@ -273,6 +337,14 @@ export default function OrderDetail() {
               installments={installments}
               onClose={() => setShowEditInstallmentModal(false)}
               onSaved={() => { setShowEditInstallmentModal(false); fetchOrder(); }}
+            />
+          )}
+          {cancelOpen && (
+            <CancelOrderModal
+              orderId={order.id}
+              onConfirm={confirmCancel}
+              onCancel={() => setCancelOpen(false)}
+              submitting={cancelSubmitting}
             />
           )}
           <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

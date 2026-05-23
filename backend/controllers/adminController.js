@@ -157,11 +157,13 @@ exports.deleteTutor = async (req, res) => {
 // ============= ORDER MANAGEMENT =============
 exports.getAllOrders = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, search, unassigned } = req.query;
+    const { page = 1, limit = 20, status, admin_status_code, search, unassigned } = req.query;
     const offset = (page - 1) * limit;
     let query = `
       SELECT o.*, u.username, ot.name as order_type_name, s.name as subject_name,
         p.name as plan_name, pr.plan_tier,
+        astat.code as admin_status_code, astat.name as admin_status_name,
+        tstat.code as tutor_status_code, tstat.name as tutor_status_name,
         GROUP_CONCAT(DISTINCT t.name) as tutor_names,
         GROUP_CONCAT(DISTINCT t.id) as tutor_ids
       FROM orders o
@@ -172,19 +174,25 @@ exports.getAllOrders = async (req, res) => {
       LEFT JOIN pricing_rules pr ON o.pricing_rule_id = pr.id
       LEFT JOIN order_tutors otr ON o.id = otr.order_id
       LEFT JOIN tutors t ON otr.tutor_id = t.id
+      LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
+      LEFT JOIN tutor_statuses tstat ON o.tutor_status_id = tstat.id
       WHERE 1=1
     `;
     const params = [];
-    if (status) { query += ' AND o.status = ?'; params.push(status); }
+    if (admin_status_code) { query += ' AND astat.code = ?'; params.push(admin_status_code); }
+    else if (status)       { query += ' AND o.status = ?';   params.push(status); }
     if (search) { query += ' AND (o.course_name LIKE ? OR u.username LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
     query += ' GROUP BY o.id';
     if (unassigned === 'true') { query += ' HAVING tutor_names IS NULL'; }
     query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
     const [orders] = await db.query(query, params);
-    let countQuery = 'SELECT COUNT(*) as total FROM orders o JOIN users u ON o.user_id = u.id LEFT JOIN order_tutors otr ON o.id = otr.order_id WHERE 1=1';
+    let countQuery = `SELECT COUNT(DISTINCT o.id) as total FROM orders o JOIN users u ON o.user_id = u.id
+      LEFT JOIN order_tutors otr ON o.id = otr.order_id
+      LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id WHERE 1=1`;
     const countParams = [];
-    if (status) { countQuery += ' AND o.status = ?'; countParams.push(status); }
+    if (admin_status_code) { countQuery += ' AND astat.code = ?'; countParams.push(admin_status_code); }
+    else if (status)       { countQuery += ' AND o.status = ?';   countParams.push(status); }
     if (search) { countQuery += ' AND (o.course_name LIKE ? OR u.username LIKE ?)'; countParams.push(`%${search}%`, `%${search}%`); }
     if (unassigned === 'true') { countQuery += ' AND otr.order_id IS NULL'; }
     const [[{ total }]] = await db.query(countQuery, countParams);
@@ -195,10 +203,39 @@ exports.getAllOrders = async (req, res) => {
   }
 };
 
+// Admin code → legacy status mapping, so legacy code paths still work
+const ADMIN_CODE_TO_LEGACY = {
+  unpaid:                  'incomplete',
+  paid_partial_unassigned: 'pending',
+  paid_full_unassigned:    'pending',
+  paid_partial_assigned:   'active',
+  paid_full_assigned:      'active',
+  paid_completed:          'completed',
+  cancelled:               'cancelled'
+};
+
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { admin_status_code, cancellation_note } = req.body;
+    let { status } = req.body;
+
+    // Resolve new-model code → row + legacy fallback
+    let adminStatusId = null;
+    if (admin_status_code) {
+      const [rows] = await db.query('SELECT id FROM admin_statuses WHERE code = ?', [admin_status_code]);
+      if (rows.length === 0) return res.status(400).json({ error: `Unknown admin_status_code: ${admin_status_code}` });
+      adminStatusId = rows[0].id;
+      status = ADMIN_CODE_TO_LEGACY[admin_status_code] || status;
+    }
+    if (!status) return res.status(400).json({ error: 'admin_status_code or status is required' });
+
+    // Cancellation requires an explanatory note
+    const isCancelling = admin_status_code === 'cancelled' || status === 'cancelled';
+    const note = typeof cancellation_note === 'string' ? cancellation_note.trim() : '';
+    if (isCancelling && !note) {
+      return res.status(400).json({ error: 'A cancellation note is required when cancelling an order.' });
+    }
 
     // Fetch current order details + user email before updating
     const [orders] = await db.query(
@@ -210,18 +247,27 @@ exports.updateOrderStatus = async (req, res) => {
     );
 
     const oldStatus = orders.length > 0 ? orders[0].status : null;
+    const isCompleting = admin_status_code === 'paid_completed' || status === 'completed';
 
     // Block completion if there's an outstanding balance
-    if (status === 'completed' && orders.length > 0 && parseFloat(orders[0].amount_remaining) > 0) {
+    if (isCompleting && orders.length > 0 && parseFloat(orders[0].amount_remaining) > 0) {
       return res.status(400).json({
         error: `Cannot mark as completed. Outstanding balance: $${parseFloat(orders[0].amount_remaining).toFixed(2)}`
       });
     }
 
-    await db.query('UPDATE orders SET status = ? WHERE id = ?', [status, id]);
+    if (adminStatusId !== null) {
+      if (isCancelling) {
+        await db.query('UPDATE orders SET status = ?, admin_status_id = ?, cancellation_note = ? WHERE id = ?', [status, adminStatusId, note, id]);
+      } else {
+        await db.query('UPDATE orders SET status = ?, admin_status_id = ? WHERE id = ?', [status, adminStatusId, id]);
+      }
+    } else {
+      await db.query('UPDATE orders SET status = ? WHERE id = ?', [status, id]);
+    }
 
     // Disable chat if completed
-    if (status === 'completed') {
+    if (isCompleting) {
       await db.query('UPDATE orders SET chat_enabled = 0 WHERE id = ?', [id]);
     }
 
@@ -302,8 +348,21 @@ exports.assignTutors = async (req, res) => {
       }
     }
 
-    // Update order status to active if pending
-    await db.query('UPDATE orders SET status = "active" WHERE id = ? AND status = "pending"', [id]);
+    // Update order status to active if pending; also promote admin/tutor status.
+    // Pick partial vs full assigned variant from the current payment_type.
+    const statuses = require('../utils/statuses');
+    const [[currentOrder]] = await db.query('SELECT payment_type FROM orders WHERE id = ?', [id]);
+    const assignedCode = currentOrder?.payment_type === 'partial' ? 'paid_partial_assigned' : 'paid_full_assigned';
+    const adminAssignedId   = await statuses.adminId(assignedCode);
+    const tutorInProgressId = await statuses.tutorId('in_progress');
+    await db.query(
+      `UPDATE orders
+       SET status = "active",
+           admin_status_id = COALESCE(?, admin_status_id),
+           tutor_status_id = COALESCE(tutor_status_id, ?)
+       WHERE id = ? AND status IN ('pending', 'active')`,
+      [adminAssignedId, tutorInProgressId, id]
+    );
 
     res.json({ message: 'Tutors assigned successfully' });
   } catch (error) {

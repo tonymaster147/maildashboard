@@ -9,8 +9,8 @@ import Notice from '../components/Notice';
 
 const STEPS = ['Service Details', 'Schedule & Plan', 'Review & Checkout'];
 
-// Only show these 3 education levels in the order form
-const ALLOWED_LEVELS = ['High School', 'Undergraduate', 'Graduate'];
+// Education levels surfaced in the order form (kept short on purpose)
+const ALLOWED_LEVELS = ['High School', 'Undergraduate', 'Graduate', 'Post-Graduate'];
 
 // Determine what the quantity field means per service type
 const getQuantityConfig = (typeName) => {

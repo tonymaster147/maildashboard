@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent, getOrderInstallments, payInstallment, payAllInstallments } from '../services/api';
 import EmbeddedCheckout from '../components/EmbeddedCheckout';
-import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones } from 'react-icons/fi';
+import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones, FiMail } from 'react-icons/fi';
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -116,7 +116,9 @@ export default function OrderDetail() {
           <h2>Order #{order.id}</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{order.course_name}</p>
         </div>
-        <span className={`badge-status badge-${order.status}`} style={{ marginLeft: 'auto', fontSize: 14, padding: '6px 16px' }}>{order.status}</span>
+        <span className={`badge-status badge-${order.status}`} style={{ marginLeft: 'auto', fontSize: 14, padding: '6px 16px' }}>
+          {order.admin_status_name || order.status}
+        </span>
       </div>
 
       <div className="grid-2">
@@ -131,6 +133,33 @@ export default function OrderDetail() {
             <div className="summary-row"><span className="label"><FiCalendar size={14} /> End</span><span>{new Date(order.end_date).toLocaleDateString()}</span></div>
             <div className="summary-row"><span className="label">Weeks</span><span>{order.num_weeks}</span></div>
           </div>
+
+          {order.site_contact_email && (
+            <a
+              href={`mailto:${order.site_contact_email}?subject=${encodeURIComponent(`Order #${order.id} — ${order.course_name || ''}`)}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                marginTop: 16,
+                padding: '10px 12px',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                textDecoration: 'none',
+                color: 'inherit',
+                transition: 'var(--transition)'
+              }}
+            >
+              <FiMail size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Need help with this order?</div>
+                <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--accent)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {order.site_contact_email}
+                </div>
+              </div>
+            </a>
+          )}
         </div>
 
         <div className="card">

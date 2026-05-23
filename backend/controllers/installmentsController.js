@@ -278,6 +278,7 @@ exports.markInstallmentPaid = async (req, res) => {
       );
       if (remaining[0].cnt === 0) {
         await conn.query("UPDATE orders SET payment_type = 'full' WHERE id = ?", [inst.order_id]);
+        await require('../utils/statuses').promotePartialToFullIfCleared(inst.order_id, conn);
       }
       await conn.commit();
     } catch (e) {
@@ -332,6 +333,7 @@ exports.markAllInstallmentsPaid = async (req, res) => {
         "UPDATE orders SET amount_paid = amount_paid + ?, amount_remaining = 0, payment_type = 'full' WHERE id = ?",
         [total, orderId]
       );
+      await require('../utils/statuses').promotePartialToFullIfCleared(orderId, conn);
       await conn.query(
         'INSERT INTO payments (order_id, user_id, amount, status, stripe_session_id) VALUES (?, ?, ?, ?, ?)',
         [orderId, userId, total, 'completed', `offline-all-${orderId}-${Date.now()}`]
@@ -503,6 +505,7 @@ exports.fulfillInstallmentIntent = async (intent) => {
     );
     if (remaining[0].cnt === 0) {
       await conn.query("UPDATE orders SET payment_type = 'full' WHERE id = ?", [orderId]);
+      await require('../utils/statuses').promotePartialToFullIfCleared(orderId, conn);
     }
     await conn.commit();
   } catch (e) {

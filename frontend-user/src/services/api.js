@@ -34,6 +34,7 @@ api.interceptors.response.use(
 // Public site branding (for login/signup page logo + name)
 export const getPublicSite = () => api.get('/public/site');
 export const getPublicGeo = () => api.get('/public/geo');
+export const getPublicStatuses = (kind) => api.get(`/public/statuses/${kind}`);
 
 // Auth
 export const signup = (data) => api.post('/auth/signup', data);
@@ -50,7 +51,7 @@ export const getSubjects = (search = '') => api.get(`/orders/subjects?search=${s
 export const getEducationLevels = () => api.get('/orders/education-levels');
 export const getPlans = () => api.get('/orders/plans');
 export const createOrder = (data) => api.post('/orders', data);
-export const getUserOrders = (status = '') => api.get(`/orders?status=${status}`);
+export const getUserOrders = (params = {}) => api.get('/orders', { params: typeof params === 'string' ? { status: params } : params });
 export const getOrderDetail = (id) => api.get(`/orders/${id}`);
 export const validateCoupon = (code) => api.post('/orders/validate-coupon', { code });
 export const calculatePrice = (data) => api.post('/orders/calculate-price', data);

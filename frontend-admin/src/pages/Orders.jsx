@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FiSearch, FiEye, FiUserPlus, FiX, FiRefreshCw, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+import { getStatuses } from '../services/api';
+import CancelOrderModal from '../components/CancelOrderModal';
 
 const VIEWED_ORDERS_KEY = 'admin_viewed_orders';
 
@@ -19,10 +21,10 @@ const markOrderViewed = (id) => {
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [tutors, setTutors] = useState([]);
+  const [adminStatuses, setAdminStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState('');         // admin_status_code (or '')
   const [search, setSearch] = useState('');
-  const [unassigned, setUnassigned] = useState(false);
   const [assignModal, setAssignModal] = useState(null);
   const [selectedTutors, setSelectedTutors] = useState([]);
   const [viewedIds, setViewedIds] = useState(getViewedOrders);
@@ -33,15 +35,39 @@ export default function Orders() {
 
   const fetchOrders = () => {
     setLoading(true);
-    getAllOrders({ status: filter, search, page, limit: perPage, unassigned }).then(res => { setOrders(res.data.orders); setTotalOrders(res.data.total); setLoading(false); }).catch(() => setLoading(false));
+    getAllOrders({ admin_status_code: filter || undefined, search, page, limit: perPage })
+      .then(res => { setOrders(res.data.orders); setTotalOrders(res.data.total); setLoading(false); })
+      .catch(() => setLoading(false));
   };
 
-  useEffect(() => { fetchOrders(); }, [filter, page, unassigned]);
+  useEffect(() => { fetchOrders(); }, [filter, page]);
   useEffect(() => { getAllTutors().then(res => setTutors(res.data)); }, []);
+  useEffect(() => { getStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))); }, []);
 
-  const handleStatusChange = async (id, status) => {
-    await updateOrderStatus(id, { status });
+  const [cancelTarget, setCancelTarget] = useState(null); // { orderId }
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+
+  const handleStatusChange = async (id, admin_status_code) => {
+    if (admin_status_code === 'cancelled') {
+      setCancelTarget({ orderId: id });
+      return;
+    }
+    await updateOrderStatus(id, { admin_status_code });
     fetchOrders();
+  };
+
+  const confirmCancel = async (note) => {
+    if (!cancelTarget) return;
+    setCancelSubmitting(true);
+    try {
+      await updateOrderStatus(cancelTarget.orderId, { admin_status_code: 'cancelled', cancellation_note: note });
+      setCancelTarget(null);
+      fetchOrders();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to cancel order');
+    } finally {
+      setCancelSubmitting(false);
+    }
   };
 
   const openAssign = (order) => {
@@ -74,10 +100,10 @@ export default function Orders() {
     <div>
       <div className="page-header"><h2>Order Management</h2><p>Manage and assign orders</p></div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {['', 'incomplete', 'pending', 'active', 'in_progress', 'completed', 'cancelled'].map(s => (
-          <button key={s} className={`btn btn-sm ${filter === s && !unassigned ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s); setUnassigned(false); setPage(1); }}>{s || 'All'}</button>
+        <button key="all" className={`btn btn-sm ${filter === '' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(''); setPage(1); }}>All</button>
+        {adminStatuses.map(s => (
+          <button key={s.code} className={`btn btn-sm ${filter === s.code ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s.code); setPage(1); }}>{s.name}</button>
         ))}
-        <button className={`btn btn-sm ${unassigned ? 'btn-primary' : 'btn-secondary'}`} style={{ marginLeft: 8 }} onClick={() => { setUnassigned(!unassigned); setPage(1); }}>Unassigned</button>
       </div>
       <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
         <input className="form-input" placeholder="Search orders..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 300 }} onKeyDown={e => e.key === 'Enter' && fetchOrders()} />
@@ -106,9 +132,15 @@ export default function Orders() {
                   </td>
                   <td style={{ fontSize: 13 }}>{o.tutor_names || <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}</td>
                   <td>
-                    <select className="form-select" value={o.status} onChange={e => handleStatusChange(o.id, e.target.value)} style={{ padding: '4px 8px', fontSize: 12, minWidth: 110 }}>
-                      <option value="incomplete">Incomplete</option><option value="pending">Pending</option><option value="active">Active</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
+                    <select className="form-select" value={o.admin_status_code || ''} onChange={e => handleStatusChange(o.id, e.target.value)} style={{ padding: '4px 8px', fontSize: 12, minWidth: 140 }}>
+                      {!o.admin_status_code && <option value="" disabled>—</option>}
+                      {adminStatuses.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                     </select>
+                    {o.tutor_status_code && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }} title="Tutor work status">
+                        Tutor: <span style={{ color: o.tutor_status_code === 'completed' ? 'var(--success)' : o.tutor_status_code === 'work_stopped' ? 'var(--warning)' : 'var(--accent)' }}>{o.tutor_status_name}</span>
+                      </div>
+                    )}
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -137,6 +169,14 @@ export default function Orders() {
             Next <FiChevronRight size={14} />
           </button>
         </div>
+      )}
+      {cancelTarget && (
+        <CancelOrderModal
+          orderId={cancelTarget.orderId}
+          onConfirm={confirmCancel}
+          onCancel={() => setCancelTarget(null)}
+          submitting={cancelSubmitting}
+        />
       )}
       {assignModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>

@@ -3,6 +3,7 @@ const adminController = require('../controllers/adminController');
 const pricingController = require('../controllers/pricingController');
 const sitesController = require('../controllers/sitesController');
 const paymentController = require('../controllers/paymentController');
+const statusesController = require('../controllers/statusesController');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateTutor } = require('../middleware/validate');
 const { upload } = require('../middleware/upload');
@@ -48,6 +49,12 @@ router.get('/settings', adminController.getSettings);
 router.put('/plans/:id', adminController.updatePlan);
 router.post('/coupons', adminController.createCoupon);
 router.delete('/coupons/:id', adminController.deleteCoupon);
+
+// Status lists (admin_statuses / tutor_statuses). :kind = 'admin' | 'tutor'
+router.get('/statuses/:kind',        statusesController.list);
+router.post('/statuses/:kind',       statusesController.create);
+router.patch('/statuses/:kind/:id',  statusesController.update);
+router.delete('/statuses/:kind/:id', statusesController.remove);
 
 // Pricing rules
 router.get('/pricing-rules', pricingController.getPricingRules);

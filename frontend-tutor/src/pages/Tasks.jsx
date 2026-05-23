@@ -1,22 +1,32 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getTasks } from '../services/api';
+import { getTasks, getPublicStatuses } from '../services/api';
 import { FiEye, FiMessageSquare, FiClock, FiCheckCircle, FiTrendingUp, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 const PER_PAGE = 25;
 
+const TUTOR_BADGE_STYLE = (code) => ({
+  padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+  background: code === 'completed' ? 'rgba(34,197,94,0.12)' : code === 'work_stopped' ? 'rgba(245,158,11,0.12)' : code === 'in_progress' ? 'rgba(59,130,246,0.12)' : 'rgba(127,127,127,0.12)',
+  color:      code === 'completed' ? '#16a34a'             : code === 'work_stopped' ? '#d97706'             : code === 'in_progress' ? '#2563eb'             : 'var(--text-muted)',
+  border: '1px solid currentColor'
+});
+
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState('');           // tutor_status_code
+  const [tutorStatuses, setTutorStatuses] = useState([]);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    getTasks(filter).then(res => { setTasks(res.data); setLoading(false); }).catch(() => setLoading(false));
+    setLoading(true);
+    getTasks(filter ? { tutor_status_code: filter } : {}).then(res => { setTasks(res.data); setLoading(false); }).catch(() => setLoading(false));
   }, [filter]);
+  useEffect(() => { getPublicStatuses('tutor').then(res => setTutorStatuses((res.data.statuses || []).filter(s => s.is_active))).catch(() => {}); }, []);
 
-  const active = tasks.filter(t => ['active', 'in_progress'].includes(t.status)).length;
-  const completed = tasks.filter(t => t.status === 'completed').length;
+  const active = tasks.filter(t => t.tutor_status_code === 'in_progress').length;
+  const completed = tasks.filter(t => t.tutor_status_code === 'completed').length;
 
   const totalPages = Math.ceil(tasks.length / PER_PAGE);
   const paged = tasks.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -45,9 +55,10 @@ export default function Tasks() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        {['', 'active', 'in_progress', 'completed'].map(s => (
-          <button key={s} className={`btn btn-sm ${filter === s ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s); setPage(1); }}>{s || 'All'}</button>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
+        <button key="all" className={`btn btn-sm ${filter === '' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(''); setPage(1); }}>All</button>
+        {tutorStatuses.map(s => (
+          <button key={s.code} className={`btn btn-sm ${filter === s.code ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s.code); setPage(1); }}>{s.name}</button>
         ))}
       </div>
 
@@ -67,7 +78,11 @@ export default function Tasks() {
                     <td>{t.subject_name}</td>
                     <td>{t.username}</td>
                     <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t.num_weeks} weeks</td>
-                    <td><span className={`badge-status badge-${t.status}`}>{t.status}</span></td>
+                    <td>
+                      {t.tutor_status_code
+                        ? <span style={TUTOR_BADGE_STYLE(t.tutor_status_code)}>{t.tutor_status_name}</span>
+                        : <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>—</span>}
+                    </td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <Link to={`/tasks/${t.id}`} className="btn btn-sm btn-outline"><FiEye size={12} /></Link>

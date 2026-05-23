@@ -14,7 +14,9 @@ exports.getTasks = async (req, res) => {
     let query = `
       SELECT o.id, o.course_name, o.status, o.start_date, o.end_date, o.num_weeks, o.chat_enabled, o.created_at,
         ot.name as order_type_name, s.name as subject_name, el.name as education_level_name,
-        p.name as plan_name, u.username
+        p.name as plan_name, u.username,
+        astat.code as admin_status_code, astat.name as admin_status_name,
+        tstat.code as tutor_status_code, tstat.name as tutor_status_name
       FROM orders o
       JOIN order_tutors otr ON o.id = otr.order_id
       JOIN order_types ot ON o.order_type_id = ot.id
@@ -22,11 +24,17 @@ exports.getTasks = async (req, res) => {
       JOIN education_levels el ON o.education_level_id = el.id
       LEFT JOIN plans p ON o.plan_id = p.id
       JOIN users u ON o.user_id = u.id
+      LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
+      LEFT JOIN tutor_statuses tstat ON o.tutor_status_id = tstat.id
       WHERE otr.tutor_id = ?
     `;
     const params = [tutorId];
 
-    if (status) {
+    const { tutor_status_code } = req.query;
+    if (tutor_status_code) {
+      query += ' AND tstat.code = ?';
+      params.push(tutor_status_code);
+    } else if (status) {
       query += ' AND o.status = ?';
       params.push(status);
     }
@@ -53,7 +61,9 @@ exports.getTaskDetail = async (req, res) => {
       SELECT o.id, o.course_name, o.additional_instructions, o.status, o.start_date, o.end_date,
         o.num_weeks, o.chat_enabled, o.created_at,
         ot.name as order_type_name, s.name as subject_name, el.name as education_level_name,
-        p.name as plan_name, u.username
+        p.name as plan_name, u.username,
+        astat.code as admin_status_code, astat.name as admin_status_name,
+        tstat.code as tutor_status_code, tstat.name as tutor_status_name
       FROM orders o
       JOIN order_tutors otr ON o.id = otr.order_id
       JOIN order_types ot ON o.order_type_id = ot.id
@@ -61,6 +71,8 @@ exports.getTaskDetail = async (req, res) => {
       JOIN education_levels el ON o.education_level_id = el.id
       LEFT JOIN plans p ON o.plan_id = p.id
       JOIN users u ON o.user_id = u.id
+      LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
+      LEFT JOIN tutor_statuses tstat ON o.tutor_status_id = tstat.id
       WHERE o.id = ? AND otr.tutor_id = ?
     `, [id, tutorId]);
 
@@ -85,33 +97,54 @@ exports.getTaskDetail = async (req, res) => {
  * Mark task as completed
  */
 exports.completeTask = async (req, res) => {
+  // Back-compat wrapper — forwards to updateTutorStatus with code='completed'
+  req.body = { ...req.body, tutor_status_code: 'completed' };
+  return exports.updateTutorStatus(req, res);
+};
+
+/**
+ * Tutor updates their own work-status (in_progress / work_stopped / completed).
+ * Independent of admin_status; admin sees this read-only.
+ */
+exports.updateTutorStatus = async (req, res) => {
   try {
     const tutorId = req.user.id;
     const { id } = req.params;
+    const { tutor_status_code } = req.body;
+    if (!tutor_status_code) return res.status(400).json({ error: 'tutor_status_code is required' });
 
     // Verify assignment
     const [assignments] = await db.query(
       'SELECT id FROM order_tutors WHERE order_id = ? AND tutor_id = ?',
       [id, tutorId]
     );
-    if (assignments.length === 0) {
-      return res.status(403).json({ error: 'Not assigned to this task' });
+    if (assignments.length === 0) return res.status(403).json({ error: 'Not assigned to this task' });
+
+    const [statusRows] = await db.query('SELECT id, code FROM tutor_statuses WHERE code = ? AND is_active = 1', [tutor_status_code]);
+    if (statusRows.length === 0) return res.status(400).json({ error: `Unknown tutor_status_code: ${tutor_status_code}` });
+    const newStatusId = statusRows[0].id;
+
+    // For "completed" we also disable chat and update the legacy status column
+    if (tutor_status_code === 'completed') {
+      await db.query('UPDATE orders SET tutor_status_id = ?, status = "completed", chat_enabled = 0 WHERE id = ?', [newStatusId, id]);
+    } else {
+      await db.query('UPDATE orders SET tutor_status_id = ? WHERE id = ?', [newStatusId, id]);
     }
 
-    await db.query('UPDATE orders SET status = "completed", chat_enabled = 0 WHERE id = ?', [id]);
-
-    // Notify user
-    const [orders] = await db.query('SELECT user_id FROM orders WHERE id = ?', [id]);
-    if (orders.length > 0) {
-      await db.query(
-        'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [orders[0].user_id, 'user', 'task_completed', `Order #${id} has been completed`, id, 'order']
-      );
+    // Notify user only on completion
+    if (tutor_status_code === 'completed') {
+      const [orders] = await db.query('SELECT user_id FROM orders WHERE id = ?', [id]);
+      if (orders.length > 0) {
+        await db.query(
+          'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
+          [orders[0].user_id, 'user', 'task_completed', `Order #${id} has been completed`, id, 'order']
+        );
+      }
     }
 
-    res.json({ message: 'Task marked as completed' });
+    res.json({ message: 'Tutor status updated', tutor_status_code });
   } catch (error) {
-    console.error('Complete task error:', error);
+    console.error('Update tutor status error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };

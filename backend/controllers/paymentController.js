@@ -179,12 +179,16 @@ const fulfillOrder = async (session, io) => {
        WHERE id = ?`,
       [chargeAmount, chargeAmount, chargeAmount, orderId]
     );
+    // If the balance is now zero, promote paid_partial_* → paid_full_*
+    await require('../utils/statuses').promotePartialToFullIfCleared(orderId);
   } else {
     // First payment for this order
     const amountRemaining = paymentType === 'partial' ? Math.max(fullTotal - chargeAmount, 0) : 0;
+    const statuses = require('../utils/statuses');
+    const adminStatusId = await statuses.adminId(paymentType === 'partial' ? 'paid_partial_unassigned' : 'paid_full_unassigned');
     await db.query(
-      'UPDATE orders SET status = "active", payment_type = ?, amount_paid = ?, amount_remaining = ? WHERE id = ?',
-      [paymentType, chargeAmount, amountRemaining, orderId]
+      'UPDATE orders SET status = "active", admin_status_id = ?, payment_type = ?, amount_paid = ?, amount_remaining = ? WHERE id = ?',
+      [adminStatusId, paymentType, chargeAmount, amountRemaining, orderId]
     );
   }
 
@@ -546,6 +550,8 @@ exports.markRemainingPaid = async (req, res) => {
       'INSERT INTO payments (order_id, user_id, amount, status, stripe_session_id) VALUES (?, ?, ?, ?, ?)',
       [order_id, order.user_id, remaining, 'completed', `offline-${Date.now()}`]
     );
+
+    await require('../utils/statuses').promotePartialToFullIfCleared(order_id);
 
     res.json({ message: 'Remaining balance marked as paid', amount: remaining });
   } catch (error) {

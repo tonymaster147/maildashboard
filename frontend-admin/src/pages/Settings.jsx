@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FiSave, FiPlus, FiTrash2, FiShield } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+import StatusListEditor from '../components/StatusListEditor';
 
 export default function Settings() {
   const { getSettings, updatePlan, createCoupon, deleteCoupon, getBannedWords, addBannedWord, deleteBannedWord } = useApi();
@@ -175,6 +176,12 @@ export default function Settings() {
             {settings?.educationLevels?.map(l => <span key={l.id} className="badge-status badge-completed">{l.name}</span>)}
           </div>
         </div>
+      </div>
+
+      {/* Order Status lists (editable) */}
+      <div className="grid-2" style={{ marginTop: 24 }}>
+        <StatusListEditor kind="admin" title="Admin Order Statuses" accent="#84c225" />
+        <StatusListEditor kind="tutor" title="Tutor Work Statuses"  accent="#2563eb" />
       </div>
     </div>
   );

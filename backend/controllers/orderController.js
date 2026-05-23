@@ -119,10 +119,14 @@ exports.createOrder = async (req, res) => {
 
     const totalPrice = price + urgentFee - discountAmount;
 
+    const statuses = require('../utils/statuses');
+    // Default to "Paid - Full (Not Assigned)" — this path mirrors the legacy
+    // status='pending' semantics ("paid, awaiting tutor").
+    const adminUnassignedId = await statuses.adminId('paid_full_unassigned');
     const [result] = await db.query(
-      `INSERT INTO orders (user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, pricing_rule_id, price, urgent_fee, total_price, additional_instructions, school_url, school_username, school_password, start_date, end_date, num_weeks, num_pages, coupon_id, discount_amount, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-      [userId, order_type_id, course_name, subject_id, education_level_id, resolvedPlanId, resolvedPricingRuleId, price, urgentFee, totalPrice, additional_instructions || null, school_url || null, school_username || null, school_password || null, start_date, end_date, num_weeks || 0, num_pages || null, couponId, discountAmount]
+      `INSERT INTO orders (user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, pricing_rule_id, price, urgent_fee, total_price, additional_instructions, school_url, school_username, school_password, start_date, end_date, num_weeks, num_pages, coupon_id, discount_amount, status, admin_status_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+      [userId, order_type_id, course_name, subject_id, education_level_id, resolvedPlanId, resolvedPricingRuleId, price, urgentFee, totalPrice, additional_instructions || null, school_url || null, school_username || null, school_password || null, start_date, end_date, num_weeks || 0, num_pages || null, couponId, discountAmount, adminUnassignedId]
     );
 
     // Create notification for admin
@@ -162,6 +166,8 @@ exports.getUserOrders = async (req, res) => {
         s.name as subject_name,
         el.name as education_level_name,
         p.name as plan_name,
+        astat.code as admin_status_code, astat.name as admin_status_name,
+        tstat.code as tutor_status_code, tstat.name as tutor_status_name,
         GROUP_CONCAT(DISTINCT t.name) as tutor_names
       FROM orders o
       JOIN order_types ot ON o.order_type_id = ot.id
@@ -170,11 +176,18 @@ exports.getUserOrders = async (req, res) => {
       LEFT JOIN plans p ON o.plan_id = p.id
       LEFT JOIN order_tutors otr ON o.id = otr.order_id
       LEFT JOIN tutors t ON otr.tutor_id = t.id
+      LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
+      LEFT JOIN tutor_statuses tstat ON o.tutor_status_id = tstat.id
       WHERE o.user_id = ?
     `;
     const params = [userId];
 
-    if (status) {
+    // Accept either legacy `status` (back-compat) or new `admin_status_code` filter
+    const { admin_status_code } = req.query;
+    if (admin_status_code) {
+      query += ' AND astat.code = ?';
+      params.push(admin_status_code);
+    } else if (status) {
       query += ' AND o.status = ?';
       params.push(status);
     }
@@ -206,7 +219,11 @@ exports.getOrderDetail = async (req, res) => {
         p.name as plan_name,
         pr.plan_tier,
         u.username,
-        IFNULL(pay.status, 'unpaid') as payment_status
+        IFNULL(pay.status, 'unpaid') as payment_status,
+        site.contact_email as site_contact_email,
+        site.name as site_name,
+        astat.code as admin_status_code, astat.name as admin_status_name,
+        tstat.code as tutor_status_code, tstat.name as tutor_status_name
       FROM orders o
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
@@ -215,6 +232,9 @@ exports.getOrderDetail = async (req, res) => {
       LEFT JOIN pricing_rules pr ON o.pricing_rule_id = pr.id
       JOIN users u ON o.user_id = u.id
       LEFT JOIN payments pay ON o.id = pay.order_id
+      LEFT JOIN sites site ON o.site_id = site.id
+      LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
+      LEFT JOIN tutor_statuses tstat ON o.tutor_status_id = tstat.id
       WHERE o.id = ?
     `;
     const params = [id];
@@ -303,11 +323,13 @@ exports.createDraftOrder = async (req, res) => {
     const { order_type_id, course_name, subject_id, education_level_id, source_url } = req.body;
 
     const siteId = req.site?.id || null;
+    const statuses = require('../utils/statuses');
+    const adminUnpaidId = await statuses.adminId('unpaid');
     const [result] = await db.query(
       `INSERT INTO orders
-       (user_id, order_type_id, course_name, subject_id, education_level_id, price, total_price, start_date, end_date, status, source_url, site_id)
-       VALUES (?, ?, ?, ?, ?, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?, ?)`,
-      [userId, order_type_id, course_name, subject_id, education_level_id, source_url || null, siteId]
+       (user_id, order_type_id, course_name, subject_id, education_level_id, price, total_price, start_date, end_date, status, source_url, site_id, admin_status_id)
+       VALUES (?, ?, ?, ?, ?, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?, ?, ?)`,
+      [userId, order_type_id, course_name, subject_id, education_level_id, source_url || null, siteId, adminUnpaidId]
     );
 
     // Fetch enriched data for email

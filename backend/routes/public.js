@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const sitesController = require('../controllers/sitesController');
+const statusesController = require('../controllers/statusesController');
 const { resolveSite } = require('../middleware/siteResolver');
 const { getClientIp, normalizeIp, lookupGeo } = require('../utils/geoip');
 
@@ -16,5 +17,9 @@ router.get('/geo', async (req, res) => {
     res.json({ ip: null, country: null, countryCode: null });
   }
 });
+
+// Public read-only status list (active only). Used by admin/tutor frontends
+// to populate filter chips and dropdowns. :kind = 'admin' | 'tutor'.
+router.get('/statuses/:kind', statusesController.list);
 
 module.exports = router;

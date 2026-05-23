@@ -7,7 +7,7 @@ const resolveLogo = (url) => !url ? '' : (url.startsWith('http') ? url : `${API_
 
 const EMPTY_FORM = {
   name: '', url: '', nickname: '', site_key: '', logo_url: '',
-  from_name: '', from_email: '',
+  from_name: '', from_email: '', contact_email: '',
   smtp_host: '', smtp_port: 587, smtp_secure: false,
   smtp_user: '', smtp_pass: '',
   is_active: true,
@@ -57,6 +57,7 @@ export default function Sites() {
       logo_url: site.logo_url || '',
       from_name: site.from_name || '',
       from_email: site.from_email || '',
+      contact_email: site.contact_email || '',
       smtp_host: site.smtp_host || '',
       smtp_port: site.smtp_port || 587,
       smtp_secure: !!site.smtp_secure,
@@ -276,6 +277,10 @@ export default function Sites() {
                   <label className="form-label">From Email</label>
                   <input type="email" className="form-input" value={form.from_email} onChange={e => setForm(f => ({ ...f, from_email: e.target.value }))} placeholder="noreply@dreamgrades.com" />
                 </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Contact Email <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 12 }}>(shown to students on their order page)</span></label>
+                <input type="email" className="form-input" value={form.contact_email} onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))} placeholder="support@dreamgrades.com" />
               </div>
 
               <h4 style={{ margin: '20px 0 12px', fontSize: 13, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>SMTP / Google Workspace</h4>
