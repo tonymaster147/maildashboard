@@ -85,4 +85,69 @@ async function deleteFromGoogleDrive(fileId) {
   }
 }
 
-module.exports = { uploadToGoogleDrive, deleteFromGoogleDrive };
+// ───────────────────────── Chat attachments ─────────────────────────
+//
+// Layout on Drive:
+//   <GOOGLE_DRIVE_FOLDER_ID>/
+//     Chat Attachments/
+//       Order #<id>/
+//         <timestamp>_<filename>
+//
+// First call per process creates "Chat Attachments"; first call per order
+// creates "Order #<id>". Both ids are cached in memory.
+
+let chatRootIdPromise = null;
+const orderFolderCache = new Map();
+
+async function findOrCreateFolder(name, parentId) {
+  const q = `name = '${name.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and '${parentId}' in parents and trashed = false`;
+  const found = await drive.files.list({ q, fields: 'files(id, name)', pageSize: 1 });
+  if (found.data.files && found.data.files.length > 0) return found.data.files[0].id;
+  const created = await drive.files.create({
+    requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+    fields: 'id'
+  });
+  return created.data.id;
+}
+
+async function getChatRootId() {
+  if (!chatRootIdPromise) {
+    chatRootIdPromise = findOrCreateFolder('Chat Attachments', process.env.GOOGLE_DRIVE_FOLDER_ID)
+      .catch(err => { chatRootIdPromise = null; throw err; });
+  }
+  return chatRootIdPromise;
+}
+
+async function getOrderChatFolderId(orderId) {
+  if (orderFolderCache.has(orderId)) return orderFolderCache.get(orderId);
+  const root = await getChatRootId();
+  const id = await findOrCreateFolder(`Order #${orderId}`, root);
+  orderFolderCache.set(orderId, id);
+  return id;
+}
+
+/**
+ * Upload a chat attachment to the per-order Drive subfolder.
+ * Returns { fileId, fileUrl, downloadUrl } shaped like uploadToGoogleDrive.
+ */
+async function uploadChatAttachment(filePath, fileName, mimeType, orderId) {
+  const parentId = await getOrderChatFolderId(orderId);
+  const fileMetadata = { name: `${Date.now()}_${fileName}`, parents: [parentId] };
+  const media = { mimeType, body: fs.createReadStream(filePath) };
+  const response = await drive.files.create({
+    requestBody: fileMetadata,
+    media,
+    fields: 'id, webViewLink, webContentLink'
+  });
+  await drive.permissions.create({
+    fileId: response.data.id,
+    requestBody: { role: 'reader', type: 'anyone' }
+  });
+  return {
+    fileId: response.data.id,
+    fileUrl: `https://drive.google.com/file/d/${response.data.id}/view`,
+    downloadUrl: response.data.webContentLink
+  };
+}
+
+module.exports = { uploadToGoogleDrive, deleteFromGoogleDrive, uploadChatAttachment };

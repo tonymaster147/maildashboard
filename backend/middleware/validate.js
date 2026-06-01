@@ -15,6 +15,7 @@ const handleValidation = (req, res, next) => {
 const validateSignup = [
   body('username').trim().isLength({ min: 3, max: 50 }).withMessage('Username must be 3-50 characters'),
   body('email').trim().isEmail().withMessage('A valid email is required'),
+  body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Name must be 2-100 characters'),
   body('phone')
     .trim()
     .notEmpty().withMessage('Phone number is required')

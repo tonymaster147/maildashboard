@@ -103,6 +103,12 @@ export const createStatus = (kind, data) => api.post(`/admin/statuses/${kind}`, 
 export const updateStatus = (kind, id, data) => api.patch(`/admin/statuses/${kind}/${id}`, data);
 export const deleteStatus = (kind, id) => api.delete(`/admin/statuses/${kind}/${id}`);
 
+export const uploadChatAttachment = (orderId, file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post(`/chat/upload/${orderId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+
 // Sales User management (admin)
 export const getAllSalesUsers = () => api.get('/admin/sales-users');
 export const createSalesUser = (data) => api.post('/admin/sales-users', data);

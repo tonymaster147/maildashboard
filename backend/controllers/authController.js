@@ -11,7 +11,7 @@ require('dotenv').config();
  */
 exports.signup = async (req, res) => {
   try {
-    const { username, email, phone } = req.body;
+    const { username, name, email, phone } = req.body;
 
     // Check if username exists
     const [existing] = await db.query('SELECT id FROM users WHERE username = ?', [username]);
@@ -29,8 +29,8 @@ exports.signup = async (req, res) => {
 
     // Insert user
     const [result] = await db.query(
-      'INSERT INTO users (username, access_code, email, phone, country, signup_ip, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [username, hashedCode, email || null, phone, country, signupIp, 'user']
+      'INSERT INTO users (username, name, access_code, email, phone, country, signup_ip, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [username, name, hashedCode, email || null, phone, country, signupIp, 'user']
     );
 
     // Send access code via email (branded to originating site)
@@ -254,7 +254,7 @@ exports.changePassword = async (req, res) => {
 exports.getProfile = async (req, res) => {
   try {
     const [users] = await db.query(
-      'SELECT id, username, email, phone, country, role, created_at FROM users WHERE id = ?',
+      'SELECT id, username, name, email, phone, country, role, created_at FROM users WHERE id = ?',
       [req.user.id]
     );
 

@@ -1,5 +1,8 @@
 const db = require('../config/db');
+const fs = require('fs');
+const path = require('path');
 const { filterMessage } = require('../services/contentFilter');
+const { uploadChatAttachment } = require('../config/drive');
 
 /**
  * 2-way chat channels stored in `channel` column:
@@ -71,6 +74,111 @@ exports.getMessages = async (req, res) => {
   } catch (error) {
     console.error('Get messages error:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+};
+
+/**
+ * Send a chat attachment (one file per call, 10MB cap enforced by multer).
+ * Uploads to Google Drive (per-order subfolder), inserts a chat row with the
+ * attachment metadata and a NULL message, then broadcasts the same
+ * `newMessage` event the socket uses so connected clients render the bubble.
+ */
+exports.sendAttachment = async (req, res) => {
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const localPath = file.path;
+  let driveFileId = null;
+  try {
+    const { orderId } = req.params;
+    const senderId = req.user.id;
+    const senderRole = req.user.role;
+
+    // Access checks
+    const [orders] = await db.query('SELECT chat_enabled, user_id FROM orders WHERE id = ?', [orderId]);
+    if (orders.length === 0)                  return res.status(404).json({ error: 'Order not found' });
+    if (!orders[0].chat_enabled)              return res.status(403).json({ error: 'Chat is disabled for this order' });
+    const orderOwnerId = orders[0].user_id;
+
+    if (senderRole === 'user') {
+      const [own] = await db.query('SELECT id FROM orders WHERE id = ? AND user_id = ?', [orderId, senderId]);
+      if (own.length === 0) return res.status(403).json({ error: 'Access denied' });
+    } else if (senderRole === 'tutor') {
+      const [assg] = await db.query('SELECT id FROM order_tutors WHERE order_id = ? AND tutor_id = ?', [orderId, senderId]);
+      if (assg.length === 0) return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Channel resolution (same rules as sendMessage)
+    let channel;
+    if (senderRole === 'tutor') channel = 'tutor';
+    else if (['admin', 'sales_lead', 'sales_executive'].includes(senderRole)) channel = 'support';
+    else channel = req.body.channel || 'support';
+
+    // Upload to Drive (per-order subfolder)
+    const drive = await uploadChatAttachment(localPath, file.originalname, file.mimetype, orderId);
+    driveFileId = drive.fileId;
+
+    const [result] = await db.query(
+      `INSERT INTO chats (order_id, sender_id, sender_role, channel, message,
+         attachment_url, attachment_name, attachment_mime, attachment_size, attachment_drive_id)
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+      [orderId, senderId, senderRole, channel, drive.fileUrl, file.originalname, file.mimetype, file.size, drive.fileId]
+    );
+
+    // Resolve sender_name for emitted payload
+    let senderName = 'Admin';
+    if (senderRole === 'user')   { const [r] = await db.query('SELECT username FROM users WHERE id = ?', [senderId]); senderName = r[0]?.username || 'User'; }
+    if (senderRole === 'tutor')  { const [r] = await db.query('SELECT name FROM tutors WHERE id = ?', [senderId]); senderName = r[0]?.name || 'Tutor'; }
+    if (['sales_lead', 'sales_executive'].includes(senderRole)) {
+      const [r] = await db.query('SELECT name FROM sales_users WHERE id = ?', [senderId]); senderName = r[0]?.name || 'Sales';
+    }
+
+    const messageData = {
+      id: result.insertId,
+      order_id: parseInt(orderId, 10),
+      sender_id: senderId,
+      sender_role: senderRole,
+      sender_name: senderName,
+      channel,
+      message: null,
+      attachment_url: drive.fileUrl,
+      attachment_name: file.originalname,
+      attachment_mime: file.mimetype,
+      attachment_size: file.size,
+      attachment_drive_id: drive.fileId,
+      is_flagged: 0,
+      created_at: new Date()
+    };
+
+    // Broadcast through socket (same channel-aware routing as text messages)
+    const io = req.app.get('io');
+    if (io) {
+      if (channel === 'tutor') {
+        io.to(`user_${orderOwnerId}`).emit('newMessage', messageData);
+        const [tutors] = await db.query('SELECT tutor_id FROM order_tutors WHERE order_id = ?', [orderId]);
+        for (const t of tutors) {
+          io.to(`tutor_${t.tutor_id}`).emit('newMessage', messageData);
+          io.to(`tutor_${t.tutor_id}`).emit('chatNotification', { order_id: messageData.order_id, sender_name: senderName, message: `📎 ${file.originalname}`, channel });
+        }
+      } else {
+        io.to(`user_${orderOwnerId}`).emit('newMessage', messageData);
+        for (const [, s] of io.sockets.sockets) {
+          if (s.user && ['admin', 'sales_lead', 'sales_executive'].includes(s.user.role)) {
+            s.emit('newMessage', messageData);
+            if (senderRole === 'user') s.emit('chatNotification', { order_id: messageData.order_id, sender_name: senderName, message: `📎 ${file.originalname}`, channel });
+          }
+        }
+      }
+    }
+
+    res.status(201).json(messageData);
+  } catch (err) {
+    console.error('Chat attachment error:', err);
+    // Best-effort: nothing to roll back on Drive (uploaded file stays harmless)
+    res.status(500).json({ error: err.message || 'Failed to upload attachment' });
+  } finally {
+    // Always clean up the local temp file
+    fs.promises.unlink(localPath).catch(() => {});
   }
 };
 

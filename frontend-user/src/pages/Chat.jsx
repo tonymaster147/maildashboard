@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getChatMessages } from '../services/api';
+import { getChatMessages, uploadChatAttachment } from '../services/api';
 import { connectSocket, getSocket } from '../services/socket';
 import { FiSend } from 'react-icons/fi';
+import { AttachButton, AttachPreview, AttachmentBubble } from '../components/ChatAttachment';
 
 export default function Chat() {
   const { orderId, channel } = useParams(); // channel = 'tutor' or 'support'
   const { user, token } = useAuth();
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [pendingFile, setPendingFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [typing, setTyping] = useState(null);
   const messagesEndRef = useRef(null);
@@ -60,16 +63,31 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
 
+    // Attachment takes priority (text + file in same submit → send file, keep text)
+    if (pendingFile) {
+      setUploading(true);
+      try {
+        const { data } = await uploadChatAttachment(parseInt(orderId), pendingFile, channel);
+        setMessages(prev => prev.some(m => m.id === data.id) ? prev : [...prev, data]);
+        setPendingFile(null);
+      } catch (err) {
+        alert(err.response?.data?.error || 'Upload failed');
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
+    if (!newMessage.trim()) return;
     const socket = getSocket();
     if (socket) {
       socket.emit('sendMessage', {
         order_id: parseInt(orderId),
         message: newMessage,
-        channel // send channel so backend knows where to route
+        channel
       });
       socket.emit('stopTyping', { order_id: parseInt(orderId) });
     }
@@ -108,26 +126,41 @@ export default function Chat() {
             <p>No messages yet. Start the conversation!</p>
           </div>
         )}
-        {messages.map(msg => (
-          <div key={msg.id} className={`message ${msg.sender_role === 'user' && msg.sender_id === user.id ? 'message-sent' : 'message-received'} ${msg.is_flagged ? 'message-flagged' : ''}`}>
-            {msg.sender_role !== 'user' || msg.sender_id !== user.id ? (
-              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'tutor' ? '#6366f1' : msg.sender_role === 'admin' ? '#3b82f6' : msg.sender_role === 'sales_lead' ? '#f59e0b' : msg.sender_role === 'sales_executive' ? '#f97316' : 'var(--accent)' }}>
-                {msg.sender_name} ({msg.sender_role === 'sales_lead' ? 'Sales Lead' : msg.sender_role === 'sales_executive' ? 'Sales Exec' : msg.sender_role})
-              </div>
-            ) : null}
-            <div>{msg.message}</div>
-            <div className="message-meta">{new Date(msg.created_at).toLocaleTimeString()}</div>
-          </div>
-        ))}
+        {messages.map(msg => {
+          const isOwn = msg.sender_role === 'user' && msg.sender_id === user.id;
+          return (
+            <div key={msg.id} className={`message ${isOwn ? 'message-sent' : 'message-received'} ${msg.is_flagged ? 'message-flagged' : ''}`}>
+              {!isOwn ? (
+                <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'tutor' ? '#6366f1' : msg.sender_role === 'admin' ? '#3b82f6' : msg.sender_role === 'sales_lead' ? '#f59e0b' : msg.sender_role === 'sales_executive' ? '#f97316' : 'var(--accent)' }}>
+                  {msg.sender_name} ({msg.sender_role === 'sales_lead' ? 'Sales Lead' : msg.sender_role === 'sales_executive' ? 'Sales Exec' : msg.sender_role})
+                </div>
+              ) : null}
+              {msg.attachment_url ? <AttachmentBubble msg={msg} isOwn={isOwn} /> : <div>{msg.message}</div>}
+              <div className="message-meta">{new Date(msg.created_at).toLocaleTimeString()}</div>
+            </div>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
-      <form className="chat-input-area" onSubmit={handleSend}>
-        <input type="text" placeholder="Type a message..." value={newMessage} onChange={handleTyping} autoFocus />
-        <button type="submit" className="btn btn-primary" disabled={!newMessage.trim()}>
-          <FiSend size={16} />
-        </button>
-      </form>
+      <div className="chat-input-area" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+        <AttachPreview file={pendingFile} onRemove={() => setPendingFile(null)} />
+        <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'center', gap: 0, width: '100%' }}>
+          <AttachButton onPick={setPendingFile} disabled={uploading} />
+          <input
+            type="text"
+            placeholder={pendingFile ? 'Press send to upload attachment' : 'Type a message...'}
+            value={newMessage}
+            onChange={handleTyping}
+            disabled={!!pendingFile || uploading}
+            autoFocus
+            style={{ flex: 1 }}
+          />
+          <button type="submit" className="btn btn-primary" disabled={uploading || (!pendingFile && !newMessage.trim())}>
+            {uploading ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <FiSend size={16} />}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

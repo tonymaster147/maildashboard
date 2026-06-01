@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getChatMessages } from '../services/api';
 import { FiArrowLeft } from 'react-icons/fi';
+import { AttachmentBubble } from '../components/ChatAttachment';
 
 export default function ChatView() {
   const { orderId } = useParams();
@@ -37,7 +38,7 @@ export default function ChatView() {
                   {msg.channel === 'tutor' ? 'Tutor Ch.' : 'Support Ch.'}
                 </span>
               </div>
-              <div>{msg.message}</div>
+              {msg.attachment_url ? <AttachmentBubble msg={msg} isOwn={['admin','sales_lead','sales_executive'].includes(msg.sender_role)} /> : <div>{msg.message}</div>}
               {Number(msg.is_flagged) ? <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>⚠️ {msg.flag_reason}</div> : null}
               <div className="message-meta">{new Date(msg.created_at).toLocaleString()}</div>
             </div>

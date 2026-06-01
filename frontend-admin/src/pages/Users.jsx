@@ -36,12 +36,13 @@ export default function Users() {
       {loading ? <div className="flex-center"><div className="loading-spinner"></div></div> : (
         <div className="table-container">
           <table>
-            <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Phone</th><th>Country</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+            <thead><tr><th>ID</th><th>Username</th><th>Name</th><th>Email</th><th>Phone</th><th>Country</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
             <tbody>
               {users.map(u => (
                 <tr key={u.id}>
                   <td>#{u.id}</td>
                   <td style={{ fontWeight: 500 }}>{u.username}</td>
+                  <td>{u.name || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{u.email || '—'}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{u.phone || '—'}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{u.country || '—'}</td>

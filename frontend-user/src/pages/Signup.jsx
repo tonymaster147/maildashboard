@@ -11,6 +11,7 @@ export default function Signup() {
   usePageMeta('signup');
   const brand = useSiteBranding();
   const [username, setUsername] = useState('');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [dialCode, setDialCode] = useState(DEFAULT_DIAL);
@@ -34,7 +35,7 @@ export default function Signup() {
 
     try {
       const fullPhone = `${dialCode} ${phone}`.trim();
-      await signup({ username, email, phone: fullPhone });
+      await signup({ username, name, email, phone: fullPhone });
       navigate('/login', {
         state: { signupSuccess: true, message: 'Account created! Your access code has been emailed to you.' },
         replace: true
@@ -69,6 +70,19 @@ export default function Signup() {
             <label className="form-label">Email *</label>
             <input type="email" className="form-input" placeholder="your@email.com" value={email} onChange={e => setEmail(e.target.value)} required />
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Your access code will be sent to this email</p>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Name *</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Your full name"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              required
+              minLength={2}
+              maxLength={100}
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Phone Number *</label>

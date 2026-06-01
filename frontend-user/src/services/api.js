@@ -36,6 +36,13 @@ export const getPublicSite = () => api.get('/public/site');
 export const getPublicGeo = () => api.get('/public/geo');
 export const getPublicStatuses = (kind) => api.get(`/public/statuses/${kind}`);
 
+export const uploadChatAttachment = (orderId, file, channel) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  if (channel) fd.append('channel', channel);
+  return api.post(`/chat/upload/${orderId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+
 // Auth
 export const signup = (data) => api.post('/auth/signup', data);
 export const login = (data) => api.post('/auth/login', data);

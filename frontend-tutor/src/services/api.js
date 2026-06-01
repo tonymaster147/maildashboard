@@ -27,6 +27,12 @@ export const getTaskDetail = (id) => api.get(`/tutor/tasks/${id}`);
 export const completeTask = (id) => api.put(`/tutor/tasks/${id}/complete`);
 export const updateTutorTaskStatus = (id, tutor_status_code) => api.patch(`/tutor/tasks/${id}/status`, { tutor_status_code });
 export const getPublicStatuses = (kind) => api.get(`/public/statuses/${kind}`);
+
+export const uploadChatAttachment = (orderId, file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post(`/chat/upload/${orderId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
 export const uploadWorkFiles = (id, formData) => api.post(`/tutor/tasks/${id}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const getChatMessages = (orderId) => api.get(`/chat/messages/${orderId}`);
 export const getNotifications = () => api.get('/tutor/notifications');

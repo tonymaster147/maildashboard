@@ -101,6 +101,15 @@ export default function Profile() {
                 <div style={{ fontWeight: 600 }}>{user?.username}</div>
               </div>
             </div>
+            {user?.name && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
+                <FiUser size={18} style={{ color: 'var(--text-muted)' }} />
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Name</div>
+                  <div style={{ fontWeight: 600 }}>{user.name}</div>
+                </div>
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
               <FiMail size={18} style={{ color: 'var(--text-muted)' }} />
               <div>

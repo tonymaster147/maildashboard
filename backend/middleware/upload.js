@@ -78,4 +78,51 @@ const handleUploadError = (err, req, res, next) => {
   next();
 };
 
-module.exports = { upload, handleUploadError };
+// ────────────── Chat attachment uploader (10 MB, single file, narrower whitelist) ──────────────
+
+const CHAT_ALLOWED_TYPES = [
+  // Documents
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Text
+  'text/plain',
+  'text/csv',
+  'text/markdown',
+  'application/rtf',
+  'text/rtf',
+  // Images
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp'
+];
+
+const CHAT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+const chatFileFilter = (req, file, cb) => {
+  if (CHAT_ALLOWED_TYPES.includes(file.mimetype)) cb(null, true);
+  else cb(new Error(`File type ${file.mimetype} is not allowed in chat`), false);
+};
+
+const chatUpload = multer({
+  storage,
+  fileFilter: chatFileFilter,
+  limits: { fileSize: CHAT_MAX_FILE_SIZE, files: 1 }
+});
+
+const handleChatUploadError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'File too large. Chat attachments are limited to 10 MB.' });
+    if (err.code === 'LIMIT_FILE_COUNT') return res.status(400).json({ error: 'Only one file per message.' });
+    return res.status(400).json({ error: err.message });
+  }
+  if (err) return res.status(400).json({ error: err.message });
+  next();
+};
+
+module.exports = { upload, handleUploadError, chatUpload, handleChatUploadError };

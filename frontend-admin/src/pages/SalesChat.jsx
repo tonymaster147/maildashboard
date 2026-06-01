@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { salesApi, getChatMessages, getUnreadPerOrder, markAllRead } from '../services/api';
+import { salesApi, getChatMessages, getUnreadPerOrder, markAllRead, uploadChatAttachment } from '../services/api';
 import { connectSocket, getSocket } from '../services/socket';
 import { FiSend, FiMessageCircle, FiSearch } from 'react-icons/fi';
+import { AttachButton, AttachPreview, AttachmentBubble } from '../components/ChatAttachment';
 
 function useNotificationSound() {
   return useCallback(() => {
@@ -29,6 +30,8 @@ export default function SalesChat() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [pendingFile, setPendingFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [chatLoading, setChatLoading] = useState(false);
   const [typing, setTyping] = useState(null);
@@ -121,9 +124,23 @@ export default function SalesChat() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedOrder) return;
+    if (!selectedOrder) return;
+    if (pendingFile) {
+      setUploading(true);
+      try {
+        const { data } = await uploadChatAttachment(selectedOrder.id, pendingFile);
+        setMessages(prev => prev.some(m => m.id === data.id) ? prev : [...prev, data]);
+        setPendingFile(null);
+      } catch (err) {
+        alert(err.response?.data?.error || 'Upload failed');
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+    if (!newMessage.trim()) return;
     const socket = getSocket();
     if (socket) {
       socket.emit('sendMessage', { order_id: selectedOrder.id, message: newMessage });
@@ -228,34 +245,42 @@ export default function SalesChat() {
                 ) : messages.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No messages yet. Start the conversation!</div>
                 ) : (
-                  messages.map(msg => (
-                    <div key={msg.id} className={`message ${isMySentMessage(msg) ? 'message-sent' : 'message-received'} ${msg.is_flagged ? 'message-flagged' : ''}`}>
-                      {!isMySentMessage(msg) && (
-                        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'admin' ? '#3b82f6' : msg.sender_role === 'tutor' ? 'var(--accent)' : msg.sender_role === 'sales_lead' ? '#f59e0b' : msg.sender_role === 'sales_executive' ? '#f97316' : 'var(--info)' }}>
-                          {msg.sender_name} ({msg.sender_role === 'sales_lead' ? 'Sales Lead' : msg.sender_role === 'sales_executive' ? 'Sales Exec' : msg.sender_role})
-                        </div>
-                      )}
-                      <div>{msg.message}</div>
-                      <div className="message-meta">{new Date(msg.created_at).toLocaleTimeString()}</div>
-                    </div>
-                  ))
+                  messages.map(msg => {
+                    const own = isMySentMessage(msg);
+                    return (
+                      <div key={msg.id} className={`message ${own ? 'message-sent' : 'message-received'} ${msg.is_flagged ? 'message-flagged' : ''}`}>
+                        {!own && (
+                          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: msg.sender_role === 'admin' ? '#3b82f6' : msg.sender_role === 'tutor' ? 'var(--accent)' : msg.sender_role === 'sales_lead' ? '#f59e0b' : msg.sender_role === 'sales_executive' ? '#f97316' : 'var(--info)' }}>
+                            {msg.sender_name} ({msg.sender_role === 'sales_lead' ? 'Sales Lead' : msg.sender_role === 'sales_executive' ? 'Sales Exec' : msg.sender_role})
+                          </div>
+                        )}
+                        {msg.attachment_url ? <AttachmentBubble msg={msg} isOwn={own} /> : <div>{msg.message}</div>}
+                        <div className="message-meta">{new Date(msg.created_at).toLocaleTimeString()}</div>
+                      </div>
+                    );
+                  })
                 )}
                 <div ref={bottomRef} />
               </div>
-              <form onSubmit={handleSend} style={{ display: 'flex', gap: 8, padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Type a message..."
-                  value={newMessage}
-                  onChange={handleTyping}
-                  autoFocus
-                  style={{ flex: 1 }}
-                />
-                <button type="submit" className="btn btn-primary" disabled={!newMessage.trim()}>
-                  <FiSend size={16} />
-                </button>
-              </form>
+              <div style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderTop: '1px solid var(--border)' }}>
+                <AttachPreview file={pendingFile} onRemove={() => setPendingFile(null)} />
+                <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AttachButton onPick={setPendingFile} disabled={uploading} />
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder={pendingFile ? 'Press send to upload attachment' : 'Type a message...'}
+                    value={newMessage}
+                    onChange={handleTyping}
+                    disabled={!!pendingFile || uploading}
+                    autoFocus
+                    style={{ flex: 1 }}
+                  />
+                  <button type="submit" className="btn btn-primary" disabled={uploading || (!pendingFile && !newMessage.trim())}>
+                    {uploading ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <FiSend size={16} />}
+                  </button>
+                </form>
+              </div>
             </>
           )}
         </div>
