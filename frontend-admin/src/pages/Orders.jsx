@@ -52,8 +52,13 @@ export default function Orders() {
       setCancelTarget({ orderId: id, orderCode });
       return;
     }
-    await updateOrderStatus(id, { admin_status_code });
-    fetchOrders();
+    try {
+      await updateOrderStatus(id, { admin_status_code });
+      fetchOrders();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update status');
+      fetchOrders(); // revert UI to true server state
+    }
   };
 
   const confirmCancel = async (note) => {

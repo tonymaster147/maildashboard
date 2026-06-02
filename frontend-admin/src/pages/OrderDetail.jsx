@@ -111,6 +111,7 @@ export default function OrderDetail() {
       fetchOrder();
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to update status');
+      fetchOrder(); // revert dropdown to true server state
     }
   };
 
