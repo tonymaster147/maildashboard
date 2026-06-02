@@ -46,7 +46,7 @@ export default function Chats() {
               <div key={order.id} className="card" style={{ padding: '16px 20px' }}>
                 <div style={{ marginBottom: 12 }}>
                   <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)' }}>
-                    Order #{order.id} — {order.course_name}
+                    Order {order.order_code || `#${order.id}`} — {order.course_name}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
                     {order.subject_name || 'N/A'} • <span style={{ textTransform: 'capitalize' }}>{order.status}</span>

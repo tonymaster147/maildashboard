@@ -208,7 +208,7 @@ exports.sendMessage = async (req, res) => {
     if (isFlagged) {
       await db.query(
         'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-        ['admin', 'flagged_message', `Flagged message in order #${order_id}: ${flagReason}`, result.insertId, 'chat']
+        ['admin', 'flagged_message', `Flagged message in order ${await require('../utils/orderCode').formatOrderRef(order_id)}: ${flagReason}`, result.insertId, 'chat']
       );
     }
 

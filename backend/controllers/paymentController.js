@@ -90,6 +90,8 @@ exports.createCheckoutSession = async (req, res) => {
     // Build product name from order type
     const [orderType] = await db.query('SELECT name FROM order_types WHERE id = ?', [order_data.order_type_id]);
     const productName = orderType.length > 0 ? orderType[0].name : 'Order';
+    const { formatOrderRef } = require('../utils/orderCode');
+    const orderRef = await formatOrderRef(order_id);
 
     // Resolve redirect base from order source_url, fallback to env
     const sourceBase = order_data.source_url ? order_data.source_url.replace(/\/$/, '') : null;
@@ -108,7 +110,7 @@ exports.createCheckoutSession = async (req, res) => {
             currency: 'usd',
             product_data: {
               name: `${productName} - ${order_data.course_name}${isPartial ? ' (Partial Payment)' : ''}`,
-              description: isPartial ? `Order #${order_id} - Partial Payment $${PARTIAL_PAYMENT_AMOUNT} of $${fullTotal.toFixed(2)}` : `Order #${order_id}`
+              description: isPartial ? `Order ${orderRef} - Partial Payment $${PARTIAL_PAYMENT_AMOUNT} of $${fullTotal.toFixed(2)}` : `Order ${orderRef}`
             },
             unit_amount: totalAmount
           },
@@ -195,7 +197,7 @@ const fulfillOrder = async (session, io) => {
   // Create notification
   await db.query(
     'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-    ['admin', 'new_order', `New paid order #${orderId}`, orderId, 'order']
+    ['admin', 'new_order', `New paid order ${await require('../utils/orderCode').formatOrderRef(orderId)}`, orderId, 'order']
   );
 
   // Emit live notification to admin/sales panels
@@ -350,7 +352,8 @@ exports.createPaymentIntent = async (req, res) => {
 
     const [orderType] = await db.query('SELECT name FROM order_types WHERE id = ?', [order_data.order_type_id]);
     const typeName = orderType.length > 0 ? orderType[0].name : 'Tutoring service';
-    const description = `${typeName} - ${order_data.course_name || 'Order'} (#${order_id})${isPartial ? ' - Partial' : ''}`;
+    const orderRef2 = await require('../utils/orderCode').formatOrderRef(order_id);
+    const description = `${typeName} - ${order_data.course_name || 'Order'} (${orderRef2})${isPartial ? ' - Partial' : ''}`;
 
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
@@ -404,7 +407,7 @@ exports.createRemainingPaymentIntent = async (req, res) => {
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: 'usd',
-      description: `Remaining Balance - Order #${order_id}`,
+      description: `Remaining Balance - Order ${await require('../utils/orderCode').formatOrderRef(order_id)}`,
       automatic_payment_methods: { enabled: true },
       metadata: {
         user_id: userId.toString(),
@@ -486,7 +489,7 @@ exports.payRemainingBalance = async (req, res) => {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `Remaining Balance - Order #${order_id}`,
+            name: `Remaining Balance - Order ${await require('../utils/orderCode').formatOrderRef(order_id)}`,
             description: `Final payment of $${remaining.toFixed(2)}`
           },
           unit_amount: totalAmount

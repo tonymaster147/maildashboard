@@ -77,7 +77,7 @@ export default function InstallmentPlanModal({ order, onClose, onCreated }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
       <div className="card" style={{ width: 560, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ margin: 0 }}>Split into Installments — Order #{order.id}</h3>
+          <h3 style={{ margin: 0 }}>Split into Installments — Order {order.order_code || `#${order.id}`}</h3>
           <button className="btn btn-sm btn-secondary" onClick={onClose}><FiX size={16} /></button>
         </div>
 

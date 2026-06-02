@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getChatMessages } from '../services/api';
+import { getChatMessages, getOrderCode } from '../services/api';
 import { FiArrowLeft } from 'react-icons/fi';
 import { AttachmentBubble } from '../components/ChatAttachment';
 
@@ -8,11 +8,13 @@ export default function ChatView() {
   const { orderId } = useParams();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [orderCode, setOrderCode] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     getChatMessages(orderId, { channel: 'all' }).then(res => { setMessages(res.data); setLoading(false); }).catch(() => setLoading(false));
   }, [orderId]);
+  useEffect(() => { getOrderCode(orderId).then(r => setOrderCode(r.data.order_code)).catch(() => {}); }, [orderId]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -22,7 +24,7 @@ export default function ChatView() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <Link to="/chats" className="btn btn-sm btn-secondary"><FiArrowLeft size={14} /></Link>
-        <h2>Chat - Order #{orderId}</h2>
+        <h2>Chat - Order {orderCode || `#${orderId}`}</h2>
         <span style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 13 }}>{messages.length} messages</span>
       </div>
       <div className="chat-container" style={{ height: 'calc(100vh - 180px)' }}>

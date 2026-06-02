@@ -59,6 +59,7 @@ export const getEducationLevels = () => api.get('/orders/education-levels');
 export const getPlans = () => api.get('/orders/plans');
 export const createOrder = (data) => api.post('/orders', data);
 export const getUserOrders = (params = {}) => api.get('/orders', { params: typeof params === 'string' ? { status: params } : params });
+export const getOrderCode = (id) => api.get(`/orders/${id}/code`);
 export const getOrderDetail = (id) => api.get(`/orders/${id}`);
 export const validateCoupon = (code) => api.post('/orders/validate-coupon', { code });
 export const calculatePrice = (data) => api.post('/orders/calculate-price', data);

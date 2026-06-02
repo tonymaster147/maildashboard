@@ -178,7 +178,7 @@ export default function OrderDetail() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
         <Link to="/orders" className="btn btn-sm btn-secondary"><FiArrowLeft size={14} /></Link>
-        <div><h2>Order #{order.id}</h2><p style={{ color: 'var(--text-secondary)' }}>{order.course_name} by {order.username}</p></div>
+        <div><h2>Order {order.order_code || `#${order.id}`}</h2><p style={{ color: 'var(--text-secondary)' }}>{order.course_name} by {order.username}</p></div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <select
             className="form-select"
@@ -334,6 +334,7 @@ export default function OrderDetail() {
           {showEditInstallmentModal && (
             <EditInstallmentModal
               orderId={order.id}
+              orderCode={order.order_code}
               installments={installments}
               onClose={() => setShowEditInstallmentModal(false)}
               onSaved={() => { setShowEditInstallmentModal(false); fetchOrder(); }}
@@ -342,6 +343,7 @@ export default function OrderDetail() {
           {cancelOpen && (
             <CancelOrderModal
               orderId={order.id}
+              orderCode={order.order_code}
               onConfirm={confirmCancel}
               onCancel={() => setCancelOpen(false)}
               submitting={cancelSubmitting}
@@ -426,7 +428,7 @@ export default function OrderDetail() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div className="card" style={{ width: 440 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-              <h3>Assign Tutor(s) to Order #{order.id}</h3>
+              <h3>Assign Tutor(s) to Order {order.order_code || `#${order.id}`}</h3>
               <button className="btn btn-sm btn-secondary" onClick={() => setShowAssign(false)}><FiX size={16} /></button>
             </div>
             <p style={{ color: 'var(--text-secondary)', marginBottom: 16, fontSize: 14 }}>Select one or multiple tutors:</p>

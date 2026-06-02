@@ -181,7 +181,7 @@ module.exports = function setupSocket(io) {
           emitToAdminSales('flaggedMessage', { ...messageData, flag_reason: flagReason });
           await db.query(
             'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-            ['admin', 'flagged_message', `Flagged: ${flagReason} in order #${order_id}`, result.insertId, 'chat']
+            ['admin', 'flagged_message', `Flagged: ${flagReason} in order ${await require('../utils/orderCode').formatOrderRef(order_id)}`, result.insertId, 'chat']
           );
         }
       } catch (error) {

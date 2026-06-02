@@ -120,19 +120,21 @@ exports.createOrder = async (req, res) => {
     const totalPrice = price + urgentFee - discountAmount;
 
     const statuses = require('../utils/statuses');
+    const { nextOrderCode } = require('../utils/orderCode');
     // Default to "Paid - Full (Not Assigned)" — this path mirrors the legacy
     // status='pending' semantics ("paid, awaiting tutor").
     const adminUnassignedId = await statuses.adminId('paid_full_unassigned');
+    const orderCode = await nextOrderCode(req.site?.id || null);
     const [result] = await db.query(
-      `INSERT INTO orders (user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, pricing_rule_id, price, urgent_fee, total_price, additional_instructions, school_url, school_username, school_password, start_date, end_date, num_weeks, num_pages, coupon_id, discount_amount, status, admin_status_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-      [userId, order_type_id, course_name, subject_id, education_level_id, resolvedPlanId, resolvedPricingRuleId, price, urgentFee, totalPrice, additional_instructions || null, school_url || null, school_username || null, school_password || null, start_date, end_date, num_weeks || 0, num_pages || null, couponId, discountAmount, adminUnassignedId]
+      `INSERT INTO orders (order_code, user_id, order_type_id, course_name, subject_id, education_level_id, plan_id, pricing_rule_id, price, urgent_fee, total_price, additional_instructions, school_url, school_username, school_password, start_date, end_date, num_weeks, num_pages, coupon_id, discount_amount, status, admin_status_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+      [orderCode, userId, order_type_id, course_name, subject_id, education_level_id, resolvedPlanId, resolvedPricingRuleId, price, urgentFee, totalPrice, additional_instructions || null, school_url || null, school_username || null, school_password || null, start_date, end_date, num_weeks || 0, num_pages || null, couponId, discountAmount, adminUnassignedId]
     );
 
     // Create notification for admin
     await db.query(
       'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-      ['admin', 'new_order', `New order #${result.insertId} received`, result.insertId, 'order']
+      ['admin', 'new_order', `New order ${orderCode} received`, result.insertId, 'order']
     );
 
     // Trigger live notification
@@ -205,6 +207,38 @@ exports.getUserOrders = async (req, res) => {
 /**
  * Get single order detail
  */
+/**
+ * Lightweight lookup: numeric order id → { id, order_code }. Used by chat UIs
+ * that only have the numeric id in the URL but want to display the friendly code.
+ */
+exports.getOrderCode = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    // Access check — same pattern as getOrderDetail
+    let access = false;
+    if (role === 'user') {
+      const [rows] = await db.query('SELECT id FROM orders WHERE id = ? AND user_id = ?', [id, userId]);
+      access = rows.length > 0;
+    } else if (role === 'tutor') {
+      const [rows] = await db.query('SELECT id FROM order_tutors WHERE order_id = ? AND tutor_id = ?', [id, userId]);
+      access = rows.length > 0;
+    } else {
+      access = true; // admin / sales
+    }
+    if (!access) return res.status(403).json({ error: 'Access denied' });
+
+    const [orders] = await db.query('SELECT id, order_code FROM orders WHERE id = ?', [id]);
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
+    res.json(orders[0]);
+  } catch (err) {
+    console.error('getOrderCode error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 exports.getOrderDetail = async (req, res) => {
   try {
     const { id } = req.params;
@@ -324,12 +358,14 @@ exports.createDraftOrder = async (req, res) => {
 
     const siteId = req.site?.id || null;
     const statuses = require('../utils/statuses');
+    const { nextOrderCode } = require('../utils/orderCode');
     const adminUnpaidId = await statuses.adminId('unpaid');
+    const orderCode = await nextOrderCode(siteId);
     const [result] = await db.query(
       `INSERT INTO orders
-       (user_id, order_type_id, course_name, subject_id, education_level_id, price, total_price, start_date, end_date, status, source_url, site_id, admin_status_id)
-       VALUES (?, ?, ?, ?, ?, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?, ?, ?)`,
-      [userId, order_type_id, course_name, subject_id, education_level_id, source_url || null, siteId, adminUnpaidId]
+       (order_code, user_id, order_type_id, course_name, subject_id, education_level_id, price, total_price, start_date, end_date, status, source_url, site_id, admin_status_id)
+       VALUES (?, ?, ?, ?, ?, ?, 0, 0, CURDATE(), CURDATE(), 'incomplete', ?, ?, ?)`,
+      [orderCode, userId, order_type_id, course_name, subject_id, education_level_id, source_url || null, siteId, adminUnpaidId]
     );
 
     // Fetch enriched data for email

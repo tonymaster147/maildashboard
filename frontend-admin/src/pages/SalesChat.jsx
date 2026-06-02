@@ -210,7 +210,7 @@ export default function SalesChat() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>Order #{order.id}</span>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>Order {order.order_code || `#${order.id}`}</span>
                   {unreadMap[order.id] > 0 && (
                     <span style={{ background: 'var(--error)', color: '#fff', fontSize: 10, padding: '1px 6px', borderRadius: 10, fontWeight: 700, minWidth: 18, textAlign: 'center' }}>{unreadMap[order.id]}</span>
                   )}
@@ -236,7 +236,7 @@ export default function SalesChat() {
           ) : (
             <>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontWeight: 600 }}>Order #{selectedOrder.id} — {selectedOrder.title || selectedOrder.subject || 'Chat'}</div>
+                <div style={{ fontWeight: 600 }}>Order {selectedOrder.order_code || `#${selectedOrder.id}`} — {selectedOrder.title || selectedOrder.subject || 'Chat'}</div>
                 {typing && <p style={{ color: 'var(--accent)', fontSize: 12, margin: 0 }}>{typing} is typing...</p>}
               </div>
               <div className="chat-messages" style={{ flex: 1, overflow: 'auto', padding: 16 }}>

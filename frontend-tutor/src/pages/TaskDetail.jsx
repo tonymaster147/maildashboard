@@ -52,7 +52,7 @@ export default function TaskDetail() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
         <Link to="/" className="btn btn-sm btn-secondary"><FiArrowLeft size={14} /></Link>
-        <div><h2>Task #{task.id}</h2><p style={{ color: 'var(--text-secondary)' }}>{task.course_name}</p></div>
+        <div><h2>Task {task.order_code || `#${task.id}`}</h2><p style={{ color: 'var(--text-secondary)' }}>{task.course_name}</p></div>
         {task.tutor_status_code && (
           <span
             style={{
@@ -70,7 +70,7 @@ export default function TaskDetail() {
       <div className="grid-2">
         <div className="card">
           <h4 style={{ marginBottom: 16 }}>Task Details</h4>
-          {[['Type', task.order_type_name], ['Subject', task.subject_name], ['Level', task.education_level_name], ['Plan', task.plan_name || '—'], ['User', task.username], ['Start', new Date(task.start_date).toLocaleDateString()], ['End', new Date(task.end_date).toLocaleDateString()], ['Weeks', task.num_weeks]].map(([l, v]) => (
+          {[['Type', task.order_type_name], ['Course', task.course_name || '—'], ['Subject', task.subject_name], ['Level', task.education_level_name], ['Plan', task.plan_name || '—'], ['User', task.username], ['Start', new Date(task.start_date).toLocaleDateString()], ['End', new Date(task.end_date).toLocaleDateString()], ['Weeks', task.num_weeks]].map(([l, v]) => (
             <div key={l} className="summary-row"><span className="label">{l}</span><span>{v}</span></div>
           ))}
         </div>

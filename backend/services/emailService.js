@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const db = require('../config/db');
 const { decryptSecret } = require('../utils/crypto');
+const { formatOrderRef } = require('../utils/orderCode');
 require('dotenv').config();
 
 const ADMIN_EMAIL = 'faruqui.a4u@gmail.com';
@@ -193,6 +194,7 @@ async function sendEmailChangeCode(newEmail, username, code, siteId) {
 async function sendNewOrderAdmin(orderDetails) {
   const { orderId, courseName, username, orderType, subject, educationLevel, status, sourceUrl, planName, totalPrice, paymentStatus, paymentType, amountPaid, amountRemaining, siteId } = orderDetails;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
 
   const pStatus = paymentStatus || 'unpaid';
   const paymentColors = { completed: { bg: '#dcfce7', text: '#16a34a' }, pending: { bg: '#fef3c7', text: '#d97706' }, cancelled: { bg: '#fee2e2', text: '#dc2626' }, unpaid: { bg: '#f1f5f9', text: '#64748b' }, partial: { bg: '#fef3c7', text: '#d97706' } };
@@ -209,7 +211,7 @@ async function sendNewOrderAdmin(orderDetails) {
       <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">A new order has been ${status === 'incomplete' ? 'started' : 'updated'}.</p>
       ${partialBanner}
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-        <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Order ID</td><td style="padding: 10px 0; color: #334155; font-weight: 600; text-align: right;">#${orderId}</td></tr>
+        <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Order ID</td><td style="padding: 10px 0; color: #334155; font-weight: 600; text-align: right;">${ref}</td></tr>
         <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">User</td><td style="padding: 10px 0; color: #334155; font-weight: 500; text-align: right;">${username || 'N/A'}</td></tr>
         <tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Course</td><td style="padding: 10px 0; color: #334155; font-weight: 500; text-align: right;">${courseName || 'N/A'}</td></tr>
         ${orderType ? `<tr style="border-bottom: 1px solid #e2e8f0;"><td style="padding: 10px 0; color: #64748b; font-size: 14px;">Type</td><td style="padding: 10px 0; color: #334155; text-align: right;">${orderType}</td></tr>` : ''}
@@ -225,16 +227,17 @@ async function sendNewOrderAdmin(orderDetails) {
   `;
   const ok = await sendViaContext(ctx, {
     to: ADMIN_EMAIL,
-    subject: `Order #${orderId} - ${status === 'incomplete' ? 'New Draft' : status === 'active' ? 'Payment Confirmed' : 'Updated'} - ${ctx.brand.name}`,
+    subject: `Order ${ref} - ${status === 'incomplete' ? 'New Draft' : status === 'active' ? 'Payment Confirmed' : 'Updated'} - ${ctx.brand.name}`,
     html
   });
-  if (ok) console.log(`✅ Admin order email sent for order #${orderId}`);
+  if (ok) console.log(`✅ Admin order email sent for order ${ref}`);
 }
 
 async function sendOrderConfirmationUser(email, orderDetails) {
   if (!email) return;
   const { orderId, courseName, status, planName, totalPrice, paymentType, amountPaid, amountRemaining, siteId } = orderDetails;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
 
   const isPaid = status === 'active';
   const isPartial = paymentType === 'partial' && parseFloat(amountRemaining || 0) > 0;
@@ -250,7 +253,7 @@ async function sendOrderConfirmationUser(email, orderDetails) {
       <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">${isPaid ? (isPartial ? 'We received your partial payment. Your order is now active. Please pay the remaining balance at your convenience.' : 'Your payment has been processed and your order is now active!') : 'Your order has been started. Complete the remaining steps to proceed to payment.'}</p>
       ${partialBanner}
       <div style="background: ${isPaid ? '#f0fdf4' : '#f0f9ff'}; padding: 20px; border-radius: 8px; border-left: 4px solid ${isPaid ? '#22c55e' : '#3b82f6'}; margin-bottom: 20px;">
-        <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> #${orderId}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> ${ref}</p>
         <p style="margin: 5px 0; color: #334155;"><strong>Course:</strong> ${courseName || 'N/A'}</p>
         ${planName ? `<p style="margin: 5px 0; color: #334155;"><strong>Plan:</strong> ${planName}</p>` : ''}
         ${totalPrice ? `<p style="margin: 5px 0; color: #334155;"><strong>Total:</strong> <span style="color: #84C225; font-weight: 700; font-size: 18px;">$${parseFloat(totalPrice).toFixed(2)}</span></p>` : ''}
@@ -261,23 +264,24 @@ async function sendOrderConfirmationUser(email, orderDetails) {
   `;
   const ok = await sendViaContext(ctx, {
     to: email,
-    subject: `${isPaid ? 'Payment Confirmed' : 'Order Started'} - Order #${orderId} - ${ctx.brand.name}`,
+    subject: `${isPaid ? 'Payment Confirmed' : 'Order Started'} - Order ${ref} - ${ctx.brand.name}`,
     html
   });
-  if (ok) console.log(`✅ User order email sent to ${email} for order #${orderId}`);
+  if (ok) console.log(`✅ User order email sent to ${email} for order ${ref}`);
 }
 
 async function sendTutorTaskEmail(email, name, orderDetails) {
   if (!email) return;
   const { orderId, courseName, subject, planName, siteId } = orderDetails;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
 
   const html = `
     ${header(ctx.brand, '🎓 New Task Assigned')}
       <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${name},</p>
       <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">A new task has been assigned to you. Please check your dashboard for more details.</p>
       <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
-        <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> #${orderId}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> ${ref}</p>
         <p style="margin: 5px 0; color: #334155;"><strong>Course:</strong> ${courseName || 'N/A'}</p>
         ${subject ? `<p style="margin: 5px 0; color: #334155;"><strong>Subject:</strong> ${subject}</p>` : ''}
         ${planName ? `<p style="margin: 5px 0; color: #334155;"><strong>Plan:</strong> ${planName}</p>` : ''}
@@ -287,10 +291,10 @@ async function sendTutorTaskEmail(email, name, orderDetails) {
   `;
   const ok = await sendViaContext(ctx, {
     to: email,
-    subject: `New Task Assigned: Order #${orderId} - ${ctx.brand.name}`,
+    subject: `New Task Assigned: Order ${ref} - ${ctx.brand.name}`,
     html
   });
-  if (ok) console.log(`✅ Tutor task email sent to ${email} for order #${orderId}`);
+  if (ok) console.log(`✅ Tutor task email sent to ${email} for order ${ref}`);
 }
 
 // Tutor / sales welcome emails are admin-initiated and have no site context → master.
@@ -344,6 +348,7 @@ async function sendOrderStatusChangeEmail(email, orderDetails) {
   if (!email) return;
   const { orderId, courseName, oldStatus, newStatus, planName, totalPrice, siteId } = orderDetails;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
 
   const statusColors = {
     incomplete: { bg: '#f1f5f9', text: '#64748b' },
@@ -360,7 +365,7 @@ async function sendOrderStatusChangeEmail(email, orderDetails) {
     ${header(ctx.brand, '📦 Order Status Updated')}
       <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">The status of your order has been updated.</p>
       <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid ${newColor.text}; margin-bottom: 20px;">
-        <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> #${orderId}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Order ID:</strong> ${ref}</p>
         <p style="margin: 5px 0; color: #334155;"><strong>Course:</strong> ${courseName || 'N/A'}</p>
         ${planName ? `<p style="margin: 5px 0; color: #334155;"><strong>Plan:</strong> ${planName}</p>` : ''}
         ${totalPrice ? `<p style="margin: 5px 0; color: #334155;"><strong>Total:</strong> $${parseFloat(totalPrice).toFixed(2)}</p>` : ''}
@@ -375,10 +380,10 @@ async function sendOrderStatusChangeEmail(email, orderDetails) {
   `;
   const ok = await sendViaContext(ctx, {
     to: email,
-    subject: `Order #${orderId} Status Updated to ${newStatus.replace('_', ' ').toUpperCase()} - ${ctx.brand.name}`,
+    subject: `Order ${ref} Status Updated to ${newStatus.replace('_', ' ').toUpperCase()} - ${ctx.brand.name}`,
     html
   });
-  if (ok) console.log(`✅ Status change email sent to ${email} for order #${orderId}`);
+  if (ok) console.log(`✅ Status change email sent to ${email} for order ${ref}`);
 }
 
 // ───────────────────────── installment emails ─────────────────────────
@@ -387,6 +392,7 @@ async function sendInstallmentPlanCreated(email, details) {
   if (!email) return;
   const { orderId, username, installments, convenienceFee, siteId } = details;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
 
   const rows = installments.map(i => `
     <tr style="border-bottom: 1px solid #e2e8f0;">
@@ -398,7 +404,7 @@ async function sendInstallmentPlanCreated(email, details) {
 
   const html = `
     ${header(ctx.brand, '📅 Installment Plan Created')}
-      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${username || 'there'}, an installment plan has been set up for Order #${orderId}.</p>
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${username || 'there'}, an installment plan has been set up for Order ${ref}.</p>
       ${convenienceFee > 0 ? `<p style="color: #d97706; font-size: 14px; margin-bottom: 16px;">Convenience fee: <strong>$${parseFloat(convenienceFee).toFixed(2)}</strong></p>` : ''}
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; background: #f8fafc; border-radius: 8px;">
         <thead><tr style="background: #0C2D64;"><th style="padding: 12px; color: #fff; text-align: left;">Installment</th><th style="padding: 12px; color: #fff; text-align: center;">Due Date</th><th style="padding: 12px; color: #fff; text-align: right;">Amount</th></tr></thead>
@@ -407,8 +413,8 @@ async function sendInstallmentPlanCreated(email, details) {
       <p style="color: #64748b; font-size: 14px;">Pay each installment from your dashboard. You can also pay all installments at once anytime.</p>
     ${footer(ctx.brand)}
   `;
-  const ok = await sendViaContext(ctx, { to: email, subject: `Installment Plan - Order #${orderId} - ${ctx.brand.name}`, html });
-  if (ok) console.log(`✅ Installment plan email sent to ${email} for order #${orderId}`);
+  const ok = await sendViaContext(ctx, { to: email, subject: `Installment Plan - Order ${ref} - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Installment plan email sent to ${email} for order ${ref}`);
 }
 
 async function sendInstallmentReminder(email, details) {
@@ -416,6 +422,7 @@ async function sendInstallmentReminder(email, details) {
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
   const to = recipient === 'admin' ? ADMIN_EMAIL : email;
   if (!to) return;
+  const ref = await formatOrderRef(orderId);
 
   const isOverdue = daysUntilDue < 0;
   const title = isOverdue ? '⚠️ Installment Overdue' : '⏰ Installment Reminder';
@@ -429,7 +436,7 @@ async function sendInstallmentReminder(email, details) {
         ${recipient === 'admin' ? `${username}'s installment is ${isOverdue ? 'overdue' : 'coming up'}.` : `Your installment is ${isOverdue ? 'overdue' : 'coming up'}.`}
       </p>
       <div style="background: ${isOverdue ? '#fee2e2' : '#fef3c7'}; padding: 20px; border-radius: 8px; border-left: 4px solid ${isOverdue ? '#dc2626' : '#d97706'}; margin-bottom: 20px;">
-        <p style="margin: 5px 0; color: #334155;"><strong>Order:</strong> #${orderId}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Order:</strong> ${ref}</p>
         <p style="margin: 5px 0; color: #334155;"><strong>Installment:</strong> ${installmentNumber}</p>
         <p style="margin: 5px 0; color: #334155;"><strong>Amount:</strong> <span style="color: #84C225; font-weight: 700;">$${parseFloat(amount).toFixed(2)}</span></p>
         <p style="margin: 5px 0; color: #334155;"><strong>Due Date:</strong> ${new Date(dueDate).toLocaleDateString()}</p>
@@ -438,19 +445,20 @@ async function sendInstallmentReminder(email, details) {
       <p style="color: #64748b; font-size: 14px;">Log in to your dashboard to pay this installment.</p>
     ${footer(ctx.brand)}
   `;
-  const ok = await sendViaContext(ctx, { to, subject: `${title} - Order #${orderId}`, html });
-  if (ok) console.log(`✅ Installment reminder sent to ${to} for order #${orderId} installment ${installmentNumber}`);
+  const ok = await sendViaContext(ctx, { to, subject: `${title} - Order ${ref}`, html });
+  if (ok) console.log(`✅ Installment reminder sent to ${to} for order ${ref} installment ${installmentNumber}`);
 }
 
 async function sendInstallmentPaid(email, details) {
   if (!email) return;
   const { orderId, username, paidInstallments, siteId } = details;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
   const total = paidInstallments.reduce((s, i) => s + parseFloat(i.amount), 0);
 
   const html = `
     ${header(ctx.brand, '✅ Installment Payment Received')}
-      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${username || 'there'}, we received your installment payment for Order #${orderId}.</p>
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">Hello ${username || 'there'}, we received your installment payment for Order ${ref}.</p>
       <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #22c55e; margin-bottom: 20px;">
         ${paidInstallments.map(i => `<p style="margin: 5px 0; color: #334155;">Installment ${i.installment_number}: <strong>$${parseFloat(i.amount).toFixed(2)}</strong></p>`).join('')}
         <p style="margin: 12px 0 0 0; padding-top: 12px; border-top: 1px solid #d1fae5; color: #16a34a; font-weight: 700; font-size: 18px;">Paid: $${total.toFixed(2)}</p>
@@ -458,8 +466,8 @@ async function sendInstallmentPaid(email, details) {
       <p style="color: #64748b; font-size: 14px;">Thank you for your payment!</p>
     ${footer(ctx.brand)}
   `;
-  const ok = await sendViaContext(ctx, { to: email, subject: `Payment Received - Order #${orderId} - ${ctx.brand.name}`, html });
-  if (ok) console.log(`✅ Installment paid email sent to ${email} for order #${orderId}`);
+  const ok = await sendViaContext(ctx, { to: email, subject: `Payment Received - Order ${ref} - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Installment paid email sent to ${email} for order ${ref}`);
 }
 
 module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid };

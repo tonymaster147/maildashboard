@@ -47,9 +47,9 @@ export default function Orders() {
   const [cancelTarget, setCancelTarget] = useState(null); // { orderId }
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
-  const handleStatusChange = async (id, admin_status_code) => {
+  const handleStatusChange = async (id, admin_status_code, orderCode) => {
     if (admin_status_code === 'cancelled') {
-      setCancelTarget({ orderId: id });
+      setCancelTarget({ orderId: id, orderCode });
       return;
     }
     await updateOrderStatus(id, { admin_status_code });
@@ -118,7 +118,7 @@ export default function Orders() {
                 const isNew = !viewedIds.has(o.id);
                 return (
                 <tr key={o.id} style={isNew ? { background: 'rgba(132,194,37,0.08)', boxShadow: 'inset 3px 0 0 var(--accent)' } : {}}>
-                  <td>#{o.id}{isNew && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block', marginLeft: 6, verticalAlign: 'middle' }}></span>}</td>
+                  <td>{o.order_code || `#${o.id}`}{isNew && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block', marginLeft: 6, verticalAlign: 'middle' }}></span>}</td>
                   <td><div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.source_url || 'Direct'}>{o.source_url || 'Direct'}</div></td>
                   <td>{o.username}</td>
                   <td style={{ fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.course_name}</td>
@@ -132,7 +132,7 @@ export default function Orders() {
                   </td>
                   <td style={{ fontSize: 13 }}>{o.tutor_names || <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}</td>
                   <td>
-                    <select className="form-select" value={o.admin_status_code || ''} onChange={e => handleStatusChange(o.id, e.target.value)} style={{ padding: '4px 8px', fontSize: 12, minWidth: 140 }}>
+                    <select className="form-select" value={o.admin_status_code || ''} onChange={e => handleStatusChange(o.id, e.target.value, o.order_code)} style={{ padding: '4px 8px', fontSize: 12, minWidth: 140 }}>
                       {!o.admin_status_code && <option value="" disabled>—</option>}
                       {adminStatuses.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                     </select>
@@ -173,6 +173,7 @@ export default function Orders() {
       {cancelTarget && (
         <CancelOrderModal
           orderId={cancelTarget.orderId}
+          orderCode={cancelTarget.orderCode}
           onConfirm={confirmCancel}
           onCancel={() => setCancelTarget(null)}
           submitting={cancelSubmitting}
@@ -182,7 +183,7 @@ export default function Orders() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div className="card" style={{ width: 440 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-              <h3>Assign Tutor(s) to Order #{assignModal.id}</h3>
+              <h3>Assign Tutor(s) to Order {assignModal.order_code || `#${assignModal.id}`}</h3>
               <button className="btn btn-sm btn-secondary" onClick={() => setAssignModal(null)}><FiX size={16} /></button>
             </div>
             <p style={{ color: 'var(--text-secondary)', marginBottom: 16, fontSize: 14 }}>Select one or multiple tutors:</p>

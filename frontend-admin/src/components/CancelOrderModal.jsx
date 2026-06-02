@@ -5,7 +5,7 @@ import { FiX, FiAlertTriangle } from 'react-icons/fi';
  * Required-note modal shown when admin/sales flips an order to "Cancelled".
  * Calls onConfirm(note) with the trimmed note, or onCancel() to close.
  */
-export default function CancelOrderModal({ orderId, onConfirm, onCancel, submitting }) {
+export default function CancelOrderModal({ orderId, orderCode, onConfirm, onCancel, submitting }) {
   const [note, setNote] = useState('');
   const trimmed = note.trim();
 
@@ -31,7 +31,7 @@ export default function CancelOrderModal({ orderId, onConfirm, onCancel, submitt
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
           <FiAlertTriangle size={22} style={{ color: '#dc2626', flexShrink: 0 }} />
-          <h3 style={{ margin: 0 }}>Cancel Order #{orderId}</h3>
+          <h3 style={{ margin: 0 }}>Cancel Order {orderCode || `#${orderId}`}</h3>
           <button
             onClick={onCancel}
             disabled={submitting}

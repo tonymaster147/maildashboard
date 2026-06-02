@@ -388,7 +388,7 @@ exports.payInstallment = async (req, res) => {
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: 'usd',
-      description: `Installment ${inst.installment_number} - Order #${inst.order_id}`,
+      description: `Installment ${inst.installment_number} - Order ${await require('../utils/orderCode').formatOrderRef(inst.order_id)}`,
       automatic_payment_methods: { enabled: true },
       metadata: {
         user_id: userId.toString(),
@@ -436,7 +436,7 @@ exports.payAllInstallments = async (req, res) => {
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,
       currency: 'usd',
-      description: `Pay all installments - Order #${orderId}`,
+      description: `Pay all installments - Order ${await require('../utils/orderCode').formatOrderRef(orderId)}`,
       automatic_payment_methods: { enabled: true },
       metadata: {
         user_id: userId.toString(),

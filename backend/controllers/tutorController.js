@@ -12,7 +12,7 @@ exports.getTasks = async (req, res) => {
     const { status } = req.query;
 
     let query = `
-      SELECT o.id, o.course_name, o.status, o.start_date, o.end_date, o.num_weeks, o.chat_enabled, o.created_at,
+      SELECT o.id, o.order_code, o.course_name, o.status, o.start_date, o.end_date, o.num_weeks, o.chat_enabled, o.created_at,
         ot.name as order_type_name, s.name as subject_name, el.name as education_level_name,
         p.name as plan_name, u.username,
         astat.code as admin_status_code, astat.name as admin_status_name,
@@ -58,7 +58,7 @@ exports.getTaskDetail = async (req, res) => {
     const { id } = req.params;
 
     const [tasks] = await db.query(`
-      SELECT o.id, o.course_name, o.additional_instructions, o.status, o.start_date, o.end_date,
+      SELECT o.id, o.order_code, o.course_name, o.additional_instructions, o.status, o.start_date, o.end_date,
         o.num_weeks, o.chat_enabled, o.created_at,
         ot.name as order_type_name, s.name as subject_name, el.name as education_level_name,
         p.name as plan_name, u.username,
@@ -135,9 +135,10 @@ exports.updateTutorStatus = async (req, res) => {
     if (tutor_status_code === 'completed') {
       const [orders] = await db.query('SELECT user_id FROM orders WHERE id = ?', [id]);
       if (orders.length > 0) {
+        const ref = await require('../utils/orderCode').formatOrderRef(id);
         await db.query(
           'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-          [orders[0].user_id, 'user', 'task_completed', `Order #${id} has been completed`, id, 'order']
+          [orders[0].user_id, 'user', 'task_completed', `Order ${ref} has been completed`, id, 'order']
         );
       }
     }
@@ -203,9 +204,10 @@ exports.uploadWorkFiles = async (req, res) => {
     // Notify user
     const [orders] = await db.query('SELECT user_id FROM orders WHERE id = ?', [id]);
     if (orders.length > 0) {
+      const ref = await require('../utils/orderCode').formatOrderRef(id);
       await db.query(
         'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [orders[0].user_id, 'user', 'file_uploaded', `New files uploaded for Order #${id}`, id, 'order']
+        [orders[0].user_id, 'user', 'file_uploaded', `New files uploaded for Order ${ref}`, id, 'order']
       );
     }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { getChatMessages, uploadChatAttachment } from '../services/api';
+import { getChatMessages, uploadChatAttachment, getOrderCode } from '../services/api';
 import { connectSocket, getSocket } from '../services/socket';
 import { FiSend } from 'react-icons/fi';
 import { AttachButton, AttachPreview, AttachmentBubble } from '../components/ChatAttachment';
@@ -15,6 +15,9 @@ export default function Chat() {
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [typing, setTyping] = useState(null);
+  const [orderCode, setOrderCode] = useState(null);
+
+  useEffect(() => { getOrderCode(orderId).then(r => setOrderCode(r.data.order_code)).catch(() => {}); }, [orderId]);
   const messagesEndRef = useRef(null);
   const channelRef = useRef(channel);
   useEffect(() => { channelRef.current = channel; }, [channel]);
@@ -113,7 +116,7 @@ export default function Chat() {
       <div className="chat-header">
         <div>
           <h3 style={{ fontSize: 16 }}>
-            Order #{orderId} — <span style={{ color: channelColor }}>{channelLabel} Chat</span>
+            Order {orderCode || `#${orderId}`} — <span style={{ color: channelColor }}>{channelLabel} Chat</span>
           </h3>
           {typing && <p style={{ color: 'var(--accent)', fontSize: 12 }}>{typing} is typing...</p>}
         </div>

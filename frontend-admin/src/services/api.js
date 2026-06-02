@@ -103,6 +103,8 @@ export const createStatus = (kind, data) => api.post(`/admin/statuses/${kind}`, 
 export const updateStatus = (kind, id, data) => api.patch(`/admin/statuses/${kind}/${id}`, data);
 export const deleteStatus = (kind, id) => api.delete(`/admin/statuses/${kind}/${id}`);
 
+export const getOrderCode = (id) => api.get(`/orders/${id}/code`);
+
 export const uploadChatAttachment = (orderId, file) => {
   const fd = new FormData();
   fd.append('file', file);

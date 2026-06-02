@@ -61,7 +61,7 @@ export default function Dashboard() {
             <tbody>
               {stats.recent_orders?.map(o => (
                 <tr key={o.id}>
-                  <td>#{o.id}</td><td>{o.username}</td><td>{o.course_name}</td>
+                  <td>{o.order_code || `#${o.id}`}</td><td>{o.username}</td><td>{o.course_name}</td>
                   <td style={{ color: 'var(--accent)', fontWeight: 600 }}>${parseFloat(o.total_price).toFixed(2)}</td>
                   <td><span className={`badge-status badge-${o.status}`}>{o.status}</span></td>
                   <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{new Date(o.created_at).toLocaleDateString()}</td>

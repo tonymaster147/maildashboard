@@ -28,7 +28,7 @@ exports.getDashboardStats = async (req, res) => {
       db.query('SELECT COUNT(*) as count FROM tutors'),
       db.query('SELECT COUNT(*) as count FROM chats WHERE is_flagged = 1'),
       db.query(`
-        SELECT o.id, o.course_name, o.total_price, o.status, o.created_at, u.username
+        SELECT o.id, o.order_code, o.course_name, o.total_price, o.status, o.created_at, u.username
         FROM orders o JOIN users u ON o.user_id = u.id
         ORDER BY o.created_at DESC LIMIT 10
       `),
@@ -274,9 +274,11 @@ exports.updateOrderStatus = async (req, res) => {
     // Notify user + send email
     if (orders.length > 0) {
       const order = orders[0];
+      const { formatOrderRef } = require('../utils/orderCode');
+      const ref = await formatOrderRef(id);
       await db.query(
         'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [order.user_id, 'user', 'order_update', `Order #${id} status: ${status}`, id, 'order']
+        [order.user_id, 'user', 'order_update', `Order ${ref} status: ${status}`, id, 'order']
       );
 
       // Send status change email to user (non-blocking)
@@ -322,14 +324,17 @@ exports.assignTutors = async (req, res) => {
     // Remove existing assignments
     await db.query('DELETE FROM order_tutors WHERE order_id = ?', [id]);
 
+    const { formatOrderRef } = require('../utils/orderCode');
+    const assignRef = await formatOrderRef(id);
+
     // Add new assignments
     for (const tutorId of tutor_ids) {
       await db.query('INSERT INTO order_tutors (order_id, tutor_id) VALUES (?, ?)', [id, tutorId]);
-      
+
       // Save notification to DB
       await db.query(
         'INSERT INTO notifications (tutor_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [tutorId, 'tutor', 'task_assigned', `New task assigned: Order #${id}`, id, 'order']
+        [tutorId, 'tutor', 'task_assigned', `New task assigned: Order ${assignRef}`, id, 'order']
       );
 
       // Get tutor details for email + emit targeted socket event

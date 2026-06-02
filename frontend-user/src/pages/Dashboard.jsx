@@ -82,7 +82,7 @@ export default function Dashboard() {
               <tbody>
                 {activeOrders.slice(0, 5).map(order => (
                   <tr key={order.id}>
-                    <td>#{order.id}</td>
+                    <td>{order.order_code || `#${order.id}`}</td>
                     <td>{order.course_name}</td>
                     <td>{order.subject_name}</td>
                     <td>{order.plan_name || order.order_type_name || '—'}</td>

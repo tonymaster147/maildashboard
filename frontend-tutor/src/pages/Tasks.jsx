@@ -72,7 +72,7 @@ export default function Tasks() {
               <tbody>
                 {paged.map(t => (
                   <tr key={t.id}>
-                    <td>#{t.id}</td>
+                    <td>{t.order_code || `#${t.id}`}</td>
                     <td style={{ fontWeight: 500 }}>{t.course_name}</td>
                     <td>{t.order_type_name}</td>
                     <td>{t.subject_name}</td>

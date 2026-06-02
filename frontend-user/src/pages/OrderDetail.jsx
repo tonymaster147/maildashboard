@@ -113,7 +113,7 @@ export default function OrderDetail() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
         <Link to="/orders" className="btn btn-sm btn-secondary"><FiArrowLeft size={14} /></Link>
         <div>
-          <h2>Order #{order.id}</h2>
+          <h2>Order {order.order_code || `#${order.id}`}</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{order.course_name}</p>
         </div>
         <span className={`badge-status badge-${order.status}`} style={{ marginLeft: 'auto', fontSize: 14, padding: '6px 16px' }}>
@@ -126,6 +126,7 @@ export default function OrderDetail() {
           <h4 style={{ marginBottom: 16 }}>📋 Order Details</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div className="summary-row"><span className="label"><FiBookOpen size={14} /> Type</span><span>{order.order_type_name}</span></div>
+            <div className="summary-row"><span className="label">Course</span><span>{order.course_name || '—'}</span></div>
             <div className="summary-row"><span className="label">Subject</span><span>{order.subject_name}</span></div>
             <div className="summary-row"><span className="label">Level</span><span>{order.education_level_name}</span></div>
             <div className="summary-row"><span className="label">Plan</span><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{order.plan_tier ? order.plan_tier.charAt(0).toUpperCase() + order.plan_tier.slice(1) : (order.plan_name || '—')}</span></div>
@@ -136,7 +137,7 @@ export default function OrderDetail() {
 
           {order.site_contact_email && (
             <a
-              href={`mailto:${order.site_contact_email}?subject=${encodeURIComponent(`Order #${order.id} — ${order.course_name || ''}`)}`}
+              href={`mailto:${order.site_contact_email}?subject=${encodeURIComponent(`Order ${order.order_code || `#${order.id}`} — ${order.course_name || ''}`)}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',

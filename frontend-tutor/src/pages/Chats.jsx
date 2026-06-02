@@ -85,7 +85,7 @@ export default function Chats() {
                   </div>
                   <div>
                     <div style={{ fontWeight: hasUnread ? 700 : 600, fontSize: 15, color: 'var(--text-primary)' }}>
-                      Order #{task.id} — {task.course_name}
+                      Order {task.order_code || `#${task.id}`} — {task.course_name}
                       {hasUnread && <span style={{ fontSize: 11, color: '#6366f1', marginLeft: 8 }}>New message</span>}
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>

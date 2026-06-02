@@ -24,6 +24,7 @@ api.interceptors.response.use(
 export const tutorLogin = (data) => api.post('/auth/tutor/login', data);
 export const getTasks = (params = {}) => api.get('/tutor/tasks', { params });
 export const getTaskDetail = (id) => api.get(`/tutor/tasks/${id}`);
+export const getOrderCode = (id) => api.get(`/orders/${id}/code`);
 export const completeTask = (id) => api.put(`/tutor/tasks/${id}/complete`);
 export const updateTutorTaskStatus = (id, tutor_status_code) => api.patch(`/tutor/tasks/${id}/status`, { tutor_status_code });
 export const getPublicStatuses = (kind) => api.get(`/public/statuses/${kind}`);
