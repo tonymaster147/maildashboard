@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const adminController = require('../controllers/adminController');
+const issuesController = require('../controllers/issuesController');
 const pricingController = require('../controllers/pricingController');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const db = require('../config/db');
@@ -78,6 +79,14 @@ router.put('/urgent-fee', requirePermission('settings'), pricingController.updat
 // Notifications — always allowed for sales users
 router.get('/notifications', adminController.getNotifications);
 router.put('/notifications/:id/read', adminController.markNotificationRead);
+
+// Issues
+router.get('/issues/unread-count',  requirePermission('issues'), issuesController.unreadCount);
+router.get('/issues',               requirePermission('issues'), issuesController.listAllIssues);
+router.get('/issues/:id',           requirePermission('issues'), issuesController.getIssueDetail);
+router.post('/issues/:id/messages', requirePermission('issues'), issuesController.addMessage);
+router.patch('/issues/:id/close',   requirePermission('issues'), issuesController.closeIssue);
+router.patch('/issues/:id/reopen',  requirePermission('issues'), issuesController.reopenIssue);
 
 // Banned Words (if settings permitted)
 router.get('/banned-words', requirePermission('settings'), adminController.getBannedWords);

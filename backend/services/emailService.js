@@ -191,6 +191,89 @@ async function sendEmailChangeCode(newEmail, username, code, siteId) {
   if (ok) console.log(`✅ Email-change code sent to ${newEmail}`);
 }
 
+// ───────────────────────── Issue / Support-ticket emails ─────────────────────────
+
+async function sendIssueCreated({ issueId, subject, category, description, userName, userEmail, orderId, recipients }) {
+  if (!recipients || recipients.length === 0) return;
+  const ctx = await resolveContext(orderId ? await getOrderSiteId(orderId) : null);
+  const ref = orderId ? await formatOrderRef(orderId) : null;
+  const html = `
+    ${header(ctx.brand, '🆘 New Support Issue')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 16px;">${userName || 'A student'} just opened a new issue.</p>
+      <div style="background: #f0f9ff; padding: 18px; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 18px;">
+        <p style="margin: 4px 0; color: #334155;"><strong>Issue:</strong> #${issueId}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Subject:</strong> ${subject}</p>
+        <p style="margin: 4px 0; color: #334155;"><strong>Category:</strong> ${category}</p>
+        ${ref ? `<p style="margin: 4px 0; color: #334155;"><strong>Order:</strong> ${ref}</p>` : ''}
+        <p style="margin: 4px 0; color: #334155;"><strong>From:</strong> ${userName || ''} ${userEmail ? `&lt;${userEmail}&gt;` : ''}</p>
+      </div>
+      <div style="background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px; white-space: pre-wrap; color: #334155;">${description}</div>
+      <p style="color: #64748b; font-size: 14px;">Log in to the admin panel → Issues to reply.</p>
+    ${footer(ctx.brand)}`;
+  for (const to of recipients) {
+    const ok = await sendViaContext(ctx, { to, subject: `[Issue #${issueId}] ${subject} - ${ctx.brand.name}`, html });
+    if (ok) console.log(`✅ Issue-created email sent to ${to}`);
+  }
+}
+
+async function sendIssueReplyToUser({ issueId, subject, body, userName, to }) {
+  if (!to) return;
+  const ctx = masterContext();
+  const html = `
+    ${header(ctx.brand, '💬 Support Reply')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 16px;">Hi ${userName || 'there'}, support just replied to your issue.</p>
+      <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; border-left: 4px solid #22c55e; margin-bottom: 16px; white-space: pre-wrap; color: #334155;">${body}</div>
+      <p style="color: #64748b; font-size: 14px;">Open your dashboard → Issues to reply.</p>
+    ${footer(ctx.brand)}`;
+  const ok = await sendViaContext(ctx, { to, subject: `Re: [Issue #${issueId}] ${subject} - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Issue reply (to user) sent to ${to}`);
+}
+
+async function sendIssueReplyToAdmin({ issueId, subject, body, userName, recipients }) {
+  if (!recipients || recipients.length === 0) return;
+  const ctx = masterContext();
+  const html = `
+    ${header(ctx.brand, '💬 User Replied')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 16px;">${userName || 'The student'} replied on issue #${issueId}.</p>
+      <div style="background: #fff7ed; padding: 16px; border-radius: 8px; border-left: 4px solid #f59e0b; margin-bottom: 16px; white-space: pre-wrap; color: #334155;">${body}</div>
+      <p style="color: #64748b; font-size: 14px;">Open the admin panel → Issues to reply.</p>
+    ${footer(ctx.brand)}`;
+  for (const to of recipients) {
+    const ok = await sendViaContext(ctx, { to, subject: `Re: [Issue #${issueId}] ${subject} - ${ctx.brand.name}`, html });
+    if (ok) console.log(`✅ Issue reply (to admin) sent to ${to}`);
+  }
+}
+
+/**
+ * User updated the school login details on an order — notify admin + all
+ * active sales users so they know fresh credentials are available.
+ */
+async function sendLoginDetailsUpdated(details) {
+  const { orderId, courseName, username, recipients, siteId } = details;
+  if (!recipients || recipients.length === 0) return;
+  const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
+
+  const html = `
+    ${header(ctx.brand, '🔐 Login Details Updated')}
+      <p style="color: #334155; font-size: 16px; margin-bottom: 20px;">
+        ${username || 'A student'} just updated the school login details for an order.
+        Please log in to the admin panel to view the new credentials.
+      </p>
+      <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 20px;">
+        <p style="margin: 5px 0; color: #334155;"><strong>Order:</strong> ${ref}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Course:</strong> ${courseName || 'N/A'}</p>
+        <p style="margin: 5px 0; color: #334155;"><strong>Updated at:</strong> ${new Date().toLocaleString()}</p>
+      </div>
+      <p style="color: #64748b; font-size: 14px;">Credentials are only visible inside the admin panel for security; they are not included in this email.</p>
+    ${footer(ctx.brand)}
+  `;
+  for (const to of recipients) {
+    const ok = await sendViaContext(ctx, { to, subject: `Login details updated - Order ${ref} - ${ctx.brand.name}`, html });
+    if (ok) console.log(`✅ Login-updated email sent to ${to} for order ${ref}`);
+  }
+}
+
 async function sendNewOrderAdmin(orderDetails) {
   const { orderId, courseName, username, orderType, subject, educationLevel, status, sourceUrl, planName, totalPrice, paymentStatus, paymentType, amountPaid, amountRemaining, siteId } = orderDetails;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
@@ -470,4 +553,4 @@ async function sendInstallmentPaid(email, details) {
   if (ok) console.log(`✅ Installment paid email sent to ${email} for order ${ref}`);
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid };
+module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid, sendLoginDetailsUpdated, sendIssueCreated, sendIssueReplyToUser, sendIssueReplyToAdmin };

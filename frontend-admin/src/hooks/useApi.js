@@ -48,6 +48,12 @@ export function useApi() {
       getUnreadCount: adminApi.getUnreadCount,
       markAllRead: adminApi.markAllRead,
       getUnreadPerOrder: adminApi.getUnreadPerOrder,
+      getAllIssues: salesApi.getAllIssues,
+      getIssuesUnreadCount: salesApi.getIssuesUnreadCount,
+      getIssue: salesApi.getIssue,
+      addIssueMessage: salesApi.addIssueMessage,
+      closeIssue: salesApi.closeIssue,
+      reopenIssue: salesApi.reopenIssue,
     };
   }
 
@@ -89,5 +95,11 @@ export function useApi() {
     getUnreadCount: adminApi.getUnreadCount,
     markAllRead: adminApi.markAllRead,
     getUnreadPerOrder: adminApi.getUnreadPerOrder,
+    getAllIssues: adminApi.getAllIssues,
+    getIssuesUnreadCount: adminApi.getIssuesUnreadCount,
+    getIssue: adminApi.getIssue,
+    addIssueMessage: adminApi.addIssueMessage,
+    closeIssue: adminApi.closeIssue,
+    reopenIssue: adminApi.reopenIssue,
   };
 }

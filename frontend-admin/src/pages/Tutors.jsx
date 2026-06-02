@@ -72,7 +72,12 @@ export default function Tutors() {
             <form onSubmit={handleSubmit}>
               <div className="form-group"><label className="form-label">Name *</label><input className="form-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required /></div>
               <div className="form-group"><label className="form-label">Email *</label><input type="email" className="form-input" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required /></div>
-              {!editing && <div className="form-group"><label className="form-label">Password *</label><input type="password" className="form-input" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required minLength={6} /></div>}
+              {!editing
+                ? <div className="form-group"><label className="form-label">Password *</label><input type="password" className="form-input" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required minLength={6} /></div>
+                : <div className="form-group">
+                    <label className="form-label">New Password <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 12 }}>(leave blank to keep current)</span></label>
+                    <input type="password" className="form-input" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} minLength={6} placeholder="•••••••" autoComplete="new-password" />
+                  </div>}
               <div className="form-group"><label className="form-label">Specialization</label><input className="form-input" placeholder="e.g. Mathematics, Science" value={form.specialization} onChange={e => setForm({ ...form, specialization: e.target.value })} /></div>
               {editing && <div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}><option value="active">Active</option><option value="inactive">Inactive</option></select></div>}
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }}><FiSave size={16} /> {editing ? 'Update' : 'Create'} Tutor</button>

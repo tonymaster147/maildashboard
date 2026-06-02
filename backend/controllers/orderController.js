@@ -239,6 +239,65 @@ exports.getOrderCode = async (req, res) => {
   }
 };
 
+/**
+ * Update school login details on an order (user-owned). Records the timestamp
+ * and notifies admin + all active sales users by email + in-app notification.
+ */
+exports.updateOrderLoginDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const { school_url, school_username, school_password } = req.body;
+
+    const [orders] = await db.query(
+      'SELECT o.id, o.user_id, o.course_name, o.site_id, u.username FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ? AND o.user_id = ?',
+      [id, userId]
+    );
+    if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
+    const order = orders[0];
+
+    await db.query(
+      `UPDATE orders SET school_url = ?, school_username = ?, school_password = ?, login_updated_at = NOW() WHERE id = ?`,
+      [
+        school_url && school_url.trim() ? school_url.trim() : null,
+        school_username && school_username.trim() ? school_username.trim() : null,
+        school_password && school_password.trim() ? school_password.trim() : null,
+        id
+      ]
+    );
+
+    const { formatOrderRef } = require('../utils/orderCode');
+    const ref = await formatOrderRef(id);
+    const message = `Login details updated for order ${ref}`;
+
+    // In-app notifications: admin + sales roles
+    await db.query("INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)",
+      ['admin', 'login_updated', message, id, 'order']);
+    await db.query("INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)",
+      ['sales_lead', 'login_updated', message, id, 'order']);
+    await db.query("INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)",
+      ['sales_executive', 'login_updated', message, id, 'order']);
+
+    // Email admin + every active sales user (non-blocking)
+    const ADMIN_EMAIL = 'faruqui.a4u@gmail.com';
+    const [sales] = await db.query("SELECT email FROM sales_users WHERE status = 'active' AND email IS NOT NULL");
+    const recipients = [ADMIN_EMAIL, ...sales.map(s => s.email)].filter(Boolean);
+    const { sendLoginDetailsUpdated } = require('../services/emailService');
+    sendLoginDetailsUpdated({
+      orderId: id,
+      courseName: order.course_name,
+      username: order.username,
+      recipients,
+      siteId: order.site_id
+    }).catch(e => console.error('Login-updated email error:', e));
+
+    res.json({ message: 'Login details updated', login_updated_at: new Date() });
+  } catch (err) {
+    console.error('updateOrderLoginDetails error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
 exports.getOrderDetail = async (req, res) => {
   try {
     const { id } = req.params;

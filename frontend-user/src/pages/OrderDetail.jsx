@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent, getOrderInstallments, payInstallment, payAllInstallments } from '../services/api';
+import { getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent, getOrderInstallments, payInstallment, payAllInstallments, updateOrderLoginDetails } from '../services/api';
 import EmbeddedCheckout from '../components/EmbeddedCheckout';
-import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones, FiMail } from 'react-icons/fi';
+import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones, FiMail, FiKey, FiSave, FiEdit2, FiEye, FiEyeOff } from 'react-icons/fi';
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -12,6 +12,12 @@ export default function OrderDetail() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [checkout, setCheckout] = useState(null);
   const [installments, setInstallments] = useState([]);
+
+  // Login details edit state
+  const [loginEditing, setLoginEditing] = useState(false);
+  const [loginForm, setLoginForm] = useState({ school_url: '', school_username: '', school_password: '' });
+  const [loginSaving, setLoginSaving] = useState(false);
+  const [loginShowPass, setLoginShowPass] = useState(false);
 
   const fetchOrder = () => {
     getOrderDetail(id).then(res => {
@@ -28,6 +34,30 @@ export default function OrderDetail() {
   useEffect(() => {
     fetchOrder();
   }, [id]);
+
+  const openLoginEdit = () => {
+    setLoginForm({
+      school_url: order?.school_url || '',
+      school_username: order?.school_username || '',
+      school_password: order?.school_password || ''
+    });
+    setLoginShowPass(false);
+    setLoginEditing(true);
+  };
+
+  const saveLoginDetails = async (e) => {
+    e.preventDefault();
+    setLoginSaving(true);
+    try {
+      await updateOrderLoginDetails(id, loginForm);
+      setLoginEditing(false);
+      fetchOrder();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update login details');
+    } finally {
+      setLoginSaving(false);
+    }
+  };
 
   const handlePayInstallment = async (instId) => {
     setPaymentLoading(true);
@@ -233,6 +263,72 @@ export default function OrderDetail() {
       )}
 
       <div className="card mt-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FiKey size={16} /> Login Details
+          </h4>
+          {order.login_updated_at && (
+            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 10, background: 'rgba(34,197,94,0.12)', color: '#16a34a', fontWeight: 600 }}>
+              Updated {new Date(order.login_updated_at).toLocaleDateString()}
+            </span>
+          )}
+          {!loginEditing && (
+            <button onClick={openLoginEdit} className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }}>
+              <FiEdit2 size={12} /> {order.school_url || order.school_username || order.school_password ? 'Update' : 'Add'}
+            </button>
+          )}
+        </div>
+
+        {loginEditing ? (
+          <form onSubmit={saveLoginDetails}>
+            <div className="form-group">
+              <label className="form-label">URL</label>
+              <input type="text" className="form-input" placeholder="https://school-portal.example.com" value={loginForm.school_url} onChange={e => setLoginForm({ ...loginForm, school_url: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Username</label>
+              <input type="text" className="form-input" placeholder="your school username" value={loginForm.school_username} onChange={e => setLoginForm({ ...loginForm, school_username: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <div style={{ position: 'relative' }}>
+                <input type={loginShowPass ? 'text' : 'password'} className="form-input" placeholder="••••••••" value={loginForm.school_password} onChange={e => setLoginForm({ ...loginForm, school_password: e.target.value })} style={{ paddingRight: 40 }} />
+                <button type="button" onClick={() => setLoginShowPass(s => !s)} title={loginShowPass ? 'Hide' : 'Show'} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                  {loginShowPass ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+                </button>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="submit" className="btn btn-primary" disabled={loginSaving}>
+                {loginSaving ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <><FiSave size={14} /> Save</>}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setLoginEditing(false)} disabled={loginSaving}>Cancel</button>
+            </div>
+          </form>
+        ) : (
+          (order.school_url || order.school_username || order.school_password) ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {order.school_url      && <div className="summary-row"><span className="label">URL</span><span style={{ wordBreak: 'break-all' }}>{order.school_url}</span></div>}
+              {order.school_username && <div className="summary-row"><span className="label">Username</span><span>{order.school_username}</span></div>}
+              {order.school_password && (
+                <div className="summary-row">
+                  <span className="label">Password</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {loginShowPass ? order.school_password : '••••••••'}
+                    <button onClick={() => setLoginShowPass(s => !s)} title={loginShowPass ? 'Hide' : 'Show'} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                      {loginShowPass ? <FiEyeOff size={14} /> : <FiEye size={14} />}
+                    </button>
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>No login details on file. Click <strong>Add</strong> to share them with your tutor and support team.</p>
+          )
+        )}
+      </div>
+
+      <div className="card mt-2">
         <h4 style={{ marginBottom: 16 }}>📎 Files {order.files ? `(${order.files.length})` : '(0)'}</h4>
         
         {order.files?.length > 0 && (
@@ -240,10 +336,24 @@ export default function OrderDetail() {
             {order.files.map(file => (
               <div key={file.id} className="file-item">
                 <div>
-                  <div className="file-name">{file.file_name}</div>
+                  <div className="file-name">
+                    {file.file_name}
+                    {Number(file.is_post_submit) === 1 && (
+                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                        Added later
+                      </span>
+                    )}
+                  </div>
                   <div className="file-size">Uploaded by {file.uploaded_by_role} • {new Date(file.created_at).toLocaleDateString()}</div>
                 </div>
-                <a href={file.file_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-secondary"><FiDownload size={14} /></a>
+                <a
+                  href={file.drive_file_id ? `https://drive.google.com/uc?export=download&id=${file.drive_file_id}` : file.file_url}
+                  download={file.file_name}
+                  className="btn btn-sm btn-secondary"
+                  title="Download"
+                >
+                  <FiDownload size={14} />
+                </a>
               </div>
             ))}
           </div>

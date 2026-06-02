@@ -8,6 +8,7 @@ const AVAILABLE_MENUS = [
   { key: 'tutors', label: 'Tutors' },
   { key: 'orders', label: 'Orders' },
   { key: 'chats', label: 'Chat Monitor' },
+  { key: 'issues', label: 'Issues' },
   { key: 'reports', label: 'Reports' },
   { key: 'settings', label: 'Settings' },
 ];

@@ -2,9 +2,9 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSiteBranding } from '../context/SiteBrandingContext';
-import { getUnreadCount, getPublicSite } from '../services/api';
+import { getUnreadCount, getPublicSite, getIssuesUnreadCount } from '../services/api';
 import { connectSocket } from '../services/socket';
-import { FiHome, FiPlusCircle, FiList, FiMessageSquare, FiDollarSign, FiUser, FiLogOut, FiMenu, FiX } from 'react-icons/fi';
+import { FiHome, FiPlusCircle, FiList, FiMessageSquare, FiDollarSign, FiUser, FiLogOut, FiMenu, FiX, FiAlertCircle } from 'react-icons/fi';
 
 const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
@@ -31,6 +31,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadChat, setUnreadChat] = useState(0);
+  const [unreadIssues, setUnreadIssues] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const locationRef = useRef(location.pathname);
   useEffect(() => { locationRef.current = location.pathname; }, [location.pathname]);
@@ -74,6 +75,22 @@ export default function Layout() {
     const interval = setInterval(fetchUnreadTotal, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Issues unread — bumps when staff replies; clears when user opens the thread
+  useEffect(() => {
+    const fetchIssues = () => {
+      if (locationRef.current.startsWith('/issues')) { setUnreadIssues(0); return; }
+      getIssuesUnreadCount().then(r => setUnreadIssues(r.data?.unread || 0)).catch(() => {});
+    };
+    fetchIssues();
+    const interval = setInterval(fetchIssues, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Clear badge immediately when navigating to the issues area
+  useEffect(() => {
+    if (location.pathname.startsWith('/issues')) setUnreadIssues(0);
+  }, [location.pathname]);
 
   // Real-time chat notifications via socket
   useEffect(() => {
@@ -149,6 +166,12 @@ export default function Layout() {
             <FiMessageSquare size={18} /> Chat
             {unreadChat > 0 && !isOnChatPage(location.pathname) && (
               <span style={{ background: 'var(--error)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadChat}</span>
+            )}
+          </NavLink>
+          <NavLink to="/issues" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <FiAlertCircle size={18} /> Issues
+            {unreadIssues > 0 && !location.pathname.startsWith('/issues') && (
+              <span style={{ background: 'var(--error)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadIssues}</span>
             )}
           </NavLink>
           <NavLink to="/payments" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>

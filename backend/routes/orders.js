@@ -17,6 +17,7 @@ router.post('/', verifyToken, validateOrder, orderController.createOrder);
 router.get('/', verifyToken, orderController.getUserOrders);
 router.get('/:id', verifyToken, orderController.getOrderDetail);
 router.get('/:id/code', verifyToken, orderController.getOrderCode);
+router.put('/:id/login-details', verifyToken, orderController.updateOrderLoginDetails);
 
 // Installment endpoints (user view)
 const installmentsController = require('../controllers/installmentsController');

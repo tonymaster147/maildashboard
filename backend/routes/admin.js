@@ -4,6 +4,7 @@ const pricingController = require('../controllers/pricingController');
 const sitesController = require('../controllers/sitesController');
 const paymentController = require('../controllers/paymentController');
 const statusesController = require('../controllers/statusesController');
+const issuesController = require('../controllers/issuesController');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateTutor } = require('../middleware/validate');
 const { upload } = require('../middleware/upload');
@@ -90,5 +91,13 @@ router.post('/sales-users', adminController.createSalesUser);
 router.put('/sales-users/:id', adminController.updateSalesUser);
 router.delete('/sales-users/:id', adminController.deleteSalesUser);
 router.get('/sales-users/:id/permissions', adminController.getSalesPermissions);
+
+// Issues
+router.get('/issues/unread-count', issuesController.unreadCount);
+router.get('/issues',              issuesController.listAllIssues);
+router.get('/issues/:id',          issuesController.getIssueDetail);
+router.post('/issues/:id/messages', issuesController.addMessage);
+router.patch('/issues/:id/close',  issuesController.closeIssue);
+router.patch('/issues/:id/reopen', issuesController.reopenIssue);
 
 module.exports = router;

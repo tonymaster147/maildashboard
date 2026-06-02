@@ -356,12 +356,19 @@ export default function OrderDetail() {
               {order.payment_status || 'unpaid'}
             </span>
           </div>
-          {order.school_url && (
+          {(order.school_url || order.school_username || order.school_password) && (
             <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>School Credentials</div>
-              <div style={{ fontSize: 13 }}>URL: {order.school_url}</div>
-              <div style={{ fontSize: 13 }}>User: {order.school_username}</div>
-              <div style={{ fontSize: 13 }}>Pass: {order.school_password}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>School Credentials</div>
+                {order.login_updated_at && (
+                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 10, background: 'rgba(34,197,94,0.15)', color: '#16a34a', fontWeight: 600 }}>
+                    Updated {new Date(order.login_updated_at).toLocaleString()}
+                  </span>
+                )}
+              </div>
+              {order.school_url      && <div style={{ fontSize: 13 }}>URL: {order.school_url}</div>}
+              {order.school_username && <div style={{ fontSize: 13 }}>User: {order.school_username}</div>}
+              {order.school_password && <div style={{ fontSize: 13 }}>Pass: {order.school_password}</div>}
             </div>
           )}
         </div>
@@ -388,13 +395,27 @@ export default function OrderDetail() {
             {files.map(f => (
               <div key={f.id} className="file-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 8, background: 'var(--bg-input)', marginBottom: 6 }}>
                 <div>
-                  <div style={{ fontWeight: 500, fontSize: 13 }}>{f.file_name}</div>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>
+                    {f.file_name}
+                    {Number(f.is_post_submit) === 1 && (
+                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                        Added later
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                     {f.uploaded_by_role} {f.created_at ? `• ${new Date(f.created_at).toLocaleDateString()}` : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <a href={f.file_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline" title="Download"><FiDownload size={13} /></a>
+                  <a
+                    href={f.drive_file_id ? `https://drive.google.com/uc?export=download&id=${f.drive_file_id}` : f.file_url}
+                    download={f.file_name}
+                    className="btn btn-sm btn-outline"
+                    title="Download"
+                  >
+                    <FiDownload size={13} />
+                  </a>
                   <button className="btn btn-sm btn-secondary" onClick={() => handleDelete(f.id)} title="Delete"><FiTrash2 size={13} /></button>
                 </div>
               </div>

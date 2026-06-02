@@ -16,6 +16,8 @@ import SalesChat from './pages/SalesChat';
 import PricingGeneral from './pages/PricingGeneral';
 import ServicePricing from './pages/ServicePricing';
 import Sites from './pages/Sites';
+import Issues from './pages/Issues';
+import IssueDetail from './pages/IssueDetail';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -61,6 +63,8 @@ function AppRoutes() {
         <Route path="orders/:id" element={<PermissionRoute menuKey="orders"><OrderDetail /></PermissionRoute>} />
         <Route path="chats" element={<PermissionRoute menuKey="chats"><ChatMonitor /></PermissionRoute>} />
         <Route path="chats/:orderId" element={<PermissionRoute menuKey="chats"><ChatView /></PermissionRoute>} />
+        <Route path="issues" element={<PermissionRoute menuKey="issues"><Issues /></PermissionRoute>} />
+        <Route path="issues/:id" element={<PermissionRoute menuKey="issues"><IssueDetail /></PermissionRoute>} />
         <Route path="reports" element={<PermissionRoute menuKey="reports"><Reports /></PermissionRoute>} />
         <Route path="pricing/general" element={<PermissionRoute menuKey="settings"><PricingGeneral /></PermissionRoute>} />
         <Route path="pricing/:serviceSlug" element={<PermissionRoute menuKey="settings"><ServicePricing /></PermissionRoute>} />

@@ -130,11 +130,18 @@ exports.createTutor = async (req, res) => {
 exports.updateTutor = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, specialization, status } = req.body;
+    const { name, email, specialization, status, password } = req.body;
     await db.query(
       'UPDATE tutors SET name = ?, email = ?, specialization = ?, status = ? WHERE id = ?',
       [name, email, specialization, status, id]
     );
+    // Optional password reset: only when a non-empty string is provided.
+    if (typeof password === 'string' && password.trim().length >= 6) {
+      const hashed = await bcrypt.hash(password, 10);
+      await db.query('UPDATE tutors SET password = ? WHERE id = ?', [hashed, id]);
+    } else if (typeof password === 'string' && password.trim().length > 0) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
     res.json({ message: 'Tutor updated' });
   } catch (error) {
     console.error('Update tutor error:', error);
@@ -653,7 +660,7 @@ exports.deleteBannedWord = async (req, res) => {
 };
 
 // ============= SALES USER MANAGEMENT =============
-const AVAILABLE_MENUS = ['dashboard', 'users', 'tutors', 'orders', 'chats', 'reports', 'settings'];
+const AVAILABLE_MENUS = ['dashboard', 'users', 'tutors', 'orders', 'chats', 'issues', 'reports', 'settings'];
 
 exports.getAllSalesUsers = async (req, res) => {
   try {

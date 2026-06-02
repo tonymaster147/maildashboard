@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { useApi } from '../hooks/useApi';
-import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown, FiGlobe } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown, FiGlobe, FiAlertCircle } from 'react-icons/fi';
 
 const MENU_ITEMS = [
   { to: '/', key: 'dashboard', icon: FiGrid, label: 'Dashboard', end: true },
@@ -11,6 +11,7 @@ const MENU_ITEMS = [
   { to: '/tutors', key: 'tutors', icon: FiUserCheck, label: 'Tutors' },
   { to: '/orders', key: 'orders', icon: FiShoppingBag, label: 'Orders', hasBadge: true },
   { to: '/chats', key: 'chats', icon: FiMessageCircle, label: 'Chat Monitor', hasFlaggedBadge: true },
+  { to: '/issues', key: 'issues', icon: FiAlertCircle, label: 'Issues', hasIssuesBadge: true },
   { to: '/reports', key: 'reports', icon: FiPieChart, label: 'Reports' },
   { to: '/settings', key: 'settings', icon: FiSettings, label: 'Settings' },
 ];
@@ -29,12 +30,13 @@ const PRICING_SUBITEMS = [
 
 export default function Layout() {
   const { logoutUser, isAdmin, isSalesUser, hasPermission, user, token } = useAuth();
-  const { getUnreadCount } = useApi();
+  const { getUnreadCount, getIssuesUnreadCount } = useApi();
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadOrders, setUnreadOrders] = useState(0);
   const [unreadChat, setUnreadChat] = useState(0);
   const [unreadFlagged, setUnreadFlagged] = useState(0);
+  const [unreadIssues, setUnreadIssues] = useState(0);
   const [pricingOpen, setPricingOpen] = useState(location.pathname.startsWith('/pricing'));
   const locationRef = useRef(location.pathname);
   useEffect(() => { locationRef.current = location.pathname; }, [location.pathname]);
@@ -71,6 +73,23 @@ export default function Layout() {
     const interval = setInterval(fetchUnread, 30000);
     return () => clearInterval(interval);
   }, [getUnreadCount]);
+
+  // Issues unread — bumps when user replies/opens new issue; clears when staff opens the thread
+  useEffect(() => {
+    if (!getIssuesUnreadCount) return;
+    const fetchUnread = () => {
+      if (locationRef.current.startsWith('/issues')) { setUnreadIssues(0); return; }
+      getIssuesUnreadCount().then(r => setUnreadIssues(r.data?.unread || 0)).catch(() => {});
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [getIssuesUnreadCount]);
+
+  // Clear badge immediately on navigation to issues area
+  useEffect(() => {
+    if (location.pathname.startsWith('/issues')) setUnreadIssues(0);
+  }, [location.pathname]);
 
   // Socket: listen for order + chat notifications, join admin_monitor room
   useEffect(() => {
@@ -172,6 +191,9 @@ export default function Layout() {
                 )}
                 {item.hasFlaggedBadge && unreadFlagged > 0 && (
                   <span style={{ background: 'var(--warning)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadFlagged}</span>
+                )}
+                {item.hasIssuesBadge && unreadIssues > 0 && !location.pathname.startsWith('/issues') && (
+                  <span style={{ background: 'var(--error)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadIssues}</span>
                 )}
               </NavLink>
               {item.key === 'tutors' && isAdmin && (

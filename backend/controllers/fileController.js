@@ -42,9 +42,13 @@ exports.uploadFiles = async (req, res) => {
           fileUrl = `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
         }
 
+        // A direct upload that already carries an order_id is a post-submission
+        // addition. Initial-form uploads come in without order_id (they're
+        // linked later via updateDraftOrder's temp_file_ids path) and stay 0.
+        const isPostSubmit = order_id ? 1 : 0;
         const [result] = await db.query(
-          'INSERT INTO files (order_id, file_url, file_name, file_size, drive_file_id, uploaded_by, uploaded_by_role) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [order_id ? parseInt(order_id) : null, fileUrl, file.originalname, file.size, fileDriveId, uploaderId, uploaderRole]
+          'INSERT INTO files (order_id, file_url, file_name, file_size, drive_file_id, uploaded_by, uploaded_by_role, is_post_submit) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [order_id ? parseInt(order_id) : null, fileUrl, file.originalname, file.size, fileDriveId, uploaderId, uploaderRole, isPostSubmit]
         );
 
         uploadedFiles.push({

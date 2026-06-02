@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getTaskDetail, updateTutorTaskStatus, uploadWorkFiles, getPublicStatuses } from '../services/api';
-import { FiArrowLeft, FiCheckCircle, FiUpload, FiMessageSquare, FiDownload } from 'react-icons/fi';
+import { FiArrowLeft, FiCheckCircle, FiUpload, FiMessageSquare, FiDownload, FiKey, FiEye, FiEyeOff, FiCopy } from 'react-icons/fi';
 
 export default function TaskDetail() {
   const { id } = useParams();
@@ -10,6 +10,9 @@ export default function TaskDetail() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tutorStatuses, setTutorStatuses] = useState([]);
+  const [showSchoolPass, setShowSchoolPass] = useState(false);
+
+  const copy = (val) => { if (val) { navigator.clipboard.writeText(val).catch(() => {}); } };
 
   const fetchTask = () => { getTaskDetail(id).then(res => { setTask(res.data); setLoading(false); }).catch(() => setLoading(false)); };
   useEffect(() => { fetchTask(); }, [id]);
@@ -120,14 +123,78 @@ export default function TaskDetail() {
         <div className="card mt-2"><h4 style={{ marginBottom: 8 }}>Instructions</h4><p style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{task.additional_instructions}</p></div>
       )}
 
+      {(task.school_url || task.school_username || task.school_password) && (
+        <div className="card mt-2">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FiKey size={16} /> Login Details
+            </h4>
+            {task.login_updated_at && (
+              <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 10, background: 'rgba(34,197,94,0.12)', color: '#16a34a', fontWeight: 600 }}>
+                Updated {new Date(task.login_updated_at).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {task.school_url && (
+              <div className="summary-row">
+                <span className="label">URL</span>
+                <span style={{ wordBreak: 'break-all', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <a href={task.school_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>{task.school_url}</a>
+                  <button onClick={() => copy(task.school_url)} title="Copy" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><FiCopy size={13} /></button>
+                </span>
+              </div>
+            )}
+            {task.school_username && (
+              <div className="summary-row">
+                <span className="label">Username</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {task.school_username}
+                  <button onClick={() => copy(task.school_username)} title="Copy" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><FiCopy size={13} /></button>
+                </span>
+              </div>
+            )}
+            {task.school_password && (
+              <div className="summary-row">
+                <span className="label">Password</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {showSchoolPass ? task.school_password : '••••••••'}
+                  <button onClick={() => setShowSchoolPass(s => !s)} title={showSchoolPass ? 'Hide' : 'Show'} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                    {showSchoolPass ? <FiEyeOff size={14} /> : <FiEye size={14} />}
+                  </button>
+                  <button onClick={() => copy(task.school_password)} title="Copy" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><FiCopy size={13} /></button>
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {task.files?.length > 0 && (
         <div className="card mt-2">
           <h4 style={{ marginBottom: 12 }}>Files ({task.files.length})</h4>
           <div className="file-list">
             {task.files.map(f => (
               <div key={f.id} className="file-item">
-                <div><div className="file-name">{f.file_name}</div><div className="file-size">By {f.uploaded_by_role} • {new Date(f.created_at).toLocaleDateString()}</div></div>
-                <a href={f.file_url} target="_blank" rel="noreferrer" className="btn btn-sm btn-secondary"><FiDownload size={14} /></a>
+                <div>
+                  <div className="file-name">
+                    {f.file_name}
+                    {Number(f.is_post_submit) === 1 && (
+                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                        Added later
+                      </span>
+                    )}
+                  </div>
+                  <div className="file-size">By {f.uploaded_by_role} • {new Date(f.created_at).toLocaleDateString()}</div>
+                </div>
+                <a
+                  href={f.drive_file_id ? `https://drive.google.com/uc?export=download&id=${f.drive_file_id}` : f.file_url}
+                  download={f.file_name}
+                  className="btn btn-sm btn-secondary"
+                  title="Download"
+                >
+                  <FiDownload size={14} />
+                </a>
               </div>
             ))}
           </div>

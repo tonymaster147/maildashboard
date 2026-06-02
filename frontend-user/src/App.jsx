@@ -11,6 +11,8 @@ import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
 import Chats from './pages/Chats';
 import Chat from './pages/Chat';
+import Issues from './pages/Issues';
+import IssueDetail from './pages/IssueDetail';
 import Profile from './pages/Profile';
 import PaymentHistory from './pages/PaymentHistory';
 import PaymentSuccess from './pages/PaymentSuccess';
@@ -44,6 +46,8 @@ function AppRoutes() {
         <Route path="orders/:id" element={<OrderDetail />} />
         <Route path="chats" element={<Chats />} />
         <Route path="chat/:channel/:orderId" element={<Chat />} />
+        <Route path="issues" element={<Issues />} />
+        <Route path="issues/:id" element={<IssueDetail />} />
         <Route path="payments" element={<PaymentHistory />} />
         <Route path="profile" element={<Profile />} />
       </Route>

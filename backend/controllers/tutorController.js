@@ -59,6 +59,7 @@ exports.getTaskDetail = async (req, res) => {
 
     const [tasks] = await db.query(`
       SELECT o.id, o.order_code, o.course_name, o.additional_instructions, o.status, o.start_date, o.end_date,
+        o.school_url, o.school_username, o.school_password, o.login_updated_at,
         o.num_weeks, o.chat_enabled, o.created_at,
         ot.name as order_type_name, s.name as subject_name, el.name as education_level_name,
         p.name as plan_name, u.username,

@@ -109,6 +109,14 @@ export const deleteStatus = (kind, id) => api.delete(`/admin/statuses/${kind}/${
 
 export const getOrderCode = (id) => api.get(`/orders/${id}/code`);
 
+// Issues — admin endpoints
+export const getIssuesUnreadCount = () => api.get('/admin/issues/unread-count');
+export const getAllIssues = (params) => api.get('/admin/issues', { params });
+export const getIssue = (id) => api.get(`/admin/issues/${id}`);
+export const addIssueMessage = (id, data) => api.post(`/admin/issues/${id}/messages`, data);
+export const closeIssue = (id) => api.patch(`/admin/issues/${id}/close`);
+export const reopenIssue = (id) => api.patch(`/admin/issues/${id}/reopen`);
+
 export const uploadChatAttachment = (orderId, file) => {
   const fd = new FormData();
   fd.append('file', file);
@@ -146,6 +154,12 @@ export const salesApi = {
   markAllInstallmentsPaid: (orderId) => api.post(`/sales/orders/${orderId}/installments/mark-all-paid`),
   getChats: () => api.get('/sales/chats'),
   getFlaggedMessages: () => api.get('/sales/chats/flagged'),
+  getIssuesUnreadCount: () => api.get('/sales/issues/unread-count'),
+  getAllIssues: (params) => api.get('/sales/issues', { params }),
+  getIssue: (id) => api.get(`/sales/issues/${id}`),
+  addIssueMessage: (id, data) => api.post(`/sales/issues/${id}/messages`, data),
+  closeIssue: (id) => api.patch(`/sales/issues/${id}/close`),
+  reopenIssue: (id) => api.patch(`/sales/issues/${id}/reopen`),
   getReports: (params) => api.get('/sales/reports', { params }),
   getSettings: () => api.get('/sales/settings'),
   updatePlan: (id, data) => api.put(`/sales/plans/${id}`, data),

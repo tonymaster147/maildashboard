@@ -60,6 +60,14 @@ export const getPlans = () => api.get('/orders/plans');
 export const createOrder = (data) => api.post('/orders', data);
 export const getUserOrders = (params = {}) => api.get('/orders', { params: typeof params === 'string' ? { status: params } : params });
 export const getOrderCode = (id) => api.get(`/orders/${id}/code`);
+export const updateOrderLoginDetails = (id, data) => api.put(`/orders/${id}/login-details`, data);
+
+export const getIssueCategories = () => api.get('/issues/categories');
+export const getMyIssues = () => api.get('/issues');
+export const getIssuesUnreadCount = () => api.get('/issues/unread-count');
+export const createIssue = (data) => api.post('/issues', data);
+export const getIssue = (id) => api.get(`/issues/${id}`);
+export const addIssueMessage = (id, data) => api.post(`/issues/${id}/messages`, data);
 export const getOrderDetail = (id) => api.get(`/orders/${id}`);
 export const validateCoupon = (code) => api.post('/orders/validate-coupon', { code });
 export const calculatePrice = (data) => api.post('/orders/calculate-price', data);
