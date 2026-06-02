@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile, getStatuses } from '../services/api';
+import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile, getPublicStatuses } from '../services/api';
 import InstallmentPlanModal from '../components/InstallmentPlanModal';
 import EditInstallmentModal from '../components/EditInstallmentModal';
 import CancelOrderModal from '../components/CancelOrderModal';
@@ -99,7 +99,7 @@ export default function OrderDetail() {
 
   useEffect(() => { fetchOrder(); }, [id]);
   useEffect(() => { getAllTutors().then(res => setTutors(res.data)).catch(() => {}); }, []);
-  useEffect(() => { getStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))).catch(() => {}); }, []);
+  useEffect(() => { getPublicStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))).catch(() => {}); }, []);
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);

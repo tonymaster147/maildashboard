@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FiSearch, FiEye, FiUserPlus, FiX, FiRefreshCw, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
-import { getStatuses } from '../services/api';
+import { getPublicStatuses } from '../services/api';
 import CancelOrderModal from '../components/CancelOrderModal';
 
 const VIEWED_ORDERS_KEY = 'admin_viewed_orders';
@@ -42,7 +42,7 @@ export default function Orders() {
 
   useEffect(() => { fetchOrders(); }, [filter, page]);
   useEffect(() => { getAllTutors().then(res => setTutors(res.data)); }, []);
-  useEffect(() => { getStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))); }, []);
+  useEffect(() => { getPublicStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))); }, []);
 
   const [cancelTarget, setCancelTarget] = useState(null); // { orderId }
   const [cancelSubmitting, setCancelSubmitting] = useState(false);

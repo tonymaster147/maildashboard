@@ -98,7 +98,11 @@ export const sendSiteTestEmail = (id, data) => api.post(`/admin/sites/${id}/test
 export const uploadSiteLogo = (formData) => api.post('/admin/sites/upload-logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
 // Order status lists (admin/tutor). kind = 'admin' | 'tutor'.
+// `getStatuses` hits the admin CRUD endpoint and requires admin role —
+// used by Settings. Read-only displays (Orders list, OrderDetail) should
+// use `getPublicStatuses` so sales users can also load the dropdowns.
 export const getStatuses = (kind) => api.get(`/admin/statuses/${kind}`);
+export const getPublicStatuses = (kind) => api.get(`/public/statuses/${kind}`);
 export const createStatus = (kind, data) => api.post(`/admin/statuses/${kind}`, data);
 export const updateStatus = (kind, id, data) => api.patch(`/admin/statuses/${kind}/${id}`, data);
 export const deleteStatus = (kind, id) => api.delete(`/admin/statuses/${kind}/${id}`);
