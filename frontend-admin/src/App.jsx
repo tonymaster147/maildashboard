@@ -18,6 +18,8 @@ import ServicePricing from './pages/ServicePricing';
 import Sites from './pages/Sites';
 import Issues from './pages/Issues';
 import IssueDetail from './pages/IssueDetail';
+import AdminDemoDesign from './pages/AdminDemoDesign';
+import AdminDemoDesignTwo from './pages/AdminDemoDesignTwo';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -55,6 +57,9 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* Public static design-preview pages — no auth, no admin shell */}
+      <Route path="/admin-demo-design" element={<AdminDemoDesign />} />
+      <Route path="/admin-demo-design-two" element={<AdminDemoDesignTwo />} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route index element={<PermissionRoute menuKey="dashboard"><Dashboard /></PermissionRoute>} />
         <Route path="users" element={<PermissionRoute menuKey="users"><Users /></PermissionRoute>} />
