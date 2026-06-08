@@ -6,7 +6,8 @@ import { useState, useEffect, useRef } from 'react';
 import {
   FiShoppingCart, FiFileText, FiMessageCircle, FiSettings, FiPlusCircle, FiLifeBuoy,
   FiAlertCircle, FiCreditCard, FiHeadphones, FiUser, FiChevronRight, FiArrowUpRight,
-  FiClock, FiCheckCircle, FiHelpCircle, FiBookOpen, FiBell, FiDollarSign
+  FiClock, FiCheckCircle, FiHelpCircle, FiBookOpen, FiBell, FiDollarSign,
+  FiMenu, FiX
 } from 'react-icons/fi';
 
 // ──────────────────────────── Theme tokens ────────────────────────────
@@ -66,7 +67,7 @@ const Avatar = ({ initials, size = 36, bg = '#dbeafe', color = '#2563eb', photo,
 );
 
 // ──────────────────────────── Sidebar (simpler) ────────────────────────────
-function Sidebar() {
+function Sidebar({ open, onClose }) {
   // Everything in this list maps to a feature we already have.
   const items = [
     { label: 'My Active Orders', icon: FiShoppingCart, count: 3, active: true },
@@ -79,11 +80,26 @@ function Sidebar() {
   ];
 
   return (
-    <aside style={{
+    <aside className={`dd2-sidebar ${open ? 'dd2-open' : ''}`} style={{
       width: 240, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`,
       minHeight: '100vh', position: 'sticky', top: 0, padding: '20px 14px',
       display: 'flex', flexDirection: 'column'
     }}>
+      {/* Close button row — only visible on mobile/tablet via the drawer */}
+      <div className="dd2-sidebar-close-row" style={{ display: 'none', justifyContent: 'flex-end', marginBottom: 8 }}>
+        <button
+          onClick={onClose}
+          aria-label="Close menu"
+          style={{
+            width: 32, height: 32, border: 'none', borderRadius: 8,
+            background: '#f1f5f9', color: C.textSecondary, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}
+        >
+          <FiX size={16} />
+        </button>
+      </div>
+      <style>{`@media (max-width: 1024px) { .dd2-sidebar-close-row { display: flex !important; } }`}</style>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {items.map((it, i) => (
           <div key={i} style={{
@@ -120,31 +136,46 @@ function Sidebar() {
 }
 
 // ──────────────────────────── Topbar ────────────────────────────
-function Topbar() {
+function Topbar({ onMenuClick }) {
   return (
-    <header style={{
+    <header className="dd2-topbar" style={{
       display: 'flex', alignItems: 'center', gap: 16, padding: '16px 28px',
       background: C.surface, borderBottom: `1px solid ${C.border}`
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      {/* Hamburger — mobile/tablet only */}
+      <button
+        type="button"
+        onClick={onMenuClick}
+        aria-label="Open menu"
+        className="dd2-hamburger"
+        style={{
+          width: 38, height: 38, borderRadius: 10, border: 'none',
+          background: '#f1f5f9', color: C.textSecondary, cursor: 'pointer',
+          alignItems: 'center', justifyContent: 'center', flexShrink: 0
+        }}
+      >
+        <FiMenu size={18} />
+      </button>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
         <div style={{
-          width: 36, height: 36, borderRadius: 8,
+          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
           background: 'linear-gradient(135deg, #1f2937, #374151)',
           display: 'flex', alignItems: 'center', justifyContent: 'center'
         }}>
           <FiBookOpen size={18} color="#fff" />
         </div>
-        <span style={{ fontSize: 17, fontWeight: 600, color: C.textPrimary }}>buyonlineclass.com</span>
+        <span className="dd2-brand-text" style={{ fontSize: 17, fontWeight: 600, color: C.textPrimary, whiteSpace: 'nowrap' }}>buyonlineclass.com</span>
       </div>
 
-      <div style={{ width: 1, height: 28, background: C.border, margin: '0 8px' }} />
-      <h1 style={{ fontSize: 18, fontWeight: 700, color: C.textPrimary, margin: 0, letterSpacing: 1 }}>
+      <div className="dd2-divider" style={{ width: 1, height: 28, background: C.border, margin: '0 8px' }} />
+      <h1 className="dd2-title" style={{ fontSize: 18, fontWeight: 700, color: C.textPrimary, margin: 0, letterSpacing: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         STUDENT DASHBOARD
       </h1>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginLeft: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginLeft: 'auto', flexShrink: 0 }}>
         {/* Notification bell — uses existing notifications table */}
-        <button title="Notifications" style={{
+        <button title="Notifications" className="dd2-topbar-bell" style={{
           position: 'relative', width: 38, height: 38, borderRadius: 10,
           background: '#f1f5f9', border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -157,7 +188,7 @@ function Topbar() {
           }}>3</span>
         </button>
         <ProfileChip />
-        <button style={{
+        <button className="dd2-get-help" style={{
           display: 'inline-flex', alignItems: 'center', gap: 8,
           background: C.accentSoft, border: 'none', borderRadius: 10,
           padding: '8px 14px', fontSize: 12, fontWeight: 700, color: C.accent,
@@ -203,8 +234,8 @@ function ProfileChip() {
         }}
       >
         <Avatar initials="JS" size={36} />
-        <div style={{ textAlign: 'left', lineHeight: 1.2 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 0.5 }}>WELCOME,</div>
+        <div className="dd2-profile-name" style={{ textAlign: 'left', lineHeight: 1.2 }}>
+          <div className="dd2-profile-welcome" style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, letterSpacing: 0.5 }}>WELCOME,</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.textPrimary, letterSpacing: 0.5 }}>JONATHAN S.</div>
         </div>
       </button>
@@ -240,6 +271,61 @@ function ProfileChip() {
           >Log Out</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ──────────────────────────── Submit Another Assignment (top banner CTA) ────────────────────────────
+// Per Ma'am's feedback (07/06/2026): course deadlines change frequently, so a fixed
+// progress timeline / milestones list doesn't make sense. Replace both with a clear
+// CTA: students can drop in a new assignment any time.
+function SubmitAssignmentBanner() {
+  return (
+    <div className="dd2-cta-banner" style={{
+      position: 'relative', overflow: 'hidden',
+      background: 'linear-gradient(120deg, #1e40af 0%, #6366f1 55%, #ec4899 100%)',
+      color: '#fff', borderRadius: 14, padding: '22px 26px',
+      display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap'
+    }}>
+      {/* Decorative blobs */}
+      <div style={{
+        position: 'absolute', right: -40, top: -40, width: 180, height: 180,
+        borderRadius: '50%', background: 'rgba(255,255,255,0.08)'
+      }} />
+      <div style={{
+        position: 'absolute', right: 60, bottom: -60, width: 140, height: 140,
+        borderRadius: '50%', background: 'rgba(255,255,255,0.06)'
+      }} />
+
+      <div style={{
+        width: 52, height: 52, borderRadius: 14, flexShrink: 0,
+        background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'relative', zIndex: 1
+      }}>
+        <FiPlusCircle size={26} />
+      </div>
+
+      <div style={{ flex: 1, minWidth: 220, position: 'relative', zIndex: 1 }}>
+        <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, opacity: 0.85, marginBottom: 4 }}>
+          NEW ASSIGNMENT
+        </div>
+        <div className="dd2-cta-banner-title" style={{ fontSize: 19, fontWeight: 800, letterSpacing: 0.2, marginBottom: 4 }}>
+          Got another deadline coming up?
+        </div>
+        <div className="dd2-cta-banner-text" style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.5 }}>
+          Drop the brief in seconds — our tutors review it and respond fast. No semester or fixed schedule required.
+        </div>
+      </div>
+
+      <button className="dd2-cta-banner-button" style={{
+        background: '#fff', color: '#1e40af', border: 'none', borderRadius: 10,
+        padding: '13px 22px', fontSize: 13, fontWeight: 800, letterSpacing: 0.5,
+        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8,
+        boxShadow: '0 6px 20px rgba(0,0,0,0.15)', position: 'relative', zIndex: 1, whiteSpace: 'nowrap'
+      }}>
+        SUBMIT ASSIGNMENT <FiArrowUpRight size={14} />
+      </button>
     </div>
   );
 }
@@ -334,13 +420,13 @@ function ActiveOrders() {
 
   return (
     <div>
-      <h2 style={{ fontSize: 18, fontWeight: 800, color: C.textPrimary, margin: '0 0 14px', letterSpacing: 0.5 }}>
+      <h2 className="dd2-active-orders-title" style={{ fontSize: 18, fontWeight: 800, color: C.textPrimary, margin: '0 0 14px', letterSpacing: 0.5 }}>
         MY ACTIVE ORDERS
       </h2>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {orders.map((o, i) => (
           <Card key={i} style={{ padding: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) 160px minmax(0, 1.3fr) 160px', gap: 18, alignItems: 'center' }}>
+            <div className="dd2-order-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) 160px minmax(0, 1.3fr) 160px', gap: 18, alignItems: 'center' }}>
               {/* Order info */}
               <div>
                 <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.3 }}>
@@ -372,7 +458,7 @@ function ActiveOrders() {
               </div>
 
               {/* CTA */}
-              <button style={{
+              <button className="dd2-order-cta" style={{
                 background: C.accent, color: '#fff', border: 'none', borderRadius: 8,
                 padding: '11px 18px', fontSize: 11, fontWeight: 700, letterSpacing: 0.6,
                 cursor: 'pointer', whiteSpace: 'nowrap'
@@ -418,7 +504,7 @@ function UpcomingMilestones() {
 // ──────────────────────────── Login Details (real, already shipped) ────────────────────────────
 function LoginDetailsCard() {
   return (
-    <Card style={{ marginTop: 14 }}>
+    <Card>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <h3 style={{ fontSize: 12, fontWeight: 800, color: C.textPrimary, margin: 0, letterSpacing: 1 }}>LOGIN DETAILS</h3>
         <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: C.greenSoft, color: C.green, letterSpacing: 0.3 }}>UPDATED APR 8</span>
@@ -487,11 +573,11 @@ function MarketingRow() {
   ];
 
   return (
-    <div style={{ marginTop: 28, display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 14 }}>
+    <div className="dd2-mkt-grid" style={{ marginTop: 28, display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 14 }}>
       {/* ── LEFT: Blog magazine ── */}
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         {/* Hero banner with gradient (placeholder for cover image) */}
-        <div style={{
+        <div className="dd2-marketing-hero" style={{
           position: 'relative', minHeight: 180, padding: 22,
           background: 'linear-gradient(135deg, #1e3a8a 0%, #6366f1 55%, #ec4899 100%)',
           color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
@@ -506,10 +592,10 @@ function MarketingRow() {
             fontSize: 10, fontWeight: 600, opacity: 0.85, letterSpacing: 0.3
           }}>FROM THE BLOG</div>
 
-          <div style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.25, marginBottom: 8, maxWidth: '85%' }}>
+          <div className="dd2-marketing-hero-title" style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.25, marginBottom: 8, maxWidth: '85%' }}>
             {featured.title}
           </div>
-          <div style={{ fontSize: 13, opacity: 0.92, lineHeight: 1.55, maxWidth: '85%', marginBottom: 14 }}>
+          <div className="dd2-marketing-hero-excerpt" style={{ fontSize: 13, opacity: 0.92, lineHeight: 1.55, maxWidth: '85%', marginBottom: 14 }}>
             {featured.excerpt}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 11, fontWeight: 600 }}>
@@ -618,21 +704,90 @@ function MarketingRow() {
   );
 }
 
-// ──────────────────────────── Page ────────────────────────────
+// ──────────────────────────── Responsive CSS ────────────────────────────
+// Breakpoints: mobile ≤640, tablet 641–1024, desktop >1024
+const RESPONSIVE_CSS = `
+  /* ── Tablet & below (≤1024px) ───────────────────────────── */
+  @media (max-width: 1024px) {
+    .dd2-sidebar {
+      position: fixed !important; top: 0; left: 0;
+      transform: translateX(-100%); transition: transform 0.28s ease;
+      z-index: 50; box-shadow: 0 6px 30px rgba(0,0,0,0.18);
+      height: 100vh; overflow-y: auto;
+    }
+    .dd2-sidebar.dd2-open { transform: translateX(0); }
+    .dd2-overlay {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+      z-index: 40; backdrop-filter: blur(2px);
+    }
+    .dd2-hamburger { display: inline-flex !important; }
+    .dd2-grid { grid-template-columns: minmax(0, 1fr) !important; }
+    .dd2-mkt-grid { grid-template-columns: minmax(0, 1fr) !important; }
+    .dd2-main { padding: 20px 22px !important; }
+    .dd2-topbar { padding: 14px 20px !important; }
+  }
+
+  /* ── Mobile only (≤640px) ───────────────────────────────── */
+  @media (max-width: 640px) {
+    .dd2-topbar { padding: 12px 14px !important; gap: 10px !important; }
+    .dd2-main { padding: 16px 14px !important; }
+    .dd2-brand-text { display: none !important; }
+    .dd2-divider { display: none !important; }
+    .dd2-title { font-size: 14px !important; letter-spacing: 0.5px !important; }
+    .dd2-get-help { display: none !important; }
+    .dd2-profile-name { display: none !important; }
+    .dd2-profile-welcome { display: none !important; }
+    .dd2-order-grid {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+    .dd2-order-grid > * { width: 100%; }
+    .dd2-order-cta { width: 100% !important; padding: 12px !important; }
+    .dd2-cta-banner { padding: 18px !important; gap: 14px !important; }
+    .dd2-cta-banner-title { font-size: 16px !important; }
+    .dd2-cta-banner-text { font-size: 12px !important; }
+    .dd2-cta-banner-button { width: 100%; justify-content: center; }
+    .dd2-active-orders-title { font-size: 15px !important; }
+    /* Push title below the absolute FEATURED pill, use full width */
+    .dd2-marketing-hero { padding: 56px 18px 18px !important; }
+    .dd2-marketing-hero-title { font-size: 18px !important; max-width: 100% !important; }
+    .dd2-marketing-hero-excerpt { max-width: 100% !important; font-size: 12px !important; }
+    .dd2-services-grid { grid-template-columns: 1fr 1fr !important; }
+    .dd2-topbar-bell { width: 34px !important; height: 34px !important; }
+  }
+
+  /* Hamburger hidden on desktop */
+  .dd2-hamburger { display: none; }
+`;
+
 export default function AdminDemoDesignTwo() {
+  const [navOpen, setNavOpen] = useState(false);
+
+  // Lock body scroll while drawer is open on mobile/tablet
+  useEffect(() => {
+    if (navOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = prev; };
+    }
+  }, [navOpen]);
+
   return (
     <div style={{ background: C.bg, minHeight: '100vh', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', color: C.textPrimary }}>
-      <Topbar />
+      <style>{RESPONSIVE_CSS}</style>
+      <Topbar onMenuClick={() => setNavOpen(true)} />
       <div style={{ display: 'flex' }}>
-        <Sidebar />
-        <main style={{ flex: 1, minWidth: 0, padding: '24px 28px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 280px', gap: 22 }}>
+        <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
+        {navOpen && <div className="dd2-overlay" onClick={() => setNavOpen(false)} />}
+        <main className="dd2-main" style={{ flex: 1, minWidth: 0, padding: '24px 28px' }}>
+          <div style={{ marginBottom: 22 }}>
+            <SubmitAssignmentBanner />
+          </div>
+          <div className="dd2-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 280px', gap: 22 }}>
             <div>
-              <CurrentOrderProgress />
               <ActiveOrders />
             </div>
             <div>
-              <UpcomingMilestones />
               <LoginDetailsCard />
             </div>
           </div>
