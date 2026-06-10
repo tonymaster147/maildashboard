@@ -81,8 +81,9 @@ function Sidebar({ open, onClose }) {
 
   return (
     <aside className={`dd2-sidebar ${open ? 'dd2-open' : ''}`} style={{
-      width: 240, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`,
-      minHeight: '100vh', position: 'sticky', top: 0, padding: '20px 14px',
+      width: 240, background: C.surface, borderRight: `1px solid ${C.border}`,
+      position: 'fixed', top: 0, left: 0, height: '100vh', overflowY: 'auto',
+      zIndex: 30, padding: '20px 14px',
       display: 'flex', flexDirection: 'column'
     }}>
       {/* Close button row — only visible on mobile/tablet via the drawer */}
@@ -324,7 +325,7 @@ function SubmitAssignmentBanner() {
         cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8,
         boxShadow: '0 6px 20px rgba(0,0,0,0.15)', position: 'relative', zIndex: 1, whiteSpace: 'nowrap'
       }}>
-        SUBMIT ASSIGNMENT <FiArrowUpRight size={14} />
+        GET MORE ASSIGNMENT HELP <FiArrowUpRight size={14} />
       </button>
     </div>
   );
@@ -502,19 +503,55 @@ function UpcomingMilestones() {
 }
 
 // ──────────────────────────── Login Details (real, already shipped) ────────────────────────────
+// Each order can have its own portal credentials, so we let students switch
+// between orders via a small dropdown. The "Update Credential" button opens
+// the existing login-details form for the selected order.
 function LoginDetailsCard() {
+  const credentialsByOrder = {
+    MMT1203: { url: 'history.school.edu',  user: 'alex.m',    pass: '••••••••', updated: 'APR 7' },
+    MMT1204: { url: 'canvas.school.edu',   user: 'alex.m',    pass: '••••••••', updated: 'APR 8' },
+    MMT1205: { url: 'moodle.school.edu',   user: 'alex.m99',  pass: '••••••••', updated: 'APR 6' }
+  };
+  const orderIds = Object.keys(credentialsByOrder);
+  const [selected, setSelected] = useState('MMT1204');
+  const c = credentialsByOrder[selected];
+
   return (
     <Card>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <h3 style={{ fontSize: 12, fontWeight: 800, color: C.textPrimary, margin: 0, letterSpacing: 1 }}>LOGIN DETAILS</h3>
-        <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: C.greenSoft, color: C.green, letterSpacing: 0.3 }}>UPDATED APR 8</span>
+        <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: C.greenSoft, color: C.green, letterSpacing: 0.3 }}>UPDATED {c.updated}</span>
       </div>
-      <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 10, letterSpacing: 0.3 }}>For <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 700, color: C.textSecondary }}>MMT1204</span></div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
-        <Row label="URL" value="canvas.school.edu" />
-        <Row label="User" value="alex.m" />
-        <Row label="Pass" value="••••••••" />
+
+      {/* Order picker — credentials can differ per order */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 11, color: C.textMuted, letterSpacing: 0.3 }}>For</span>
+        <select
+          value={selected}
+          onChange={e => setSelected(e.target.value)}
+          style={{
+            flex: 1, fontFamily: 'ui-monospace, monospace', fontWeight: 700, color: C.textSecondary,
+            fontSize: 12, padding: '5px 8px', border: `1px solid ${C.border}`, borderRadius: 6,
+            background: C.surface, cursor: 'pointer', outline: 'none'
+          }}
+        >
+          {orderIds.map(id => <option key={id} value={id}>{id}</option>)}
+        </select>
       </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, marginBottom: 14 }}>
+        <Row label="URL"  value={c.url} />
+        <Row label="User" value={c.user} />
+        <Row label="Pass" value={c.pass} />
+      </div>
+
+      <button style={{
+        width: '100%', background: C.accent, color: '#fff', border: 'none', borderRadius: 8,
+        padding: '10px 14px', fontSize: 11, fontWeight: 700, letterSpacing: 0.6,
+        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6
+      }}>
+        <FiSettings size={13} /> UPDATE CREDENTIAL
+      </button>
     </Card>
   );
 }
@@ -709,11 +746,10 @@ function MarketingRow() {
 const RESPONSIVE_CSS = `
   /* ── Tablet & below (≤1024px) ───────────────────────────── */
   @media (max-width: 1024px) {
+    .dd2-shifted { padding-left: 0 !important; }
     .dd2-sidebar {
-      position: fixed !important; top: 0; left: 0;
       transform: translateX(-100%); transition: transform 0.28s ease;
       z-index: 50; box-shadow: 0 6px 30px rgba(0,0,0,0.18);
-      height: 100vh; overflow-y: auto;
     }
     .dd2-sidebar.dd2-open { transform: translateX(0); }
     .dd2-overlay {
@@ -775,11 +811,11 @@ export default function AdminDemoDesignTwo() {
   return (
     <div style={{ background: C.bg, minHeight: '100vh', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', color: C.textPrimary }}>
       <style>{RESPONSIVE_CSS}</style>
-      <Topbar onMenuClick={() => setNavOpen(true)} />
-      <div style={{ display: 'flex' }}>
-        <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
-        {navOpen && <div className="dd2-overlay" onClick={() => setNavOpen(false)} />}
-        <main className="dd2-main" style={{ flex: 1, minWidth: 0, padding: '24px 28px' }}>
+      <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
+      {navOpen && <div className="dd2-overlay" onClick={() => setNavOpen(false)} />}
+      <div className="dd2-shifted" style={{ paddingLeft: 240 }}>
+        <Topbar onMenuClick={() => setNavOpen(true)} />
+        <main className="dd2-main" style={{ minWidth: 0, padding: '24px 28px' }}>
           <div style={{ marginBottom: 22 }}>
             <SubmitAssignmentBanner />
           </div>
