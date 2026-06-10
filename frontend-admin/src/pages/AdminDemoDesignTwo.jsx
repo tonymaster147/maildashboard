@@ -101,6 +101,21 @@ function Sidebar({ open, onClose }) {
         </button>
       </div>
       <style>{`@media (max-width: 1024px) { .dd2-sidebar-close-row { display: flex !important; } }`}</style>
+
+      {/* Brand / logo — moved here from the topbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 6px 16px', borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+          background: 'linear-gradient(135deg, #1f2937, #374151)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <FiBookOpen size={18} color="#fff" />
+        </div>
+        <span style={{ fontSize: 15, fontWeight: 700, color: C.textPrimary, letterSpacing: 0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          buyonlineclass.com
+        </span>
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {items.map((it, i) => (
           <div key={i} style={{
@@ -158,18 +173,7 @@ function Topbar({ onMenuClick }) {
         <FiMenu size={18} />
       </button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-        <div style={{
-          width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-          background: 'linear-gradient(135deg, #1f2937, #374151)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}>
-          <FiBookOpen size={18} color="#fff" />
-        </div>
-        <span className="dd2-brand-text" style={{ fontSize: 17, fontWeight: 600, color: C.textPrimary, whiteSpace: 'nowrap' }}>buyonlineclass.com</span>
-      </div>
-
-      <div className="dd2-divider" style={{ width: 1, height: 28, background: C.border, margin: '0 8px' }} />
+      {/* Logo lives in the sidebar now — topbar shows just the page title */}
       <h1 className="dd2-title" style={{ fontSize: 18, fontWeight: 700, color: C.textPrimary, margin: 0, letterSpacing: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         STUDENT DASHBOARD
       </h1>
