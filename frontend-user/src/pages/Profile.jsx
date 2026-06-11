@@ -1,13 +1,20 @@
+// Profile — v2 styled. Access-code change + email-change OTP flow are
+// preserved verbatim. Wording stays "Access Code" (not "password").
+
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { changePassword, requestEmailChange, verifyEmailChange } from '../services/api';
-import { FiSave, FiUser, FiMail, FiCalendar, FiSend, FiCheck } from 'react-icons/fi';
+import {
+  FiSave, FiUser, FiMail, FiCalendar, FiSend, FiCheck, FiKey, FiEdit3,
+} from 'react-icons/fi';
 import Notice from '../components/Notice';
+import { C } from '../theme/tokens';
+import { Card, Avatar, initialsFrom } from '../components/ui';
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
 
-  // Access code form
+  // Access code form state
   const [currentCode, setCurrentCode] = useState('');
   const [newCode, setNewCode] = useState('');
   const [confirmCode, setConfirmCode] = useState('');
@@ -15,7 +22,7 @@ export default function Profile() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Email change form
+  // Email change form state
   const [newEmail, setNewEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [emailStep, setEmailStep] = useState('idle'); // idle | code-sent
@@ -63,7 +70,7 @@ export default function Profile() {
     setEmailError('');
     setEmailLoading(true);
     try {
-      const res = await verifyEmailChange({ code: emailCode });
+      await verifyEmailChange({ code: emailCode });
       setEmailMessage('Email updated successfully!');
       setEmailStep('idle');
       setNewEmail('');
@@ -83,77 +90,110 @@ export default function Profile() {
     setEmailMessage('');
   };
 
+  const displayName = user?.name || user?.username || 'Student';
+
   return (
     <div>
-      <div className="page-header">
-        <h2>Profile</h2>
-        <p>Manage your account settings</p>
+      {/* Header */}
+      <div style={{ marginBottom: 18 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: C.textPrimary, margin: 0, letterSpacing: 0.3 }}>
+          Profile
+        </h2>
+        <p style={{ color: C.textMuted, fontSize: 13, margin: '4px 0 0' }}>
+          Manage your account, access code, and email address.
+        </p>
       </div>
 
-      <div className="grid-2">
-        <div className="card">
-          <h4 style={{ marginBottom: 20 }}>Account Information</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-              <FiUser size={18} style={{ color: 'var(--text-muted)' }} />
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Username</div>
-                <div style={{ fontWeight: 600 }}>{user?.username}</div>
+      {/* Two-column: Account Info + Change Access Code */}
+      <div className="v2-detail-grid">
+        {/* Account Info */}
+        <Card>
+          <SectionTitle icon={FiUser}>Account Information</SectionTitle>
+
+          {/* Avatar + display name */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16,
+            padding: 14, borderRadius: 10, background: C.surfaceHover,
+            border: `1px solid ${C.border}`,
+          }}>
+            <Avatar initials={initialsFrom(displayName)} size={50} bg={C.accentSoft} color={C.accent} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: C.textPrimary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {displayName}
               </div>
-            </div>
-            {user?.name && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-                <FiUser size={18} style={{ color: 'var(--text-muted)' }} />
-                <div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Name</div>
-                  <div style={{ fontWeight: 600 }}>{user.name}</div>
+              {user?.email && (
+                <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user.email}
                 </div>
-              </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-              <FiMail size={18} style={{ color: 'var(--text-muted)' }} />
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Email</div>
-                <div style={{ fontWeight: 600 }}>{user?.email || 'Not provided'}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-              <FiCalendar size={18} style={{ color: 'var(--text-muted)' }} />
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Member Since</div>
-                <div style={{ fontWeight: 600 }}>{user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</div>
-              </div>
+              )}
             </div>
           </div>
-        </div>
 
-        <div className="card">
-          <h4 style={{ marginBottom: 20 }}>Change Access Code</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <InfoRow icon={FiUser} label="Username" value={user?.username} />
+            {user?.name && <InfoRow icon={FiEdit3} label="Name" value={user.name} />}
+            <InfoRow icon={FiMail} label="Email" value={user?.email || 'Not provided'} />
+            <InfoRow
+              icon={FiCalendar}
+              label="Member Since"
+              value={user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
+            />
+          </div>
+        </Card>
+
+        {/* Change Access Code */}
+        <Card>
+          <SectionTitle icon={FiKey}>Change Access Code</SectionTitle>
           {message && <Notice type="success">{message}</Notice>}
           {error && <Notice type="error">{error}</Notice>}
           <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">Current Access Code</label>
-              <input type="password" className="form-input" value={currentCode} onChange={e => setCurrentCode(e.target.value)} required />
-            </div>
-            <div className="form-group">
-              <label className="form-label">New Access Code</label>
-              <input type="password" className="form-input" value={newCode} onChange={e => setNewCode(e.target.value)} required minLength={4} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Confirm New Access Code</label>
-              <input type="password" className="form-input" value={confirmCode} onChange={e => setConfirmCode(e.target.value)} required />
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-              {loading ? <div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></div> : <><FiSave size={16} /> Update</>}
+            <Field label="Current Access Code">
+              <input
+                type="password" className="form-input"
+                value={currentCode}
+                onChange={e => setCurrentCode(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="New Access Code">
+              <input
+                type="password" className="form-input"
+                value={newCode}
+                onChange={e => setNewCode(e.target.value)}
+                required minLength={4}
+              />
+            </Field>
+            <Field label="Confirm New Access Code">
+              <input
+                type="password" className="form-input"
+                value={confirmCode}
+                onChange={e => setConfirmCode(e.target.value)}
+                required
+              />
+            </Field>
+            <button
+              type="submit" disabled={loading}
+              style={{
+                width: '100%', padding: '11px 20px', borderRadius: 10,
+                border: 'none', background: C.accent, color: '#fff',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: 13, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading
+                ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+                : <><FiSave size={14} /> Update Access Code</>}
             </button>
           </form>
-        </div>
+        </Card>
       </div>
 
-      <div className="card" style={{ marginTop: 24 }}>
-        <h4 style={{ marginBottom: 8 }}>Change Email</h4>
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 20 }}>
+      {/* Change Email (full width) */}
+      <Card style={{ marginTop: 14 }}>
+        <SectionTitle icon={FiMail}>Change Email</SectionTitle>
+        <p style={{ color: C.textMuted, fontSize: 13, margin: '0 0 16px', lineHeight: 1.5 }}>
           We'll send a 6-digit verification code to the new address. Your email won't change until you enter the code.
         </p>
         {emailMessage && <Notice type="success">{emailMessage}</Notice>}
@@ -161,27 +201,36 @@ export default function Profile() {
 
         {emailStep === 'idle' && (
           <form onSubmit={handleRequestEmailCode}>
-            <div className="form-group">
-              <label className="form-label">New Email Address</label>
+            <Field label="New Email Address">
               <input
-                type="email"
-                className="form-input"
+                type="email" className="form-input"
                 value={newEmail}
                 onChange={e => setNewEmail(e.target.value)}
                 placeholder="new@example.com"
                 required
               />
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={emailLoading}>
-              {emailLoading ? <div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></div> : <><FiSend size={16} /> Send Verification Code</>}
+            </Field>
+            <button
+              type="submit" disabled={emailLoading}
+              style={{
+                padding: '11px 20px', borderRadius: 10, border: 'none',
+                background: C.accent, color: '#fff',
+                cursor: emailLoading ? 'not-allowed' : 'pointer',
+                fontSize: 13, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                opacity: emailLoading ? 0.7 : 1,
+              }}
+            >
+              {emailLoading
+                ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+                : <><FiSend size={14} /> Send Verification Code</>}
             </button>
           </form>
         )}
 
         {emailStep === 'code-sent' && (
           <form onSubmit={handleVerifyEmailCode}>
-            <div className="form-group">
-              <label className="form-label">Verification Code</label>
+            <Field label="Verification Code">
               <input
                 type="text"
                 inputMode="numeric"
@@ -190,25 +239,102 @@ export default function Profile() {
                 className="form-input"
                 value={emailCode}
                 onChange={e => setEmailCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="6-digit code"
+                placeholder="000000"
                 required
                 autoFocus
-                style={{ letterSpacing: 6, fontFamily: 'monospace', fontSize: 18 }}
+                style={{
+                  letterSpacing: 8, fontFamily: 'ui-monospace, monospace',
+                  fontSize: 22, textAlign: 'center', fontWeight: 700,
+                }}
               />
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                Sent to <strong>{newEmail}</strong>. Code expires in 15 minutes.
+              <p style={{ fontSize: 11, color: C.textMuted, margin: '6px 0 0' }}>
+                Sent to <strong style={{ color: C.textSecondary }}>{newEmail}</strong>. Code expires in 15 minutes.
               </p>
-            </div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button type="submit" className="btn btn-primary" disabled={emailLoading || emailCode.length !== 6} style={{ flex: 1 }}>
-                {emailLoading ? <div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></div> : <><FiCheck size={16} /> Verify & Update</>}
+            </Field>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                type="submit"
+                disabled={emailLoading || emailCode.length !== 6}
+                style={{
+                  flex: 1, padding: '11px 20px', borderRadius: 10, border: 'none',
+                  background: C.accent, color: '#fff',
+                  cursor: (emailLoading || emailCode.length !== 6) ? 'not-allowed' : 'pointer',
+                  fontSize: 13, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  opacity: (emailLoading || emailCode.length !== 6) ? 0.6 : 1,
+                }}
+              >
+                {emailLoading
+                  ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+                  : <><FiCheck size={14} /> Verify &amp; Update</>}
               </button>
-              <button type="button" className="btn btn-secondary" onClick={cancelEmailChange} disabled={emailLoading}>
+              <button
+                type="button" onClick={cancelEmailChange} disabled={emailLoading}
+                style={{
+                  padding: '11px 20px', borderRadius: 10,
+                  border: `1px solid ${C.border}`, background: C.surface, color: C.textPrimary,
+                  cursor: emailLoading ? 'not-allowed' : 'pointer',
+                  fontSize: 13, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase',
+                }}
+              >
                 Cancel
               </button>
             </div>
           </form>
         )}
+      </Card>
+    </div>
+  );
+}
+
+// ── Helpers ─────────────────────────────────────────────────
+function SectionTitle({ icon: Icon, children }) {
+  return (
+    <h3 style={{
+      fontSize: 13, fontWeight: 800, color: C.textPrimary, margin: '0 0 16px',
+      letterSpacing: 0.5, textTransform: 'uppercase',
+      display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      {Icon && <Icon size={14} color={C.accent} />}
+      {children}
+    </h3>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      {label && (
+        <label style={{
+          display: 'block', fontSize: 11, fontWeight: 700, color: C.textMuted,
+          letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6,
+        }}>
+          {label}
+        </label>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function InfoRow({ icon: Icon, label, value }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '10px 12px', background: C.surfaceHover,
+      border: `1px solid ${C.border}`, borderRadius: 8,
+    }}>
+      <Icon size={16} style={{ color: C.textMuted, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.3, textTransform: 'uppercase' }}>
+          {label}
+        </div>
+        <div style={{
+          fontSize: 14, fontWeight: 700, color: C.textPrimary, marginTop: 1,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {value}
+        </div>
       </div>
     </div>
   );

@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { useApi } from '../hooks/useApi';
-import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown, FiGlobe, FiAlertCircle } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown, FiGlobe, FiAlertCircle, FiBell } from 'react-icons/fi';
+import NotificationPanel from './NotificationPanel';
 
 const MENU_ITEMS = [
   { to: '/', key: 'dashboard', icon: FiGrid, label: 'Dashboard', end: true },
@@ -30,7 +31,11 @@ const PRICING_SUBITEMS = [
 
 export default function Layout() {
   const { logoutUser, isAdmin, isSalesUser, hasPermission, user, token } = useAuth();
-  const { getUnreadCount, getIssuesUnreadCount } = useApi();
+  const {
+    getUnreadCount, getIssuesUnreadCount,
+    getNotificationsFeed, getNotificationsFeedUnread,
+    markFeedNotificationRead, markAllFeedNotificationsRead,
+  } = useApi();
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadOrders, setUnreadOrders] = useState(0);
@@ -38,8 +43,62 @@ export default function Layout() {
   const [unreadFlagged, setUnreadFlagged] = useState(0);
   const [unreadIssues, setUnreadIssues] = useState(0);
   const [pricingOpen, setPricingOpen] = useState(location.pathname.startsWith('/pricing'));
+  // Notification feed (sidebar bell)
+  const [bellOpen, setBellOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [bellAnchor, setBellAnchor] = useState(null);
+  const bellRef = useRef(null);
+  const bellBtnRef = useRef(null);
+  const myRole = isSalesUser ? user?.role : 'admin';
   const locationRef = useRef(location.pathname);
   useEffect(() => { locationRef.current = location.pathname; }, [location.pathname]);
+
+  // Close bell on outside click / route change
+  useEffect(() => { setBellOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!bellOpen) return;
+    const onDown = (e) => {
+      if (bellRef.current && !bellRef.current.contains(e.target)) setBellOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [bellOpen]);
+
+  // Poll feed unread count every 30s (socket below covers live)
+  useEffect(() => {
+    if (!getNotificationsFeedUnread) return;
+    const fetchCount = () => {
+      getNotificationsFeedUnread().then(r => setUnreadNotifs(r.data?.unread || 0)).catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, [getNotificationsFeedUnread]);
+
+  const openBell = () => {
+    setBellOpen(o => !o);
+    if (bellOpen) return; // closing
+    if (bellBtnRef.current) setBellAnchor(bellBtnRef.current.getBoundingClientRect());
+    setNotifLoading(true);
+    getNotificationsFeed()
+      .then(r => setNotifications(r.data?.notifications || []))
+      .catch(() => {})
+      .finally(() => setNotifLoading(false));
+  };
+
+  const handleNotifRead = (id) => {
+    setNotifications(prev => prev.map(n => (n.id === id ? { ...n, is_read: 1 } : n)));
+    setUnreadNotifs(prev => Math.max(0, prev - 1));
+    markFeedNotificationRead(id).catch(() => {});
+  };
+
+  const handleMarkAllNotifsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+    setUnreadNotifs(0);
+    markAllFeedNotificationsRead().catch(() => {});
+  };
 
   const playNotificationSound = useCallback(() => {
     try {
@@ -126,16 +185,40 @@ export default function Layout() {
       playNotificationSound();
     };
 
+    // Live issues badge — fires when a student opens a new issue or replies
+    // (previously this only refreshed on the 30s poll, unlike chat).
+    const handleIssueNotif = () => {
+      if (!locationRef.current.startsWith('/issues')) {
+        setUnreadIssues(prev => prev + 1);
+        playNotificationSound();
+      }
+    };
+
+    // Bell-panel feed — each role gets its own row; keep only ours. Types
+    // that already chime through the dedicated handlers above stay silent
+    // here so a single event never double-beeps.
+    const QUIET_TYPES = ['chat_message', 'issue_created', 'issue_reply', 'new_order', 'flagged_message'];
+    const handleStaffNotif = (n) => {
+      if (n.role !== myRole) return;
+      if (!n.is_update) setUnreadNotifs(prev => prev + 1);
+      setNotifications(prev => [n, ...prev.filter(x => x.id !== n.id)]);
+      if (!QUIET_TYPES.includes(n.type)) playNotificationSound();
+    };
+
     socket.on('newOrderNotification', handleNewOrder);
     socket.on('chatNotification', handleChatNotif);
     socket.on('flaggedMessage', handleFlagged);
+    socket.on('issueNotification', handleIssueNotif);
+    socket.on('staffNotification', handleStaffNotif);
 
     return () => {
       socket.off('newOrderNotification', handleNewOrder);
       socket.off('chatNotification', handleChatNotif);
       socket.off('flaggedMessage', handleFlagged);
+      socket.off('issueNotification', handleIssueNotif);
+      socket.off('staffNotification', handleStaffNotif);
     };
-  }, [token, playNotificationSound]);
+  }, [token, playNotificationSound, myRole]);
 
   // Clear order badge after 5s on orders page
   useEffect(() => {
@@ -174,6 +257,47 @@ export default function Layout() {
 
   return (
     <div className="app-layout">
+      {/* Notification bell — fixed top-right; .main-content reserves a
+          topbar-height gap so page content never sits under it. */}
+      <div ref={bellRef} style={{ position: 'fixed', top: 14, right: 28, zIndex: 250 }}>
+        <button
+          type="button"
+          onClick={openBell}
+          aria-label="Notifications"
+          title="Notifications"
+          style={{
+            position: 'relative', width: 42, height: 42, borderRadius: 12,
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            color: 'var(--text-secondary)', cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)',
+          }}
+        >
+          <FiBell size={18} />
+          {unreadNotifs > 0 && (
+            <span style={{
+              position: 'absolute', top: -5, right: -5,
+              minWidth: 18, height: 18, borderRadius: 9,
+              background: 'var(--error)', color: '#fff',
+              fontSize: 10, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 5px', animation: 'pulse 2s infinite',
+            }}>
+              {unreadNotifs > 99 ? '99+' : unreadNotifs}
+            </span>
+          )}
+        </button>
+        {bellOpen && (
+          <NotificationPanel
+            notifications={notifications}
+            loading={notifLoading}
+            onItemRead={handleNotifRead}
+            onMarkAllRead={handleMarkAllNotifsRead}
+            onClose={() => setBellOpen(false)}
+            isSalesUser={isSalesUser}
+          />
+        )}
+      </div>
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="logo-icon" style={{ background: panelGradient }}>

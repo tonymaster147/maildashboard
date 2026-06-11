@@ -36,6 +36,19 @@ export const getAllTutors = () => api.get('/admin/tutors');
 export const createTutor = (data) => api.post('/admin/tutors', data);
 export const updateTutor = (id, data) => api.put(`/admin/tutors/${id}`, data);
 export const deleteTutor = (id) => api.delete(`/admin/tutors/${id}`);
+// Notification feed (bell panel) — role-aware; same paths exist under /sales
+export const getNotificationsFeed = () => api.get('/admin/notifications-feed');
+export const getNotificationsFeedUnread = () => api.get('/admin/notifications-feed/unread-count');
+export const markFeedNotificationRead = (id) => api.put(`/admin/notifications-feed/${id}/read`);
+export const markAllFeedNotificationsRead = () => api.put('/admin/notifications-feed/read-all');
+
+export const uploadTutorPhoto = (file) => {
+  const fd = new FormData();
+  fd.append('photo', file);
+  return api.post('/admin/tutors/upload-photo', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
 
 // Orders
 export const getAllOrders = (params) => api.get('/admin/orders', { params });
@@ -167,6 +180,10 @@ export const salesApi = {
   deleteCoupon: (id) => api.delete(`/sales/coupons/${id}`),
   getNotifications: () => api.get('/sales/notifications'),
   markNotificationRead: (id) => api.put(`/sales/notifications/${id}/read`),
+  getNotificationsFeed: () => api.get('/sales/notifications-feed'),
+  getNotificationsFeedUnread: () => api.get('/sales/notifications-feed/unread-count'),
+  markFeedNotificationRead: (id) => api.put(`/sales/notifications-feed/${id}/read`),
+  markAllFeedNotificationsRead: () => api.put('/sales/notifications-feed/read-all'),
   getPricingRules: () => api.get('/sales/pricing-rules'),
   createPricingRule: (data) => api.post('/sales/pricing-rules', data),
   updatePricingRule: (id, data) => api.put(`/sales/pricing-rules/${id}`, data),

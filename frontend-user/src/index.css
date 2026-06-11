@@ -1,6 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import './styles/v2-shell.css';
+@import './styles/v2-dashboard.css';
+@import './styles/v2-neworder.css';
+@import './styles/v2-chat.css';
+@import './styles/v2-auth.css';
+@import './styles/v2-mobile-polish.css';
 
 :root {
+  /* ─── Legacy tokens (kept so unmigrated pages keep rendering) ─── */
   --primary: #ffffff;
   --primary-light: #f8fafc;
   --primary-dark: #f1f5f9;
@@ -28,6 +35,85 @@
   --radius-sm: 8px;
   --radius-lg: 16px;
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── v2 design tokens (single source of truth — change here to retheme) ─── */
+  /* Surfaces */
+  --v2-bg:               #f6f7fb;
+  --v2-surface:          #ffffff;
+  --v2-surface-hover:    #f9fafc;
+  --v2-border:           #e3e7ed;
+  --v2-border-strong:    #cfd5dd;
+
+  /* Text */
+  --v2-text-primary:     #1f2937;
+  --v2-text-secondary:   #4b5563;
+  --v2-text-muted:       #9ca3af;
+  --v2-text-inverse:     #ffffff;
+
+  /* Brand accent (CTA blue) */
+  --v2-accent:           #2563eb;
+  --v2-accent-hover:     #1d4ed8;
+  --v2-accent-soft:      #dbeafe;
+  --v2-accent-soft-2:    #eff6ff;
+
+  /* CTA red (PLACE NEW ORDER / destructive) */
+  --v2-red:              #dc2626;
+  --v2-red-hover:        #b91c1c;
+  --v2-red-soft:         #fee2e2;
+
+  /* Status colors */
+  --v2-green:            #16a34a;
+  --v2-green-soft:       #dcfce7;
+  --v2-orange:           #f59e0b;
+  --v2-orange-text:      #b45309;
+  --v2-orange-soft:      #fef3c7;
+  --v2-yellow-soft:      #fef9c3;
+  --v2-purple:           #7c3aed;
+  --v2-purple-soft:      #ede9fe;
+  --v2-indigo:           #6366f1;
+  --v2-indigo-soft:      #e0e7ff;
+
+  /* Hero gradient palette (Submit Assignment banner) */
+  --v2-grad-blue:        #1e40af;
+  --v2-grad-indigo:      #6366f1;
+  --v2-grad-pink:        #ec4899;
+  --v2-grad-hero:        linear-gradient(120deg, var(--v2-grad-blue) 0%, var(--v2-grad-indigo) 55%, var(--v2-grad-pink) 100%);
+
+  /* Dark card (Student Voice testimonial slider) */
+  --v2-dark-surface:     #0f172a;
+  --v2-dark-text:        #ffffff;
+  --v2-dark-text-muted:  rgba(255, 255, 255, 0.6);
+  --v2-dark-accent:      #a5b4fc;
+
+  /* Radii */
+  --v2-radius-sm:        6px;
+  --v2-radius:           10px;
+  --v2-radius-lg:        12px;
+  --v2-radius-xl:        14px;
+  --v2-radius-pill:      999px;
+
+  /* Shadows */
+  --v2-shadow-sm:        0 1px 2px rgba(15, 23, 42, 0.05);
+  --v2-shadow:           0 4px 12px rgba(15, 23, 42, 0.06);
+  --v2-shadow-lg:        0 12px 36px rgba(15, 23, 42, 0.12);
+  --v2-shadow-cta:       0 6px 14px rgba(220, 38, 38, 0.25);
+
+  /* Spacing scale (use sparingly — most v2 styles inline px) */
+  --v2-space-1:          4px;
+  --v2-space-2:          8px;
+  --v2-space-3:          12px;
+  --v2-space-4:          16px;
+  --v2-space-5:          20px;
+  --v2-space-6:          24px;
+  --v2-space-8:          32px;
+
+  /* Sidebar / topbar measurements */
+  --v2-sidebar-width:    240px;
+  --v2-topbar-height:    68px;
+
+  /* Motion */
+  --v2-transition:       all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --v2-transition-fast:  all 0.12s ease;
 }
 
 * {

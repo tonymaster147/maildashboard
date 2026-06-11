@@ -87,11 +87,18 @@ exports.createIssue = async (req, res) => {
       [issueId, userId, 'user', description.trim()]
     );
 
-    // In-app notifications for admin + sales
-    const msg = `New issue #${issueId} — ${subject}`;
-    for (const role of ['admin', 'sales_lead', 'sales_executive']) {
-      await db.query('INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-        [role, 'issue_created', msg, issueId, 'issue']);
+    // In-app notifications for admin + sales (persisted + live panel push)
+    {
+      const io = req.app.get('io');
+      const { notifyStaff } = require('../services/notifyUser');
+      await notifyStaff(io, {
+        type: 'issue_created',
+        message: `New issue #${issueId} — ${subject}`,
+        referenceId: issueId,
+        referenceType: 'issue',
+      }).catch(e => console.error('issue_created staff notify failed:', e.message));
+      // Sidebar badge bump
+      if (io) io.to('admin_monitor').emit('issueNotification', { issue_id: issueId, kind: 'created' });
     }
 
     // Email admin + sales (non-blocking)
@@ -228,11 +235,16 @@ exports.addMessage = async (req, res) => {
 
     // Notify the OTHER side
     if (role === 'user') {
-      const notifMsg = `User replied on issue #${id}`;
-      for (const r of ['admin', 'sales_lead', 'sales_executive']) {
-        await db.query('INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-          [r, 'issue_reply', notifMsg, id, 'issue']);
-      }
+      const io = req.app.get('io');
+      const { notifyStaff } = require('../services/notifyUser');
+      await notifyStaff(io, {
+        type: 'issue_reply',
+        message: `${issue.user_name || 'User'} replied on issue #${id} — ${issue.subject}`,
+        referenceId: Number(id),
+        referenceType: 'issue',
+      }).catch(e => console.error('issue_reply staff notify failed:', e.message));
+      // Sidebar badge bump
+      if (io) io.to('admin_monitor').emit('issueNotification', { issue_id: Number(id), kind: 'reply' });
       const recipients = await getAdminAndSalesRecipients();
       sendIssueReplyToAdmin({ issueId: id, subject: issue.subject, body: message.trim(), userName: issue.user_name, recipients })
         .catch(e => console.error('Issue reply admin email error:', e));
@@ -242,8 +254,13 @@ exports.addMessage = async (req, res) => {
         sendIssueReplyToUser({ issueId: id, subject: issue.subject, body: message.trim(), userName: issue.user_name, to: issue.user_email })
           .catch(e => console.error('Issue reply user email error:', e));
       }
-      await db.query('INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [issue.user_id, 'user', 'issue_reply', `Support replied on issue #${id}`, id, 'issue']);
+      const { notifyUser } = require('../services/notifyUser');
+      await notifyUser(req.app.get('io'), issue.user_id, {
+        type: 'issue_reply',
+        message: `Support replied on issue #${id}`,
+        referenceId: Number(id),
+        referenceType: 'issue',
+      });
     }
 
     res.status(201).json({ message: 'Reply added' });
@@ -290,8 +307,13 @@ exports.closeIssue = async (req, res) => {
 
     const [[issue]] = await db.query('SELECT user_id, subject FROM issues WHERE id = ?', [id]);
     if (issue) {
-      await db.query('INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [issue.user_id, 'user', 'issue_closed', `Issue #${id} has been closed`, id, 'issue']);
+      const { notifyUser } = require('../services/notifyUser');
+      await notifyUser(req.app.get('io'), issue.user_id, {
+        type: 'issue_closed',
+        message: `Issue #${id} has been closed`,
+        referenceId: Number(id),
+        referenceType: 'issue',
+      });
     }
     res.json({ message: 'Issue closed' });
   } catch (err) {
@@ -304,6 +326,18 @@ exports.reopenIssue = async (req, res) => {
   try {
     const { id } = req.params;
     await db.query("UPDATE issues SET status = 'open', closed_at = NULL, closed_by_role = NULL WHERE id = ?", [id]);
+
+    const [[issue]] = await db.query('SELECT user_id FROM issues WHERE id = ?', [id]);
+    if (issue) {
+      const { notifyUser } = require('../services/notifyUser');
+      await notifyUser(req.app.get('io'), issue.user_id, {
+        type: 'issue_reply',
+        message: `Issue #${id} has been reopened by support`,
+        referenceId: Number(id),
+        referenceType: 'issue',
+      }).catch(e => console.error('issue reopen notify failed:', e.message));
+    }
+
     res.json({ message: 'Issue reopened' });
   } catch (err) {
     console.error('reopenIssue error:', err);

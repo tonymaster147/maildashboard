@@ -1,9 +1,14 @@
+// ForgotAccessCode — v2 split-screen auth shell. Email-based recovery API
+// flow preserved verbatim.
+
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FiMail, FiArrowLeft } from 'react-icons/fi';
 import { forgotAccessCode } from '../services/api';
 import { useSiteBranding } from '../context/SiteBrandingContext';
-import { FiMail, FiArrowLeft } from 'react-icons/fi';
 import Notice from '../components/Notice';
+import { C } from '../theme/tokens';
+import { AuthShell } from '../components/ui';
 
 export default function ForgotAccessCode() {
   const brand = useSiteBranding();
@@ -17,7 +22,6 @@ export default function ForgotAccessCode() {
     setError('');
     setMessage('');
     setLoading(true);
-
     try {
       const res = await forgotAccessCode({ email });
       setMessage(res.data.message);
@@ -29,34 +33,67 @@ export default function ForgotAccessCode() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <div className="text-center mb-3">
-          {brand.logoUrl ? (
-            <img src={brand.logoUrl} alt={brand.name} style={{ maxHeight: 60, maxWidth: 200, objectFit: 'contain', marginBottom: 16 }} />
-          ) : (
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🔑</div>
-          )}
-          <h1>Forgot Access Code</h1>
-          <p className="subtitle">Enter your {brand.name} email to receive a new access code</p>
-        </div>
+    <AuthShell
+      title="Forgot access code?"
+      subtitle={`Enter your ${brand.name} email and we'll send a new access code right away.`}
+      heroTitle="Lost access? We've got you."
+      heroSubtitle="One quick email and you're back in — no support ticket needed."
+      bullets={[
+        'New access code delivered in seconds',
+        'No password reset hoops',
+        'Same account, same orders, picked up where you left off',
+      ]}
+    >
+      {error && <Notice type="error">{error}</Notice>}
+      {message && <Notice type="success">{message}</Notice>}
 
-        {error && <Notice type="error">{error}</Notice>}
-        {message && <Notice type="success">{message}</Notice>}
+      <form onSubmit={handleSubmit}>
+        <Field label="Email Address">
+          <input
+            type="email" className="form-input"
+            placeholder="your@email.com"
+            value={email} onChange={e => setEmail(e.target.value)}
+            required autoComplete="email"
+          />
+        </Field>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input type="email" className="form-input" placeholder="Enter your email" value={email} onChange={e => setEmail(e.target.value)} required />
-          </div>
-          <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={loading}>
-            {loading ? <div className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></div> : <><FiMail size={18} /> Send New Access Code</>}
-          </button>
-        </form>
+        <button
+          type="submit" disabled={loading}
+          style={primaryBtnStyle(loading)}
+        >
+          {loading
+            ? <div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+            : <><FiMail size={16} /> Send New Access Code</>}
+        </button>
+      </form>
 
-        <div className="auth-divider">Remember your code?</div>
-        <Link to="/login" className="btn btn-secondary btn-lg" style={{ width: '100%' }}><FiArrowLeft size={16} /> Back to Login</Link>
-      </div>
+      <div className="v2-auth-link-strip">Remember your code?</div>
+      <Link to="/login" className="v2-auth-secondary-btn">
+        <FiArrowLeft size={14} /> Back to Login
+      </Link>
+    </AuthShell>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{
+        display: 'block', fontSize: 11, fontWeight: 700, color: C.textMuted,
+        letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6,
+      }}>
+        {label}
+      </label>
+      {children}
     </div>
   );
 }
+
+const primaryBtnStyle = (loading) => ({
+  width: '100%', marginTop: 8, padding: '12px 18px', borderRadius: 10,
+  border: 'none', background: C.accent, color: '#fff',
+  cursor: loading ? 'not-allowed' : 'pointer',
+  fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  opacity: loading ? 0.7 : 1,
+});

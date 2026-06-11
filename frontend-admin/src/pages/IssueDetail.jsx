@@ -24,6 +24,20 @@ export default function IssueDetail() {
     }).catch(() => setLoading(false));
   };
   useEffect(() => { load(); }, [id]);
+
+  // Silent refresh while viewing — new replies appear without a manual
+  // reload, and each fetch advances staff_seen_at so the sidebar badge
+  // can't resurrect for messages that arrived while we were watching.
+  useEffect(() => {
+    const t = setInterval(() => {
+      getIssue(id).then(r => {
+        setIssue(r.data.issue);
+        setMessages(prev => ((r.data.messages || []).length !== prev.length ? r.data.messages : prev));
+      }).catch(() => {});
+    }, 10000);
+    return () => clearInterval(t);
+  }, [id]);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const send = async (e) => {

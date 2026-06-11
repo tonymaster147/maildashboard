@@ -143,7 +143,9 @@ body {
 .main-content {
   flex: 1;
   margin-left: 260px;
-  padding: 24px 32px;
+  /* Top padding reserves a topbar-style strip for the fixed notification
+     bell so page headers and action buttons never sit underneath it. */
+  padding: 72px 32px 24px;
   min-height: 100vh;
 }
 
@@ -828,7 +830,8 @@ tr:hover td {
   }
   .main-content {
     margin-left: 0;
-    padding: 16px;
+    /* keep the topbar strip for the fixed bell on mobile too */
+    padding: 64px 16px 16px;
   }
   .stats-grid {
     grid-template-columns: 1fr;

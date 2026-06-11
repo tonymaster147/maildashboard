@@ -1,0 +1,125 @@
+/* ============================================================
+   v2 DASHBOARD — page-level grid + active-order card grid +
+   marketing row responsive rules. CSS variables only.
+   ============================================================ */
+
+/* Animated slide-in for the testimonial slider */
+@keyframes v2FadeSlide {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Two-column dashboard body: main (orders) + rail (login details) */
+.v2-dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 22px;
+}
+
+.v2-dash-section-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--v2-text-primary);
+  margin: 0 0 14px;
+  letter-spacing: 0.5px;
+}
+
+.v2-dash-row-with-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+}
+
+.v2-show-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--v2-accent);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--v2-accent-soft-2);
+  transition: var(--v2-transition-fast);
+  letter-spacing: 0.4px;
+}
+.v2-show-all-btn:hover { background: var(--v2-accent-soft); }
+
+/* Active order card grid (4 columns: info / status / tutor / cta).
+   Status column is generous because admin-configured status names can be
+   long ("Paid - Full (Not Assigned)"); long ones still ellipsis-truncate
+   inside the Pill with a hover tooltip. */
+.v2-order-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 190px minmax(0, 1.1fr) 196px;
+  gap: 18px;
+  align-items: center;
+}
+
+/* Marketing row — magazine-style asymmetric on desktop */
+.v2-mkt-grid {
+  grid-template-columns: 1.7fr 1fr;
+}
+
+/* ── Tablet + below: stack everything ─────────────────────── */
+@media (max-width: 1024px) {
+  .v2-dash-grid { grid-template-columns: minmax(0, 1fr); }
+  .v2-mkt-grid  { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* ── Mobile only ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .v2-order-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .v2-order-grid > * { width: 100%; }
+  .v2-order-cta { width: 100% !important; padding: 12px !important; }
+  .v2-dash-section-title { font-size: 15px !important; }
+  .v2-cta-banner { padding: 18px !important; gap: 14px !important; }
+  .v2-cta-banner-title { font-size: 16px !important; }
+  .v2-cta-banner-text  { font-size: 12px !important; }
+  .v2-cta-banner-button { width: 100% !important; justify-content: center; }
+  .v2-marketing-hero { padding: 56px 18px 18px !important; }
+  .v2-marketing-hero-title   { font-size: 18px !important; max-width: 100% !important; }
+  .v2-marketing-hero-excerpt { font-size: 12px !important; max-width: 100% !important; }
+}
+
+/* ── OrderDetail page grid (2 cols on desktop, stack on tablet+) ── */
+.v2-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.v2-chat-cta-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+@media (max-width: 1024px) {
+  .v2-detail-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .v2-chat-cta-row { flex-direction: column; }
+}
+
+/* ── PaymentHistory row grid ── */
+.v2-payment-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px 140px 40px;
+  gap: 16px;
+  align-items: center;
+}
+@media (max-width: 640px) {
+  .v2-payment-grid {
+    grid-template-columns: 1fr;
+    gap: 8px !important;
+  }
+  .v2-payment-grid > * { text-align: left !important; }
+}

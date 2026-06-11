@@ -78,6 +78,7 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/files', require('./routes/files'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/issues', require('./routes/issues'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/tutor', require('./routes/tutor'));
 app.use('/api/sales', require('./routes/sales'));

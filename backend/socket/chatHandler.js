@@ -116,6 +116,16 @@ module.exports = function setupSocket(io) {
         }
         const orderOwnerId = orders[0].user_id;
 
+        // Students can't message the tutor channel before a tutor exists —
+        // those messages would land in a room nobody is ever assigned to read.
+        if (channel === 'tutor' && senderRole === 'user') {
+          const [assigned] = await db.query('SELECT id FROM order_tutors WHERE order_id = ? LIMIT 1', [order_id]);
+          if (assigned.length === 0) {
+            socket.emit('error', { message: 'A tutor has not been assigned to this order yet. Please use Support Chat.' });
+            return;
+          }
+        }
+
         // Filter message
         const { filteredMessage, isFlagged, flagReason } = await filterMessage(message);
 
@@ -126,6 +136,30 @@ module.exports = function setupSocket(io) {
         );
 
         const senderName = await getSenderName(senderRole, senderId);
+
+        // ── Advance read cursors for everyone currently VIEWING this room ──
+        // Without this, a message that arrives while the recipient has the
+        // chat open (delivered via socket, so getMessages never re-runs)
+        // stays "newer than their cursor" — and the next unread poll
+        // resurrects a badge for a conversation they already read/replied
+        // to. Anyone in the socket room has seen the message by definition.
+        let viewerKeys = new Set();
+        try {
+          const roomSockets = await io.in(`order_${order_id}`).fetchSockets();
+          for (const s of roomSockets) {
+            if (!s.user) continue;
+            viewerKeys.add(`${s.user.role}_${s.user.id}`);
+            await db.query(
+              `INSERT INTO chat_read_cursors (order_id, user_id, role, last_read_at)
+               VALUES (?, ?, ?, NOW(3))
+               ON DUPLICATE KEY UPDATE last_read_at = NOW(3)`,
+              [order_id, s.user.id, s.user.role]
+            );
+          }
+        } catch (e) {
+          console.error('Read-cursor advance failed:', e.message);
+        }
+        const ownerIsViewing = viewerKeys.has(`user_${orderOwnerId}`);
 
         const messageData = {
           id: result.insertId,
@@ -149,14 +183,29 @@ module.exports = function setupSocket(io) {
           if (senderRole === 'user') {
             // User sent → deliver to assigned tutors
             const [tutors] = await db.query('SELECT tutor_id FROM order_tutors WHERE order_id = ?', [order_id]);
+            const tutorOrderRef = await require('../utils/orderCode').formatOrderRef(order_id);
             for (const t of tutors) {
               io.to(`tutor_${t.tutor_id}`).emit('newMessage', messageData);
               io.to(`tutor_${t.tutor_id}`).emit('chatNotification', { order_id, sender_name: senderName, message: filteredMessage, channel });
+              // Tutor bell panel (deduped per order); skip if tutor is in the room
+              if (!viewerKeys.has(`tutor_${t.tutor_id}`)) {
+                require('../services/notifyUser').notifyTutorChat(io, t.tutor_id, {
+                  orderId: order_id, senderName, orderRef: tutorOrderRef,
+                }).catch(e => console.error('tutor chat bell notify failed:', e.message));
+              }
             }
           } else {
             // Tutor sent → deliver to order owner
             io.to(`user_${orderOwnerId}`).emit('newMessage', messageData);
             io.to(`user_${orderOwnerId}`).emit('chatNotification', { order_id, sender_name: senderName, message: filteredMessage, channel });
+            // Bell-panel notification (deduped per order+channel); skip when
+            // the student is viewing the room — they're reading it live.
+            if (!ownerIsViewing) {
+              require('../services/notifyUser').notifyUserChat(io, orderOwnerId, {
+                orderId: order_id, channel, senderName,
+                orderRef: await require('../utils/orderCode').formatOrderRef(order_id),
+              }).catch(e => console.error('chat bell notify failed:', e.message));
+            }
           }
 
         } else {
@@ -167,22 +216,38 @@ module.exports = function setupSocket(io) {
             // User sent → deliver to all admin/sales directly
             emitToAdminSales('newMessage', messageData);
             emitToAdminSales('chatNotification', { order_id, sender_name: senderName, message: filteredMessage, channel });
+            // Staff bell panel (deduped per role+order)
+            require('../services/notifyUser').notifyStaffChat(io, {
+              orderId: order_id, senderName,
+              orderRef: await require('../utils/orderCode').formatOrderRef(order_id),
+            }).catch(e => console.error('staff chat bell notify failed:', e.message));
           } else {
             // Admin/Sales sent → deliver to order owner
             io.to(`user_${orderOwnerId}`).emit('newMessage', messageData);
             io.to(`user_${orderOwnerId}`).emit('chatNotification', { order_id, sender_name: senderName, message: filteredMessage, channel });
+            // Bell-panel notification (deduped per order+channel); skip when
+            // the student is viewing the room — they're reading it live.
+            if (!ownerIsViewing) {
+              require('../services/notifyUser').notifyUserChat(io, orderOwnerId, {
+                orderId: order_id, channel, senderName,
+                orderRef: await require('../utils/orderCode').formatOrderRef(order_id),
+              }).catch(e => console.error('chat bell notify failed:', e.message));
+            }
             // Also deliver to other admin/sales (exclude sender)
             emitToAdminSales('newMessage', messageData, socket.id);
           }
         }
 
-        // If flagged, notify admin/sales only
+        // If flagged, notify admin/sales only (bell rows for all staff roles,
+        // referenced to the order so the panel can open Chat Monitor on it)
         if (isFlagged) {
           emitToAdminSales('flaggedMessage', { ...messageData, flag_reason: flagReason });
-          await db.query(
-            'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-            ['admin', 'flagged_message', `Flagged: ${flagReason} in order ${await require('../utils/orderCode').formatOrderRef(order_id)}`, result.insertId, 'chat']
-          );
+          require('../services/notifyUser').notifyStaff(io, {
+            type: 'flagged_message',
+            message: `Flagged: ${flagReason} in order ${await require('../utils/orderCode').formatOrderRef(order_id)}`,
+            referenceId: order_id,
+            referenceType: 'chat_monitor',
+          }).catch(e => console.error('flagged staff notify failed:', e.message));
         }
       } catch (error) {
         console.error('Socket sendMessage error:', error);
@@ -203,9 +268,12 @@ module.exports = function setupSocket(io) {
       });
     });
 
-    // Join admin_monitor room for order notifications (emitted by orderController/paymentController)
+    // Join admin_monitor room for order/staff notifications. Staff-only —
+    // this room now also carries the staff bell-panel feed.
     socket.on('adminMonitorAll', () => {
-      socket.join('admin_monitor');
+      if (['admin', 'sales_lead', 'sales_executive'].includes(socket.user.role)) {
+        socket.join('admin_monitor');
+      }
     });
 
     socket.on('disconnect', () => {

@@ -1,8 +1,43 @@
+// OrderDetail — v2 styled. Every block from the legacy page is preserved:
+// header + status, order details summary, site contact email link, payment
+// summary with all 3 conditional CTAs (complete / pay remaining / pay
+// installments), installment plan list, tutor list, instructions, login
+// details editor (via shared UpdateCredentialModal), files with "Added later"
+// pill + Drive/file_url download fallback, upload zone, tutor/support chat
+// buttons, and the EmbeddedCheckout swap.
+
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent, getOrderInstallments, payInstallment, payAllInstallments, updateOrderLoginDetails } from '../services/api';
+import {
+  getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent,
+  getOrderInstallments, payInstallment, payAllInstallments,
+} from '../services/api';
 import EmbeddedCheckout from '../components/EmbeddedCheckout';
-import { FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard, FiHeadphones, FiMail, FiKey, FiSave, FiEdit2, FiEye, FiEyeOff } from 'react-icons/fi';
+import {
+  FiDownload, FiArrowLeft, FiCalendar, FiUser, FiBookOpen, FiUpload, FiCreditCard,
+  FiHeadphones, FiMail, FiKey, FiEdit2,
+} from 'react-icons/fi';
+import { C } from '../theme/tokens';
+import {
+  Card, Pill, Row, Avatar, initialsFrom,
+  LoginDetailsCard, Stars,
+} from '../components/ui';
+
+// Resolve relative photo URLs (/uploads/foo.png) against API origin.
+const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+const resolvePhoto = (u) => (!u ? null : (u.startsWith('http') ? u : `${API_ORIGIN}${u}`));
+
+// Map admin/tutor status codes → pill colors (same table used by ActiveOrderCard)
+const STATUS_STYLE = {
+  in_progress:  { bg: C.greenSoft,  color: C.green },
+  active:       { bg: C.greenSoft,  color: C.green },
+  work_stopped: { bg: C.redSoft,    color: C.red },
+  pending:      { bg: C.orangeSoft, color: C.orangeText },
+  completed:    { bg: C.accentSoft, color: C.accent },
+  cancelled:    { bg: '#eef2f7',    color: C.textMuted },
+  incomplete:   { bg: C.orangeSoft, color: C.orangeText },
+};
+const statusStyleFor = (code) => STATUS_STYLE[code] || { bg: '#eef2f7', color: C.textSecondary };
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -13,51 +48,19 @@ export default function OrderDetail() {
   const [checkout, setCheckout] = useState(null);
   const [installments, setInstallments] = useState([]);
 
-  // Login details edit state
-  const [loginEditing, setLoginEditing] = useState(false);
-  const [loginForm, setLoginForm] = useState({ school_url: '', school_username: '', school_password: '' });
-  const [loginSaving, setLoginSaving] = useState(false);
-  const [loginShowPass, setLoginShowPass] = useState(false);
-
   const fetchOrder = () => {
     getOrderDetail(id).then(res => {
       setOrder(res.data);
       setLoading(false);
       if (res.data?.has_installments) {
-        getOrderInstallments(id).then(r => setInstallments(r.data || [])).catch(() => {});
+        getOrderInstallments(id).then(r => setInstallments(r.data || [])).catch(() => setInstallments([]));
       } else {
         setInstallments([]);
       }
     }).catch(() => setLoading(false));
   };
 
-  useEffect(() => {
-    fetchOrder();
-  }, [id]);
-
-  const openLoginEdit = () => {
-    setLoginForm({
-      school_url: order?.school_url || '',
-      school_username: order?.school_username || '',
-      school_password: order?.school_password || ''
-    });
-    setLoginShowPass(false);
-    setLoginEditing(true);
-  };
-
-  const saveLoginDetails = async (e) => {
-    e.preventDefault();
-    setLoginSaving(true);
-    try {
-      await updateOrderLoginDetails(id, loginForm);
-      setLoginEditing(false);
-      fetchOrder();
-    } catch (err) {
-      alert(err.response?.data?.error || 'Failed to update login details');
-    } finally {
-      setLoginSaving(false);
-    }
-  };
+  useEffect(() => { fetchOrder(); }, [id]);
 
   const handlePayInstallment = async (instId) => {
     setPaymentLoading(true);
@@ -88,7 +91,6 @@ export default function OrderDetail() {
     const formData = new FormData();
     Array.from(files).forEach(f => formData.append('files', f));
     formData.append('order_id', order.id);
-
     try {
       await uploadFiles(formData);
       fetchOrder();
@@ -120,11 +122,17 @@ export default function OrderDetail() {
     setPaymentLoading(false);
   };
 
-  if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 320 }}>
+        <div className="loading-spinner" />
+      </div>
+    );
+  }
 
   if (checkout) {
     return (
-      <div style={{ padding: '40px 20px' }}>
+      <Card padding={0} style={{ overflow: 'hidden', maxWidth: 720, margin: '24px auto' }}>
         <EmbeddedCheckout
           clientSecret={checkout.clientSecret}
           amount={checkout.amount}
@@ -133,259 +141,423 @@ export default function OrderDetail() {
           onSuccess={() => { setCheckout(null); fetchOrder(); }}
           onCancel={() => setCheckout(null)}
         />
-      </div>
+      </Card>
     );
   }
-  if (!order) return <div className="card text-center"><h3>Order not found</h3></div>;
+
+  if (!order) {
+    return (
+      <Card style={{ textAlign: 'center', padding: 40 }}>
+        <h3 style={{ color: C.textPrimary }}>Order not found</h3>
+      </Card>
+    );
+  }
+
+  const orderCode = order.order_code || `#${order.id}`;
+  const statusCode = order.admin_status_code || order.status;
+  const statusName = order.admin_status_name || order.status || '—';
+  const statusStyle = statusStyleFor(statusCode);
+  const tutors = Array.isArray(order.tutors) ? order.tutors : [];
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-        <Link to="/orders" className="btn btn-sm btn-secondary"><FiArrowLeft size={14} /></Link>
-        <div>
-          <h2>Order {order.order_code || `#${order.id}`}</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>{order.course_name}</p>
+      {/* ── Header ─────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22, flexWrap: 'wrap' }}>
+        <Link
+          to="/orders"
+          aria-label="Back to orders"
+          style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: '#f1f5f9', color: C.textSecondary,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            textDecoration: 'none',
+          }}
+        >
+          <FiArrowLeft size={16} />
+        </Link>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600, letterSpacing: 0.3 }}>
+            ORDER ID:{' '}
+            <span style={{ fontFamily: 'ui-monospace, monospace', color: C.textSecondary, fontWeight: 700 }}>{orderCode}</span>
+          </div>
+          <h2 style={{
+            fontSize: 22, fontWeight: 800, color: C.textPrimary, margin: '4px 0 0',
+            letterSpacing: 0.3, textTransform: 'uppercase',
+          }}>
+            {order.course_name || order.subject_name || order.order_type_name || 'Order'}
+          </h2>
         </div>
-        <span className={`badge-status badge-${order.status}`} style={{ marginLeft: 'auto', fontSize: 14, padding: '6px 16px' }}>
-          {order.admin_status_name || order.status}
-        </span>
+        <Pill bg={statusStyle.bg} color={statusStyle.color} style={{ fontSize: 12, padding: '6px 14px' }}>
+          {statusName}
+        </Pill>
       </div>
 
-      <div className="grid-2">
-        <div className="card">
-          <h4 style={{ marginBottom: 16 }}>📋 Order Details</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="summary-row"><span className="label"><FiBookOpen size={14} /> Type</span><span>{order.order_type_name}</span></div>
-            <div className="summary-row"><span className="label">Course</span><span>{order.course_name || '—'}</span></div>
-            <div className="summary-row"><span className="label">Subject</span><span>{order.subject_name}</span></div>
-            <div className="summary-row"><span className="label">Level</span><span>{order.education_level_name}</span></div>
-            <div className="summary-row"><span className="label">Plan</span><span style={{ color: 'var(--accent)', fontWeight: 600 }}>{order.plan_tier ? order.plan_tier.charAt(0).toUpperCase() + order.plan_tier.slice(1) : (order.plan_name || '—')}</span></div>
-            <div className="summary-row"><span className="label"><FiCalendar size={14} /> Start</span><span>{new Date(order.start_date).toLocaleDateString()}</span></div>
-            <div className="summary-row"><span className="label"><FiCalendar size={14} /> End</span><span>{new Date(order.end_date).toLocaleDateString()}</span></div>
-            <div className="summary-row"><span className="label">Weeks</span><span>{order.num_weeks}</span></div>
+      {/* ── Two-column: Details + Payment ──────────────── */}
+      <div className="v2-detail-grid">
+        {/* Order Details card */}
+        <Card>
+          <SectionTitle icon={FiBookOpen}>Order Details</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Row label="Type"    value={order.order_type_name || '—'} mono={false} />
+            <Row label="Course"  value={order.course_name || '—'} mono={false} />
+            <Row label="Subject" value={order.subject_name || '—'} mono={false} />
+            <Row label="Level"   value={order.education_level_name || '—'} mono={false} />
+            <Row label="Plan"
+              value={
+                <span style={{ color: C.accent, fontWeight: 700 }}>
+                  {order.plan_tier ? capitalize(order.plan_tier) : (order.plan_name || '—')}
+                </span>
+              }
+              mono={false}
+            />
+            <Row label="Start" value={fmtDate(order.start_date)} mono={false} />
+            <Row label="End"   value={fmtDate(order.end_date)} mono={false} />
+            <Row label="Weeks" value={order.num_weeks ?? '—'} mono={false} />
           </div>
 
           {order.site_contact_email && (
             <a
-              href={`mailto:${order.site_contact_email}?subject=${encodeURIComponent(`Order ${order.order_code || `#${order.id}`} — ${order.course_name || ''}`)}`}
+              href={`mailto:${order.site_contact_email}?subject=${encodeURIComponent(`Order ${orderCode} — ${order.course_name || ''}`)}`}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                marginTop: 16,
-                padding: '10px 12px',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-sm)',
-                textDecoration: 'none',
-                color: 'inherit',
-                transition: 'var(--transition)'
+                display: 'flex', alignItems: 'center', gap: 10, marginTop: 14,
+                padding: '10px 12px', background: C.accentSoft2 || '#eff6ff',
+                border: `1px solid ${C.border}`, borderRadius: 8,
+                textDecoration: 'none', color: 'inherit',
               }}
             >
-              <FiMail size={16} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <FiMail size={16} style={{ color: C.accent, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Need help with this order?</div>
-                <div style={{ fontWeight: 500, fontSize: 14, color: 'var(--accent)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: 11, color: C.textMuted, fontWeight: 600 }}>Need help with this order?</div>
+                <div style={{
+                  fontWeight: 600, fontSize: 13, color: C.accent,
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
                   {order.site_contact_email}
                 </div>
               </div>
             </a>
           )}
-        </div>
+        </Card>
 
-        <div className="card">
-          <h4 style={{ marginBottom: 16 }}>💰 Payment</h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="summary-row"><span className="label">Plan Price</span><span>${parseFloat(order.price).toFixed(2)}</span></div>
-            {parseFloat(order.urgent_fee) > 0 && <div className="summary-row"><span className="label">Urgent Fee</span><span style={{ color: 'var(--warning)' }}>+${parseFloat(order.urgent_fee).toFixed(2)}</span></div>}
-            {parseFloat(order.discount_amount) > 0 && <div className="summary-row"><span className="label">Discount</span><span style={{ color: 'var(--success)' }}>-${parseFloat(order.discount_amount).toFixed(2)}</span></div>}
-            <div className="summary-row total"><span className="label">Total</span><span className="value">${parseFloat(order.total_price).toFixed(2)}</span></div>
+        {/* Payment card */}
+        <Card>
+          <SectionTitle icon={FiCreditCard}>Payment</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Row label="Plan Price" value={`$${parseFloat(order.price).toFixed(2)}`} mono={false} />
+            {parseFloat(order.urgent_fee) > 0 && (
+              <Row label="Urgent Fee" value={<span style={{ color: C.orangeText }}>+${parseFloat(order.urgent_fee).toFixed(2)}</span>} mono={false} />
+            )}
+            {parseFloat(order.discount_amount) > 0 && (
+              <Row label="Discount" value={<span style={{ color: C.green }}>−${parseFloat(order.discount_amount).toFixed(2)}</span>} mono={false} />
+            )}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 0', borderTop: `1px solid ${C.border}`, marginTop: 4,
+            }}>
+              <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>
+                Total
+              </span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: C.accent }}>
+                ${parseFloat(order.total_price).toFixed(2)}
+              </span>
+            </div>
             {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && (
               <>
-                <div className="summary-row" style={{ color: 'var(--success)' }}><span className="label">Paid</span><span>${parseFloat(order.amount_paid).toFixed(2)}</span></div>
+                <Row label="Paid" value={<span style={{ color: C.green }}>${parseFloat(order.amount_paid).toFixed(2)}</span>} mono={false} />
                 {parseFloat(order.convenience_fee || 0) > 0 && (
-                  <div className="summary-row" style={{ color: 'var(--warning)' }}><span className="label">Convenience Fee</span><span>+${parseFloat(order.convenience_fee).toFixed(2)}</span></div>
+                  <Row label="Conv Fee" value={<span style={{ color: C.orangeText }}>+${parseFloat(order.convenience_fee).toFixed(2)}</span>} mono={false} />
                 )}
-                <div className="summary-row" style={{ color: 'var(--warning)', fontWeight: 600 }}><span className="label">Remaining</span><span>${parseFloat(order.amount_remaining).toFixed(2)}</span></div>
+                <Row
+                  label="Remaining"
+                  value={<span style={{ color: C.orangeText, fontWeight: 700 }}>${parseFloat(order.amount_remaining).toFixed(2)}</span>}
+                  mono={false}
+                />
               </>
             )}
           </div>
+
+          {/* Conditional payment CTAs — same logic as legacy page */}
           {order.status === 'incomplete' && parseFloat(order.total_price) > 0 && (
-            <button className="btn btn-primary mt-2" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 20px', fontSize: 15 }} onClick={handleCompletePayment} disabled={paymentLoading}>
-              {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : <><FiCreditCard size={18} /> Complete Payment</>}
-            </button>
+            <PrimaryButton onClick={handleCompletePayment} disabled={paymentLoading} icon={FiCreditCard}>
+              Complete Payment
+            </PrimaryButton>
           )}
           {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && order.status !== 'incomplete' && !order.has_installments && (
-            <button className="btn btn-primary mt-2" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 20px', fontSize: 15, background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={handlePayRemaining} disabled={paymentLoading}>
-              {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : <><FiCreditCard size={18} /> Pay Remaining ${parseFloat(order.amount_remaining).toFixed(2)}</>}
-            </button>
+            <PrimaryButton
+              onClick={handlePayRemaining} disabled={paymentLoading} icon={FiCreditCard}
+              gradient={`linear-gradient(135deg, ${C.orange}, ${C.orangeText})`}
+            >
+              Pay Remaining ${parseFloat(order.amount_remaining).toFixed(2)}
+            </PrimaryButton>
           )}
           {!!order.has_installments && installments.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)' }}>📅 Installment Plan</div>
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 10, color: C.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                Installment Plan
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-                {installments.map(i => (
-                  <div key={i.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 12, background: i.status === 'paid' ? 'rgba(34,197,94,0.08)' : i.status === 'overdue' ? 'rgba(220,38,38,0.08)' : 'var(--bg-input)', border: `1px solid ${i.status === 'paid' ? '#22c55e' : i.status === 'overdue' ? '#dc2626' : 'var(--border)'}`, borderRadius: 8 }}>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>Installment {i.installment_number}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Due {new Date(i.due_date).toLocaleDateString()} · <span style={{ textTransform: 'uppercase', fontWeight: 600, color: i.status === 'paid' ? '#16a34a' : i.status === 'overdue' ? '#dc2626' : 'var(--warning)' }}>{i.status}</span></div>
+                {installments.map(i => {
+                  const isPaid = i.status === 'paid';
+                  const isOverdue = i.status === 'overdue';
+                  const tone = isPaid
+                    ? { bg: C.greenSoft,  border: C.green,  text: C.green }
+                    : isOverdue
+                      ? { bg: C.redSoft,    border: C.red,    text: C.red }
+                      : { bg: '#f6f7fb',    border: C.border, text: C.orangeText };
+                  return (
+                    <div
+                      key={i.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: 12, background: tone.bg, border: `1px solid ${tone.border}`,
+                        borderRadius: 10,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 700, color: C.textPrimary }}>Installment {i.installment_number}</div>
+                        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+                          Due {fmtDate(i.due_date)} ·{' '}
+                          <span style={{ textTransform: 'uppercase', fontWeight: 700, color: tone.text, letterSpacing: 0.3 }}>{i.status}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <strong style={{ fontSize: 15, color: C.textPrimary }}>${parseFloat(i.amount).toFixed(2)}</strong>
+                        {!isPaid && (
+                          <button
+                            type="button" onClick={() => handlePayInstallment(i.id)} disabled={paymentLoading}
+                            style={{
+                              padding: '7px 14px', background: C.accent, color: '#fff', border: 'none',
+                              borderRadius: 8, fontSize: 11, fontWeight: 700, letterSpacing: 0.4, cursor: 'pointer',
+                            }}
+                          >
+                            PAY
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <strong style={{ fontSize: 15 }}>${parseFloat(i.amount).toFixed(2)}</strong>
-                      {i.status !== 'paid' && (
-                        <button className="btn btn-sm btn-primary" onClick={() => handlePayInstallment(i.id)} disabled={paymentLoading}>Pay</button>
-                      )}
+                  );
+                })}
+              </div>
+              {installments.some(i => i.status !== 'paid') && (
+                <PrimaryButton
+                  onClick={handlePayAllInstallments} disabled={paymentLoading}
+                  gradient={`linear-gradient(135deg, ${C.orange}, ${C.orangeText})`}
+                >
+                  Pay All Remaining ${installments.filter(i => i.status !== 'paid').reduce((s, i) => s + parseFloat(i.amount), 0).toFixed(2)}
+                </PrimaryButton>
+              )}
+            </div>
+          )}
+
+          {/* Assigned tutors (array — multi-tutor support) */}
+          {tutors.length > 0 && (
+            <div style={{
+              marginTop: 18, padding: '12px 14px',
+              background: C.surfaceHover, borderRadius: 10, border: `1px solid ${C.border}`,
+            }}>
+              <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 8, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                <FiUser size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+                Assigned Tutor{tutors.length > 1 ? 's' : ''}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                {tutors.map((t, i) => (
+                  <div key={t.id ?? i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Avatar
+                      initials={initialsFrom(t.name)} size={28}
+                      bg={C.indigoSoft} color={C.indigo} photo={resolvePhoto(t.photo_url)}
+                    />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary }}>{t.name}</div>
+                      <Stars value={t.rating} size={10} />
                     </div>
                   </div>
                 ))}
               </div>
-              {installments.some(i => i.status !== 'paid') && (
-                <button className="btn btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={handlePayAllInstallments} disabled={paymentLoading}>
-                  {paymentLoading ? <div className="loading-spinner" style={{ width: 18, height: 18 }}></div> : `Pay All Remaining $${installments.filter(i => i.status !== 'paid').reduce((s, i) => s + parseFloat(i.amount), 0).toFixed(2)}`}
-                </button>
-              )}
             </div>
           )}
-          {order.tutors?.length > 0 && (
-            <div style={{ marginTop: 20, padding: '12px 16px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}><FiUser size={12} /> Assigned Tutor(s)</div>
-              <div style={{ fontWeight: 500 }}>{order.tutors.map(t => t.name).join(', ')}</div>
-            </div>
-          )}
-        </div>
+        </Card>
       </div>
 
+      {/* ── Instructions ───────────────────────────────── */}
       {order.additional_instructions && (
-        <div className="card mt-2">
-          <h4 style={{ marginBottom: 12 }}>📝 Instructions</h4>
-          <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{order.additional_instructions}</p>
-        </div>
+        <Card style={{ marginTop: 16 }}>
+          <SectionTitle icon={FiEdit2}>Instructions</SectionTitle>
+          <p style={{ color: C.textSecondary, lineHeight: 1.6, margin: 0, whiteSpace: 'pre-wrap' }}>
+            {order.additional_instructions}
+          </p>
+        </Card>
       )}
 
-      <div className="card mt-2">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-          <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FiKey size={16} /> Login Details
-          </h4>
-          {order.login_updated_at && (
-            <span style={{ fontSize: 11, padding: '3px 10px', borderRadius: 10, background: 'rgba(34,197,94,0.12)', color: '#16a34a', fontWeight: 600 }}>
-              Updated {new Date(order.login_updated_at).toLocaleDateString()}
-            </span>
-          )}
-          {!loginEditing && (
-            <button onClick={openLoginEdit} className="btn btn-sm btn-secondary" style={{ marginLeft: 'auto' }}>
-              <FiEdit2 size={12} /> {order.school_url || order.school_username || order.school_password ? 'Update' : 'Add'}
-            </button>
-          )}
-        </div>
-
-        {loginEditing ? (
-          <form onSubmit={saveLoginDetails}>
-            <div className="form-group">
-              <label className="form-label">URL</label>
-              <input type="text" className="form-input" placeholder="https://school-portal.example.com" value={loginForm.school_url} onChange={e => setLoginForm({ ...loginForm, school_url: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Username</label>
-              <input type="text" className="form-input" placeholder="your school username" value={loginForm.school_username} onChange={e => setLoginForm({ ...loginForm, school_username: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <div style={{ position: 'relative' }}>
-                <input type={loginShowPass ? 'text' : 'password'} className="form-input" placeholder="••••••••" value={loginForm.school_password} onChange={e => setLoginForm({ ...loginForm, school_password: e.target.value })} style={{ paddingRight: 40 }} />
-                <button type="button" onClick={() => setLoginShowPass(s => !s)} title={loginShowPass ? 'Hide' : 'Show'} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                  {loginShowPass ? <FiEyeOff size={16} /> : <FiEye size={16} />}
-                </button>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="submit" className="btn btn-primary" disabled={loginSaving}>
-                {loginSaving ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <><FiSave size={14} /> Save</>}
-              </button>
-              <button type="button" className="btn btn-secondary" onClick={() => setLoginEditing(false)} disabled={loginSaving}>Cancel</button>
-            </div>
-          </form>
-        ) : (
-          (order.school_url || order.school_username || order.school_password) ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {order.school_url      && <div className="summary-row"><span className="label">URL</span><span style={{ wordBreak: 'break-all' }}>{order.school_url}</span></div>}
-              {order.school_username && <div className="summary-row"><span className="label">Username</span><span>{order.school_username}</span></div>}
-              {order.school_password && (
-                <div className="summary-row">
-                  <span className="label">Password</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {loginShowPass ? order.school_password : '••••••••'}
-                    <button onClick={() => setLoginShowPass(s => !s)} title={loginShowPass ? 'Hide' : 'Show'} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                      {loginShowPass ? <FiEyeOff size={14} /> : <FiEye size={14} />}
-                    </button>
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>No login details on file. Click <strong>Add</strong> to share them with your tutor and support team.</p>
-          )
-        )}
+      {/* ── Login Details (per-order; reuses shared widget) ── */}
+      <div style={{ marginTop: 16 }}>
+        <LoginDetailsCard orders={[order]} onChanged={fetchOrder} />
       </div>
 
-      <div className="card mt-2">
-        <h4 style={{ marginBottom: 16 }}>📎 Files {order.files ? `(${order.files.length})` : '(0)'}</h4>
-        
+      {/* ── Files ─────────────────────────────────────── */}
+      <Card style={{ marginTop: 16 }}>
+        <SectionTitle icon={FiDownload}>
+          Files {order.files ? `(${order.files.length})` : '(0)'}
+        </SectionTitle>
+
         {order.files?.length > 0 && (
-          <div className="file-list" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
             {order.files.map(file => (
-              <div key={file.id} className="file-item">
-                <div>
-                  <div className="file-name">
-                    {file.file_name}
-                    {Number(file.is_post_submit) === 1 && (
-                      <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', textTransform: 'uppercase', letterSpacing: 0.3 }}>
-                        Added later
-                      </span>
-                    )}
-                  </div>
-                  <div className="file-size">Uploaded by {file.uploaded_by_role} • {new Date(file.created_at).toLocaleDateString()}</div>
-                </div>
-                <a
-                  href={file.drive_file_id ? `https://drive.google.com/uc?export=download&id=${file.drive_file_id}` : file.file_url}
-                  download={file.file_name}
-                  className="btn btn-sm btn-secondary"
-                  title="Download"
-                >
-                  <FiDownload size={14} />
-                </a>
-              </div>
+              <FileRow key={file.id} file={file} />
             ))}
           </div>
         )}
 
-        {order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'incomplete' && order.status !== 'pending' && (
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <div className="file-upload-zone" onClick={() => document.getElementById('user-upload-files').click()} style={{ padding: '20px', border: '2px dashed var(--border)', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', background: 'var(--bg-card-hover)', transition: 'var(--transition)' }}>
-              {uploading ? (
-                <div className="loading-spinner" style={{ margin: '0 auto' }}></div>
-              ) : (
-                <>
-                  <FiUpload size={24} style={{ marginBottom: 8, color: 'var(--accent)' }} />
-                  <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: 0 }}>Click to upload additional files</p>
-                </>
-              )}
-            </div>
-            <input id="user-upload-files" type="file" multiple style={{ display: 'none' }} onChange={handleFileUpload} />
-          </div>
+        {!['completed', 'cancelled', 'incomplete', 'pending'].includes(order.status) && (
+          <UploadZone uploading={uploading} onUpload={handleFileUpload} />
         )}
-      </div>
+      </Card>
 
+      {/* ── Tutor + Support chat CTAs ──────────────────── */}
       {!!order.chat_enabled && (
-        <div className="mt-2" style={{ display: 'flex', gap: 12 }}>
-          <Link to={`/chat/tutor/${order.id}`} className="btn btn-lg" style={{ flex: 1, background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <FiUser size={18} /> Tutor Chat
-          </Link>
-          <Link to={`/chat/support/${order.id}`} className="btn btn-lg" style={{ flex: 1, background: 'rgba(132, 194, 37, 0.1)', border: '1px solid rgba(132, 194, 37, 0.3)', color: '#84c225', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <FiHeadphones size={18} /> Support Chat
+        <div className="v2-chat-cta-row">
+          {tutors.length > 0 ? (
+            <Link
+              to={`/chat/tutor/${order.id}`}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '14px 18px', borderRadius: 10, textDecoration: 'none',
+                background: C.indigoSoft, color: C.indigo, fontWeight: 700, letterSpacing: 0.4,
+                fontSize: 13, textTransform: 'uppercase',
+              }}
+            >
+              <FiUser size={16} /> Tutor Chat
+            </Link>
+          ) : (
+            <div
+              title="A tutor hasn't been assigned to this order yet"
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '14px 18px', borderRadius: 10,
+                background: '#eef2f7', color: C.textMuted, fontWeight: 700, letterSpacing: 0.4,
+                fontSize: 13, textTransform: 'uppercase', cursor: 'not-allowed',
+              }}
+            >
+              <FiUser size={16} /> Tutor Chat — Not assigned yet
+            </div>
+          )}
+          <Link
+            to={`/chat/support/${order.id}`}
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '14px 18px', borderRadius: 10, textDecoration: 'none',
+              background: C.greenSoft, color: C.green, fontWeight: 700, letterSpacing: 0.4,
+              fontSize: 13, textTransform: 'uppercase',
+            }}
+          >
+            <FiHeadphones size={16} /> Support Chat
           </Link>
         </div>
       )}
     </div>
   );
 }
+
+// ── Helpers ─────────────────────────────────────────────────
+function SectionTitle({ icon: Icon, children }) {
+  return (
+    <h3 style={{
+      fontSize: 13, fontWeight: 800, color: C.textPrimary, margin: '0 0 14px',
+      letterSpacing: 0.5, textTransform: 'uppercase',
+      display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      {Icon && <Icon size={14} color={C.accent} />}
+      {children}
+    </h3>
+  );
+}
+
+function PrimaryButton({ onClick, disabled, icon: Icon, gradient, children }) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={disabled}
+      style={{
+        marginTop: 14, width: '100%', padding: '13px 18px',
+        background: gradient || C.accent, color: '#fff', border: 'none', borderRadius: 10,
+        fontSize: 14, fontWeight: 700, letterSpacing: 0.4, cursor: disabled ? 'not-allowed' : 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        opacity: disabled ? 0.7 : 1,
+        textTransform: 'uppercase',
+      }}
+    >
+      {disabled
+        ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+        : <>{Icon && <Icon size={16} />} {children}</>}
+    </button>
+  );
+}
+
+function FileRow({ file }) {
+  const isPostSubmit = Number(file.is_post_submit) === 1;
+  const href = file.drive_file_id
+    ? `https://drive.google.com/uc?export=download&id=${file.drive_file_id}`
+    : file.file_url;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '10px 12px', background: C.surfaceHover,
+      border: `1px solid ${C.border}`, borderRadius: 10,
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: 13, fontWeight: 700, color: C.textPrimary,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+          }}>
+            {file.file_name}
+          </span>
+          {isPostSubmit && (
+            <Pill bg={C.orangeSoft} color={C.orangeText}>Added later</Pill>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+          Uploaded by {file.uploaded_by_role} · {fmtDate(file.created_at)}
+        </div>
+      </div>
+      <a
+        href={href} download={file.file_name} title="Download"
+        style={{
+          width: 34, height: 34, borderRadius: 8,
+          background: C.accentSoft, color: C.accent,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          textDecoration: 'none', flexShrink: 0,
+        }}
+      >
+        <FiDownload size={14} />
+      </a>
+    </div>
+  );
+}
+
+function UploadZone({ uploading, onUpload }) {
+  return (
+    <>
+      <div
+        onClick={() => document.getElementById('user-upload-files').click()}
+        style={{
+          padding: 22, border: `2px dashed ${C.border}`, borderRadius: 10,
+          textAlign: 'center', cursor: 'pointer', background: C.surfaceHover,
+        }}
+      >
+        {uploading ? (
+          <div className="loading-spinner" style={{ margin: '0 auto' }} />
+        ) : (
+          <>
+            <FiUpload size={22} style={{ marginBottom: 8, color: C.accent }} />
+            <p style={{ color: C.textSecondary, fontSize: 13, margin: 0, fontWeight: 600 }}>
+              Click to upload additional files
+            </p>
+          </>
+        )}
+      </div>
+      <input id="user-upload-files" type="file" multiple style={{ display: 'none' }} onChange={onUpload} />
+    </>
+  );
+}
+
+const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
+const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);

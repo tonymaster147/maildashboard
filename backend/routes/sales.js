@@ -78,6 +78,13 @@ router.put('/urgent-fee', requirePermission('settings'), pricingController.updat
 
 // Notifications — always allowed for sales users
 router.get('/notifications', adminController.getNotifications);
+// Notification feed (bell panel) — role-aware, mirrors the student feed
+const staffNotifications = require('../controllers/staffNotificationsController');
+router.get('/notifications-feed', staffNotifications.list);
+router.get('/notifications-feed/unread-count', staffNotifications.unreadCount);
+router.put('/notifications-feed/read-all', staffNotifications.markAllRead);
+router.put('/notifications-feed/:id/read', staffNotifications.markRead);
+
 router.put('/notifications/:id/read', adminController.markNotificationRead);
 
 // Issues

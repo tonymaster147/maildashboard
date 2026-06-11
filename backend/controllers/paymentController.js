@@ -154,7 +154,7 @@ exports.createCheckoutSession = async (req, res) => {
 const fulfillOrder = async (session, io) => {
   // Installment payments have their own fulfillment path
   if (session.metadata && (session.metadata.payment_type === 'installment' || session.metadata.payment_type === 'installment_all')) {
-    return await fulfillInstallmentIntent({ id: session.id, metadata: session.metadata });
+    return await fulfillInstallmentIntent({ id: session.id, metadata: session.metadata }, io);
   }
 
   // Update payment status
@@ -194,11 +194,38 @@ const fulfillOrder = async (session, io) => {
     );
   }
 
-  // Create notification
-  await db.query(
-    'INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)',
-    ['admin', 'new_order', `New paid order ${await require('../utils/orderCode').formatOrderRef(orderId)}`, orderId, 'order']
-  );
+  // Staff bell notifications (all roles, live) — distinguish a brand-new
+  // paid order from a remaining-balance payment on an existing one.
+  const orderRefLabel = await require('../utils/orderCode').formatOrderRef(orderId);
+  const { notifyStaff } = require('../services/notifyUser');
+  await notifyStaff(io, isRemainingPayment
+    ? {
+        type: 'payment_received',
+        message: `Remaining balance ($${chargeAmount.toFixed(2)}) paid on order ${orderRefLabel}`,
+        referenceId: Number(orderId),
+        referenceType: 'order',
+      }
+    : {
+        type: 'new_order',
+        message: `New paid order ${orderRefLabel} — $${chargeAmount.toFixed(2)} (${paymentType})`,
+        referenceId: Number(orderId),
+        referenceType: 'order',
+      }
+  ).catch(e => console.error('staff new_order notify failed:', e.message));
+
+  // Payment confirmation for the student's bell panel (live)
+  {
+    const [[ownerRow]] = await db.query('SELECT user_id FROM orders WHERE id = ?', [orderId]);
+    if (ownerRow?.user_id) {
+      const { notifyUser } = require('../services/notifyUser');
+      await notifyUser(io, ownerRow.user_id, {
+        type: 'payment_received',
+        message: `Payment of $${Number(chargeAmount).toFixed(2)} received for order ${orderRefLabel}`,
+        referenceId: Number(orderId),
+        referenceType: 'order',
+      }).catch(e => console.error('payment_received notify failed:', e.message));
+    }
+  }
 
   // Emit live notification to admin/sales panels
   if (io) {
@@ -555,6 +582,18 @@ exports.markRemainingPaid = async (req, res) => {
     );
 
     await require('../utils/statuses').promotePartialToFullIfCleared(order_id);
+
+    // Bell-panel confirmation (live)
+    {
+      const { notifyUser } = require('../services/notifyUser');
+      const ref = await require('../utils/orderCode').formatOrderRef(order_id);
+      await notifyUser(req.app.get('io'), order.user_id, {
+        type: 'payment_received',
+        message: `Remaining balance ($${remaining.toFixed(2)}) on order ${ref} marked as paid — you're all settled`,
+        referenceId: Number(order_id),
+        referenceType: 'order',
+      }).catch(e => console.error('remaining paid notify failed:', e.message));
+    }
 
     res.json({ message: 'Remaining balance marked as paid', amount: remaining });
   } catch (error) {

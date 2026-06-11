@@ -12,5 +12,12 @@ router.put('/tasks/:id/complete', tutorController.completeTask);
 router.patch('/tasks/:id/status', tutorController.updateTutorStatus);
 router.post('/tasks/:id/upload', upload.array('files', 10), handleUploadError, tutorController.uploadWorkFiles);
 router.get('/notifications', tutorController.getNotifications);
+// Notification feed (bell panel) — role-aware, mirrors the student feed
+const staffNotifications = require('../controllers/staffNotificationsController');
+router.get('/notifications-feed', staffNotifications.list);
+router.get('/notifications-feed/unread-count', staffNotifications.unreadCount);
+router.put('/notifications-feed/read-all', staffNotifications.markAllRead);
+router.put('/notifications-feed/:id/read', staffNotifications.markRead);
+
 
 module.exports = router;

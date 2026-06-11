@@ -9,3 +9,6 @@ backend/uploads/
 .DS_Store
 *key.json
 .claude/
+
+# Local DB snapshots (contain production data - never commit)
+_backups/

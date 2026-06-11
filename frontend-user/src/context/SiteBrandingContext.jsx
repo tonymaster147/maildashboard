@@ -3,10 +3,15 @@ import { getPublicSite } from '../services/api';
 
 const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
+// Fallback support email when a site has no contact_email configured.
+// Used by the GET HELP 24/7 button in the topbar.
+export const FALLBACK_SUPPORT_EMAIL = 'sale.makemytutor@gmail.com';
+
 const DEFAULT_BRAND = {
   name: 'EduPro',
   nickname: null,
   logoUrl: null,
+  contactEmail: null,
   resolved: false
 };
 
@@ -24,6 +29,7 @@ export const SiteBrandingProvider = ({ children }) => {
             name: s.name,
             nickname: s.nickname,
             logoUrl: s.logo_url ? (s.logo_url.startsWith('http') ? s.logo_url : `${API_ORIGIN}${s.logo_url}`) : null,
+            contactEmail: s.contact_email || null,
             resolved: true,
             siteKey: s.site_key,
             siteId: s.id,

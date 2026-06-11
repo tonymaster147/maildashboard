@@ -1,0 +1,70 @@
+/* ============================================================
+   v2 CHAT — Chats list channel-chip row + Chat room container.
+   The chat room uses a flex column that fills the available
+   viewport so the input stays pinned at the bottom.
+   ============================================================ */
+
+/* Chats list: two channel chips per order — stack on mobile */
+.v2-chat-channel-row {
+  display: flex;
+  gap: 12px;
+}
+@media (max-width: 640px) {
+  .v2-chat-channel-row { flex-direction: column; }
+}
+
+/* ── Chat room container ─────────────────────────────────── */
+.v2-chat-container {
+  /* Fill the area between the topbar (~68px) and the bottom of the page.
+     Main padding is 24px top/bottom on desktop. */
+  height: calc(100vh - var(--v2-topbar-height) - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--v2-radius-lg);
+  overflow: hidden;
+}
+
+.v2-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--v2-border);
+  background: var(--v2-surface);
+  flex-shrink: 0;
+}
+
+.v2-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--v2-bg);
+}
+
+.v2-chat-input-area {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  border-top: 1px solid var(--v2-border);
+  background: var(--v2-surface);
+  flex-shrink: 0;
+}
+
+/* Tablet + below: tighten + use more vertical space */
+@media (max-width: 1024px) {
+  .v2-chat-container {
+    height: calc(100vh - var(--v2-topbar-height) - 40px);
+  }
+}
+
+@media (max-width: 640px) {
+  .v2-chat-container {
+    height: calc(100vh - var(--v2-topbar-height) - 32px);
+    border-radius: 10px;
+  }
+  .v2-chat-header { padding: 12px 14px; gap: 10px; }
+  .v2-chat-messages { padding: 14px; }
+  .v2-chat-input-area { padding: 10px 12px; }
+}

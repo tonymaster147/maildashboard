@@ -62,6 +62,14 @@ export const getUserOrders = (params = {}) => api.get('/orders', { params: typeo
 export const getOrderCode = (id) => api.get(`/orders/${id}/code`);
 export const updateOrderLoginDetails = (id, data) => api.put(`/orders/${id}/login-details`, data);
 
+// Notification feed (bell panel) — non-chat notifications: status changes,
+// payment received/reminders, files, issue replies. Live pushes arrive on
+// the 'notification' socket event.
+export const getNotifications = () => api.get('/notifications');
+export const getNotificationsUnreadCount = () => api.get('/notifications/unread-count');
+export const markNotificationRead = (id) => api.put(`/notifications/${id}/read`);
+export const markAllNotificationsRead = () => api.put('/notifications/read-all');
+
 export const getIssueCategories = () => api.get('/issues/categories');
 export const getMyIssues = () => api.get('/issues');
 export const getIssuesUnreadCount = () => api.get('/issues/unread-count');

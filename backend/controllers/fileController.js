@@ -63,6 +63,28 @@ exports.uploadFiles = async (req, res) => {
       }
     }
 
+    // Post-submission uploads by the student → tell staff + assigned tutors
+    // (initial-form uploads have no order_id and are covered by new_order).
+    if (order_id && req.user.role === 'user' && uploadedFiles.length > 0) {
+      try {
+        const io = req.app.get('io');
+        const { notifyStaff, notifyTutor } = require('../services/notifyUser');
+        const ref = await require('../utils/orderCode').formatOrderRef(order_id);
+        const msg = `${uploadedFiles.length} new file${uploadedFiles.length > 1 ? 's' : ''} uploaded by student on order ${ref}`;
+        await notifyStaff(io, {
+          type: 'file_uploaded', message: msg, referenceId: Number(order_id), referenceType: 'order',
+        });
+        const [assignedTutors] = await db.query('SELECT tutor_id FROM order_tutors WHERE order_id = ?', [order_id]);
+        for (const t of assignedTutors) {
+          await notifyTutor(io, t.tutor_id, {
+            type: 'file_uploaded', message: msg, referenceId: Number(order_id), referenceType: 'order',
+          });
+        }
+      } catch (e) {
+        console.error('file upload notify failed:', e.message);
+      }
+    }
+
     res.json({
       message: `${uploadedFiles.length} file(s) uploaded successfully`,
       files: uploadedFiles

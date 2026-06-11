@@ -7,7 +7,7 @@ const statusesController = require('../controllers/statusesController');
 const issuesController = require('../controllers/issuesController');
 const { verifyToken, requireRole } = require('../middleware/auth');
 const { validateTutor } = require('../middleware/validate');
-const { upload } = require('../middleware/upload');
+const { upload, photoUpload, handlePhotoUploadError } = require('../middleware/upload');
 
 // All admin routes require admin role
 router.use(verifyToken, requireRole('admin'));
@@ -24,6 +24,12 @@ router.get('/tutors', adminController.getAllTutors);
 router.post('/tutors', validateTutor, adminController.createTutor);
 router.put('/tutors/:id', adminController.updateTutor);
 router.delete('/tutors/:id', adminController.deleteTutor);
+router.post(
+  '/tutors/upload-photo',
+  photoUpload.single('photo'),
+  handlePhotoUploadError,
+  adminController.uploadTutorPhoto,
+);
 
 // Order management
 router.get('/orders', adminController.getAllOrders);
@@ -66,6 +72,13 @@ router.put('/urgent-fee', pricingController.updateUrgentFee);
 
 // Notifications
 router.get('/notifications', adminController.getNotifications);
+// Notification feed (bell panel) — role-aware, mirrors the student feed
+const staffNotifications = require('../controllers/staffNotificationsController');
+router.get('/notifications-feed', staffNotifications.list);
+router.get('/notifications-feed/unread-count', staffNotifications.unreadCount);
+router.put('/notifications-feed/read-all', staffNotifications.markAllRead);
+router.put('/notifications-feed/:id/read', staffNotifications.markRead);
+
 router.put('/notifications/:id/read', adminController.markNotificationRead);
 
 // Reports

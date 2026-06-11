@@ -125,4 +125,45 @@ const handleChatUploadError = (err, req, res, next) => {
   next();
 };
 
-module.exports = { upload, handleUploadError, chatUpload, handleChatUploadError };
+// ────────────── Profile photo uploader (5 MB, single image, modern formats) ──────────────
+// Used by the admin tutor-photo upload. We accept the modern image MIME
+// types (avif, heic, heif) that Chrome and iPhone camera roll emit by
+// default — the general document uploader above doesn't know about these.
+
+const PHOTO_ALLOWED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+];
+
+const PHOTO_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+const photoFileFilter = (req, file, cb) => {
+  if (PHOTO_ALLOWED_TYPES.includes(file.mimetype)) cb(null, true);
+  else cb(new Error(`Image type ${file.mimetype} is not supported (use JPG, PNG, WEBP, GIF, AVIF, or HEIC).`), false);
+};
+
+const photoUpload = multer({
+  storage,
+  fileFilter: photoFileFilter,
+  limits: { fileSize: PHOTO_MAX_FILE_SIZE, files: 1 },
+});
+
+const handlePhotoUploadError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'Photo too large. Maximum is 5 MB.' });
+    return res.status(400).json({ error: err.message });
+  }
+  if (err) return res.status(400).json({ error: err.message });
+  next();
+};
+
+module.exports = {
+  upload, handleUploadError,
+  chatUpload, handleChatUploadError,
+  photoUpload, handlePhotoUploadError,
+};

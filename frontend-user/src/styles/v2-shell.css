@@ -1,0 +1,373 @@
+/* ============================================================
+   v2 SHELL — sidebar (fixed left) + topbar + drawer
+   Layout.jsx maps every class below. To restyle the shell,
+   edit here only — components don't carry shell styles inline.
+   ============================================================ */
+
+.v2-app {
+  min-height: 100vh;
+  background: var(--v2-bg);
+  color: var(--v2-text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+.v2-sidebar {
+  width: var(--v2-sidebar-width);
+  background: var(--v2-surface);
+  border-right: 1px solid var(--v2-border);
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 30;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.v2-sidebar-close-row {
+  display: none;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.v2-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 16px;
+  border-bottom: 1px solid var(--v2-border);
+  margin-bottom: 14px;
+}
+
+.v2-sidebar-brand-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #1f2937, #374151);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.v2-sidebar-brand-text {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v2-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Nav link — Layout uses uppercase labels inside */
+.v2-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--v2-text-secondary);
+  text-decoration: none;
+  letter-spacing: 0.3px;
+  transition: var(--v2-transition-fast);
+  cursor: pointer;
+}
+.v2-nav-link:hover {
+  background: #f1f5f9;
+  color: var(--v2-text-primary);
+}
+.v2-nav-link.v2-active {
+  background: var(--v2-accent);
+  color: #fff;
+  font-weight: 700;
+}
+.v2-nav-label {
+  flex: 1;
+  text-transform: uppercase;
+}
+
+.v2-nav-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+  background: #eef2f7;
+  color: var(--v2-text-muted);
+}
+.v2-nav-link.v2-active .v2-nav-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+.v2-nav-link:not(.v2-active) .v2-nav-badge:not(:empty) {
+  background: var(--v2-red);
+  color: #fff;
+  animation: pulse 2s infinite;
+}
+
+/* Anchored CTA */
+.v2-sidebar-cta {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--v2-red);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  box-shadow: var(--v2-shadow-cta);
+  transition: var(--v2-transition-fast);
+}
+.v2-sidebar-cta:hover {
+  background: var(--v2-red-hover);
+}
+
+/* ── Topbar + main wrapper (pushed right by sidebar on desktop) ── */
+.v2-shifted {
+  padding-left: var(--v2-sidebar-width);
+}
+
+.v2-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px;
+  background: var(--v2-surface);
+  border-bottom: 1px solid var(--v2-border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.v2-topbar-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  margin: 0;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v2-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Generic small icon button */
+.v2-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: var(--v2-text-secondary);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: var(--v2-transition-fast);
+}
+.v2-icon-btn:hover { background: #e2e8f0; color: var(--v2-text-primary); }
+
+/* Hamburger — declared AFTER .v2-icon-btn so the `display: none` wins.
+   `button.v2-hamburger` bumps specificity above `.v2-icon-btn`. */
+button.v2-hamburger { display: none; }
+
+.v2-bell-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--v2-red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+/* Profile chip */
+.v2-profile-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  padding: 6px 10px 6px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: var(--v2-transition-fast);
+}
+.v2-profile-chip:hover { background: #eef2f7; }
+.v2-profile-text { text-align: left; line-height: 1.2; }
+.v2-profile-welcome {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--v2-text-muted);
+  letter-spacing: 0.5px;
+}
+.v2-profile-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  letter-spacing: 0.5px;
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* GET HELP */
+.v2-get-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--v2-accent-soft-2);
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--v2-accent);
+  text-decoration: none;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: var(--v2-transition-fast);
+}
+.v2-get-help:hover { background: var(--v2-accent-soft); }
+.v2-get-help-sub { font-size: 11px; opacity: 0.85; font-weight: 600; }
+
+/* Main content */
+.v2-main {
+  padding: 24px 28px;
+  min-height: calc(100vh - var(--v2-topbar-height));
+}
+
+/* ── Drawer overlay ── */
+.v2-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 40;
+  backdrop-filter: blur(2px);
+}
+
+/* ── Popover (bell, profile dropdowns) ── */
+.v2-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: 12px;
+  box-shadow: var(--v2-shadow-lg);
+  padding: 6px;
+  z-index: 100;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.v2-popover-header {
+  padding: 10px 12px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--v2-text-muted);
+}
+.v2-popover-section {
+  padding: 10px 12px 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--v2-text-muted);
+  text-transform: uppercase;
+}
+.v2-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--v2-text-primary);
+  text-decoration: none;
+  transition: var(--v2-transition-fast);
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+.v2-popover-item:hover { background: #f1f5f9; }
+.v2-popover-item-btn { font-family: inherit; }
+.v2-popover-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v2-popover-item-sub {
+  font-size: 11px;
+  color: var(--v2-text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Tablet + below ── */
+@media (max-width: 1024px) {
+  .v2-shifted { padding-left: 0; }
+  .v2-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.28s ease;
+    z-index: 50;
+    box-shadow: var(--v2-shadow-lg);
+  }
+  .v2-sidebar.v2-open { transform: translateX(0); }
+  .v2-sidebar-close-row { display: flex; }
+  button.v2-hamburger { display: inline-flex; }
+  .v2-topbar { padding: 14px 20px; }
+  .v2-main { padding: 20px 22px; }
+}
+
+/* ── Mobile only ── */
+@media (max-width: 640px) {
+  .v2-topbar { padding: 12px 14px; gap: 10px; }
+  .v2-main { padding: 16px 14px; }
+  .v2-topbar-title { font-size: 14px; letter-spacing: 0.5px; }
+  .v2-get-help { display: none; }
+  .v2-profile-text { display: none; }
+  .v2-icon-btn { width: 34px; height: 34px; }
+  .v2-popover { width: calc(100vw - 28px) !important; right: -14px !important; }
+}

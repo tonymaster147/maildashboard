@@ -132,15 +132,32 @@ exports.updateTutorStatus = async (req, res) => {
       await db.query('UPDATE orders SET tutor_status_id = ? WHERE id = ?', [newStatusId, id]);
     }
 
-    // Notify user only on completion
-    if (tutor_status_code === 'completed') {
+    // Notify user on every tutor-status change (completed gets its own type
+    // so the bell panel can use a distinct icon). Staff get a heads-up too —
+    // "Work Stopped" especially needs admin/sales eyes.
+    {
       const [orders] = await db.query('SELECT user_id FROM orders WHERE id = ?', [id]);
       if (orders.length > 0) {
         const ref = await require('../utils/orderCode').formatOrderRef(id);
-        await db.query(
-          'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-          [orders[0].user_id, 'user', 'task_completed', `Order ${ref} has been completed`, id, 'order']
-        );
+        const { notifyUser, notifyStaff } = require('../services/notifyUser');
+        const [statusRows] = await db.query('SELECT name FROM tutor_statuses WHERE id = ?', [newStatusId]);
+        const statusName = statusRows[0]?.name || tutor_status_code;
+        const io = req.app.get('io');
+        await notifyUser(io, orders[0].user_id, {
+          type: tutor_status_code === 'completed' ? 'task_completed' : 'order_update',
+          message: tutor_status_code === 'completed'
+            ? `Order ${ref} has been completed`
+            : `Order ${ref} status: ${statusName}`,
+          referenceId: Number(id),
+          referenceType: 'order',
+        });
+        const [[tutorRow]] = await db.query('SELECT name FROM tutors WHERE id = ?', [tutorId]);
+        await notifyStaff(io, {
+          type: 'order_update',
+          message: `${tutorRow?.name || 'Tutor'} set order ${ref} to "${statusName}"`,
+          referenceId: Number(id),
+          referenceType: 'order',
+        }).catch(e => console.error('tutor status staff notify failed:', e.message));
       }
     }
 
@@ -202,14 +219,17 @@ exports.uploadWorkFiles = async (req, res) => {
       }
     }
 
-    // Notify user
+    // Notify user (live push to the bell panel)
     const [orders] = await db.query('SELECT user_id FROM orders WHERE id = ?', [id]);
     if (orders.length > 0) {
       const ref = await require('../utils/orderCode').formatOrderRef(id);
-      await db.query(
-        'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [orders[0].user_id, 'user', 'file_uploaded', `New files uploaded for Order ${ref}`, id, 'order']
-      );
+      const { notifyUser } = require('../services/notifyUser');
+      await notifyUser(req.app.get('io'), orders[0].user_id, {
+        type: 'file_uploaded',
+        message: `New files uploaded for Order ${ref}`,
+        referenceId: Number(id),
+        referenceType: 'order',
+      });
     }
 
     res.json({ message: `${uploadedFiles.length} file(s) uploaded`, files: uploadedFiles });

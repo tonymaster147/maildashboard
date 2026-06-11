@@ -15,8 +15,12 @@ export default function Chats() {
       getUnreadPerOrder()
     ]).then(([tasksRes, unreadRes]) => {
       const chatTasks = tasksRes.data.filter(t => t.status === 'active' || t.status === 'in_progress');
+      // Unread conversations first so nothing gets missed (stable sort keeps
+      // the normal order within each group).
+      const umap = unreadRes.data || {};
+      chatTasks.sort((a, b) => ((umap[b.id] || 0) > 0 ? 1 : 0) - ((umap[a.id] || 0) > 0 ? 1 : 0));
       setTasks(chatTasks);
-      setUnreadMap(unreadRes.data || {});
+      setUnreadMap(umap);
       setLoading(false);
       // Mark all as read AFTER we've captured the unread counts for display
       markAllRead().catch(() => {});

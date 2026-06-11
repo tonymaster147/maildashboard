@@ -95,6 +95,22 @@ exports.createInstallmentPlan = async (req, res) => {
       }).catch(e => console.error('Installment email error:', e));
     }
 
+    // Bell-panel notification (live) — the student should know their
+    // remaining balance was split into a payment plan.
+    {
+      const { notifyUser } = require('../services/notifyUser');
+      const ref = await require('../utils/orderCode').formatOrderRef(orderId);
+      const firstDue = installmentRows[0]
+        ? new Date(installmentRows[0].due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : null;
+      await notifyUser(req.app.get('io'), order.user_id, {
+        type: 'installment_plan',
+        message: `Your remaining balance on order ${ref} was split into ${installmentRows.length} installments${firstDue ? ` — first due ${firstDue}` : ''}`,
+        referenceId: Number(orderId),
+        referenceType: 'order',
+      }).catch(e => console.error('installment_plan notify failed:', e.message));
+    }
+
     res.json({ message: 'Installment plan created', installments: installmentRows, convenience_fee: feeAmount });
   } catch (error) {
     console.error('Create installment plan error:', error);
@@ -202,6 +218,22 @@ exports.updateInstallmentPlan = async (req, res) => {
       'SELECT id, installment_number, amount, due_date, status FROM order_installments WHERE order_id = ? ORDER BY installment_number',
       [orderId]
     );
+
+    // Tell the student their plan changed (amounts / due dates)
+    {
+      const [[orderOwner]] = await db.query('SELECT user_id FROM orders WHERE id = ?', [orderId]);
+      if (orderOwner?.user_id) {
+        const { notifyUser } = require('../services/notifyUser');
+        const ref = await require('../utils/orderCode').formatOrderRef(orderId);
+        await notifyUser(req.app.get('io'), orderOwner.user_id, {
+          type: 'installment_plan',
+          message: `Your installment plan on order ${ref} was updated — check the new amounts and due dates`,
+          referenceId: Number(orderId),
+          referenceType: 'order',
+        }).catch(e => console.error('installment_plan notify failed:', e.message));
+      }
+    }
+
     res.json({ message: 'Installment plan updated', installments: rows });
   } catch (error) {
     console.error('Update installment plan error:', error);
@@ -297,6 +329,18 @@ exports.markInstallmentPaid = async (req, res) => {
       }).catch(e => console.error('Mark paid email error:', e));
     }
 
+    // Bell-panel confirmation (live)
+    {
+      const { notifyUser } = require('../services/notifyUser');
+      const ref = await require('../utils/orderCode').formatOrderRef(inst.order_id);
+      await notifyUser(req.app.get('io'), inst.user_id, {
+        type: 'payment_received',
+        message: `Installment #${inst.installment_number} ($${amount.toFixed(2)}) on order ${ref} marked as paid`,
+        referenceId: Number(inst.order_id),
+        referenceType: 'order',
+      }).catch(e => console.error('installment paid notify failed:', e.message));
+    }
+
     res.json({ message: 'Installment marked as paid', amount });
   } catch (error) {
     console.error('Mark installment paid error:', error);
@@ -354,6 +398,18 @@ exports.markAllInstallmentsPaid = async (req, res) => {
         paidInstallments: pending,
         siteId: orderRows[0].site_id
       }).catch(e => console.error('Mark all paid email error:', e));
+    }
+
+    // Bell-panel confirmation (live)
+    {
+      const { notifyUser } = require('../services/notifyUser');
+      const ref = await require('../utils/orderCode').formatOrderRef(orderId);
+      await notifyUser(req.app.get('io'), userId, {
+        type: 'payment_received',
+        message: `All remaining installments ($${total.toFixed(2)}) on order ${ref} marked as paid — balance cleared`,
+        referenceId: Number(orderId),
+        referenceType: 'order',
+      }).catch(e => console.error('all installments paid notify failed:', e.message));
     }
 
     res.json({ message: 'All installments marked as paid', amount: total });
@@ -463,7 +519,7 @@ exports.payAllInstallments = async (req, res) => {
  * Mark installment(s) as paid after Stripe PaymentIntent succeeds.
  * Called from webhook/fulfill-intent for metadata.payment_type === 'installment' or 'installment_all'.
  */
-exports.fulfillInstallmentIntent = async (intent) => {
+exports.fulfillInstallmentIntent = async (intent, io = null) => {
   const meta = intent.metadata || {};
   const orderId = parseInt(meta.order_id);
   let installmentIds = [];
@@ -532,6 +588,26 @@ exports.fulfillInstallmentIntent = async (intent) => {
         paidInstallments: paidInsts,
         siteId: orderRows[0].site_id
       }).catch(e => console.error('Installment paid email error:', e));
+
+      // Bell-panel confirmation (live) for the Stripe-paid installment(s)
+      const { notifyUser, notifyStaff } = require('../services/notifyUser');
+      const ref = await require('../utils/orderCode').formatOrderRef(orderId);
+      const paidTotal = paidInsts.reduce((s, p) => s + parseFloat(p.amount), 0);
+      await notifyUser(io, orderRows[0].user_id, {
+        type: 'payment_received',
+        message: paidInsts.length > 1
+          ? `Payment of $${paidTotal.toFixed(2)} received — ${paidInsts.length} installments cleared on order ${ref}`
+          : `Installment #${paidInsts[0]?.installment_number} ($${paidTotal.toFixed(2)}) paid on order ${ref}`,
+        referenceId: Number(orderId),
+        referenceType: 'order',
+      }).catch(e => console.error('installment stripe notify failed:', e.message));
+      // Staff should see incoming money too
+      await notifyStaff(io, {
+        type: 'payment_received',
+        message: `Installment payment of $${paidTotal.toFixed(2)} received on order ${ref} (${orderRows[0].username})`,
+        referenceId: Number(orderId),
+        referenceType: 'order',
+      }).catch(e => console.error('installment staff notify failed:', e.message));
     }
   } catch (e) {
     console.error('Installment paid email lookup failed:', e);
@@ -599,6 +675,22 @@ exports.runReminderCron = async () => {
         siteId: r.site_id,
         recipient: 'admin'
       }).catch(e => console.error('Reminder email error (admin):', e));
+
+      // Bell-panel reminder (live if the student is online). Same daily
+      // dedupe as the emails via reminder_sent_dates.
+      {
+        const { notifyUser } = require('../services/notifyUser');
+        const ref = await require('../utils/orderCode').formatOrderRef(r.order_id);
+        const io = require('../server').io;
+        await notifyUser(io, r.user_id, {
+          type: 'payment_reminder',
+          message: daysUntilDue < 0
+            ? `Installment #${r.installment_number} ($${parseFloat(r.amount).toFixed(2)}) on order ${ref} is overdue`
+            : `Installment #${r.installment_number} ($${parseFloat(r.amount).toFixed(2)}) on order ${ref} is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}`,
+          referenceId: Number(r.order_id),
+          referenceType: 'order',
+        }).catch(e => console.error('reminder cron notify failed:', e.message));
+      }
 
       sentDates.push(today);
       await db.query(

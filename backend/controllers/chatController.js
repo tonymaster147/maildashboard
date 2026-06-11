@@ -114,6 +114,14 @@ exports.sendAttachment = async (req, res) => {
     else if (['admin', 'sales_lead', 'sales_executive'].includes(senderRole)) channel = 'support';
     else channel = req.body.channel || 'support';
 
+    // Students can't post to the tutor channel before a tutor is assigned
+    if (channel === 'tutor' && senderRole === 'user') {
+      const [assigned] = await db.query('SELECT id FROM order_tutors WHERE order_id = ? LIMIT 1', [orderId]);
+      if (assigned.length === 0) {
+        return res.status(400).json({ error: 'A tutor has not been assigned to this order yet. Please use Support Chat.' });
+      }
+    }
+
     // Upload to Drive (per-order subfolder)
     const drive = await uploadChatAttachment(localPath, file.originalname, file.mimetype, orderId);
     driveFileId = drive.fileId;

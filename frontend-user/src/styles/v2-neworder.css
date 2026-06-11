@@ -1,0 +1,128 @@
+/* ============================================================
+   v2 NEW ORDER — step indicator + form grid + plan grid +
+   step actions row. CSS variables only — restyle from :root.
+   ============================================================ */
+
+/* ── Step indicator (3 pills, connected by a thin line) ── */
+.v2-step-indicator {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 22px;
+  padding: 14px 18px;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: var(--v2-radius-lg);
+  position: relative;
+}
+
+.v2-step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+/* Connecting line between circles */
+.v2-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: calc(50% + 18px);
+  right: calc(-50% + 18px);
+  height: 2px;
+  background: var(--v2-border);
+}
+.v2-step[data-state="done"]:not(:last-child)::after {
+  background: var(--v2-accent);
+}
+
+.v2-step-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #eef2f7;
+  color: var(--v2-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid transparent;
+  z-index: 1;
+  transition: var(--v2-transition-fast);
+}
+.v2-step[data-state="active"] .v2-step-circle {
+  background: var(--v2-accent);
+  color: #fff;
+  box-shadow: 0 0 0 4px var(--v2-accent-soft);
+}
+.v2-step[data-state="done"] .v2-step-circle {
+  background: var(--v2-accent);
+  color: #fff;
+}
+
+.v2-step-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--v2-text-muted);
+  text-align: center;
+}
+.v2-step[data-state="active"] .v2-step-label,
+.v2-step[data-state="done"]   .v2-step-label {
+  color: var(--v2-text-primary);
+}
+
+/* ── Form grid: 2 columns desktop, stacks on tablet+ ── */
+.v2-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 768px) {
+  .v2-form-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Plan cards: stack on tablet+ ── */
+@media (max-width: 1024px) {
+  .v2-plans-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Step actions row (Back + Next/Submit) ── */
+.v2-step-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 14px 0 4px;
+}
+
+/* ── Smooth out the existing .form-input under v2 — keep legacy class ── */
+.form-input,
+.form-select,
+.form-textarea {
+  border-color: var(--v2-border) !important;
+  border-radius: 8px !important;
+  background: var(--v2-surface) !important;
+  color: var(--v2-text-primary) !important;
+  font-family: inherit;
+}
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: var(--v2-accent) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--v2-accent-soft) !important;
+}
+
+/* DatePicker library styling adjustments — keep its overlay but match v2 colors */
+.react-datepicker-wrapper { width: 100%; }
+.react-datepicker__input-container input { width: 100%; }

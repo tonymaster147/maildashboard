@@ -1,11 +1,15 @@
+// Login — v2 split-screen auth shell. Access-code flow preserved verbatim.
+
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { FiLogIn, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useSiteBranding } from '../context/SiteBrandingContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { login } from '../services/api';
-import { FiLogIn, FiEye, FiEyeOff } from 'react-icons/fi';
 import Notice from '../components/Notice';
+import { C } from '../theme/tokens';
+import { AuthShell } from '../components/ui';
 
 export default function Login() {
   usePageMeta('login');
@@ -24,7 +28,6 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const res = await login({ username, access_code: accessCode });
       loginUser(res.data.user, res.data.token);
@@ -37,47 +40,85 @@ export default function Login() {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <div className="text-center mb-3">
-          {brand.logoUrl ? (
-            <img src={brand.logoUrl} alt={brand.name} style={{ maxHeight: 60, maxWidth: 200, objectFit: 'contain', marginBottom: 16 }} />
-          ) : (
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📚</div>
-          )}
-          <h1>Welcome Back</h1>
-          <p className="subtitle">Sign in to your {brand.name} account</p>
-        </div>
+    <AuthShell
+      title="Welcome back"
+      subtitle={`Sign in to your ${brand.name} account to continue.`}
+    >
+      {successMessage && <Notice type="success">{successMessage}</Notice>}
+      {error && <Notice type="error">{error}</Notice>}
 
-        {successMessage && <Notice type="success">{successMessage}</Notice>}
-        {error && <Notice type="error">{error}</Notice>}
-
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Username</label>
-            <input type="text" className="form-input" placeholder="Enter your username" value={username} onChange={e => setUsername(e.target.value)} required />
+      <form onSubmit={handleSubmit}>
+        <Field label="Username">
+          <input
+            type="text" className="form-input"
+            placeholder="Enter your username"
+            value={username} onChange={e => setUsername(e.target.value)}
+            required autoComplete="username"
+          />
+        </Field>
+        <Field label="Access Code">
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showCode ? 'text' : 'password'} className="form-input"
+              placeholder="Enter your access code"
+              value={accessCode} onChange={e => setAccessCode(e.target.value)}
+              required style={{ paddingRight: 44 }}
+              autoComplete="current-password"
+            />
+            <button
+              type="button" onClick={() => setShowCode(s => !s)}
+              aria-label={showCode ? 'Hide access code' : 'Show access code'}
+              style={{
+                position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                background: 'transparent', border: 'none', color: C.textMuted, cursor: 'pointer',
+                padding: 6, display: 'flex',
+              }}
+            >
+              {showCode ? <FiEyeOff size={16} /> : <FiEye size={16} />}
+            </button>
           </div>
-          <div className="form-group">
-            <label className="form-label">Access Code</label>
-            <div style={{ position: 'relative' }}>
-              <input type={showCode ? 'text' : 'password'} className="form-input" placeholder="Enter your access code" value={accessCode} onChange={e => setAccessCode(e.target.value)} required style={{ paddingRight: 44 }} />
-              <button type="button" onClick={() => setShowCode(!showCode)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                {showCode ? <FiEyeOff size={18} /> : <FiEye size={18} />}
-              </button>
-            </div>
-          </div>
-          <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={loading}>
-            {loading ? <div className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2 }}></div> : <><FiLogIn size={18} /> Sign In</>}
-          </button>
-        </form>
+          <Link to="/forgot-access-code" className="v2-auth-forgot">
+            Forgot access code?
+          </Link>
+        </Field>
 
-        <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <Link to="/forgot-access-code" style={{ color: 'var(--accent)', fontSize: 14, textDecoration: 'none', fontWeight: 500 }}>Forgot Access Code?</Link>
-        </div>
+        <button
+          type="submit" disabled={loading}
+          style={primaryBtnStyle(loading)}
+        >
+          {loading
+            ? <div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+            : <><FiLogIn size={16} /> Sign In</>}
+        </button>
+      </form>
 
-        <div className="auth-divider">Don't have an account?</div>
-        <Link to="/signup" className="btn btn-secondary btn-lg" style={{ width: '100%' }}>Create Account</Link>
-      </div>
+      <div className="v2-auth-link-strip">Don't have an account?</div>
+      <Link to="/signup" className="v2-auth-secondary-btn">
+        Create Account
+      </Link>
+    </AuthShell>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={fieldLabelStyle}>{label}</label>
+      {children}
     </div>
   );
 }
+
+const fieldLabelStyle = {
+  display: 'block', fontSize: 11, fontWeight: 700, color: C.textMuted,
+  letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6,
+};
+
+const primaryBtnStyle = (loading) => ({
+  width: '100%', marginTop: 8, padding: '12px 18px', borderRadius: 10,
+  border: 'none', background: C.accent, color: '#fff',
+  cursor: loading ? 'not-allowed' : 'pointer',
+  fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  opacity: loading ? 0.7 : 1,
+});

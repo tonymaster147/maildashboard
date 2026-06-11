@@ -170,7 +170,9 @@ exports.getUserOrders = async (req, res) => {
         p.name as plan_name,
         astat.code as admin_status_code, astat.name as admin_status_name,
         tstat.code as tutor_status_code, tstat.name as tutor_status_name,
-        GROUP_CONCAT(DISTINCT t.name) as tutor_names
+        GROUP_CONCAT(DISTINCT t.name) as tutor_names,
+        GROUP_CONCAT(DISTINCT IFNULL(t.photo_url, '')) as tutor_photos,
+        GROUP_CONCAT(DISTINCT IFNULL(t.rating, '')) as tutor_ratings
       FROM orders o
       JOIN order_types ot ON o.order_type_id = ot.id
       JOIN subjects s ON o.subject_id = s.id
@@ -270,18 +272,33 @@ exports.updateOrderLoginDetails = async (req, res) => {
     const ref = await formatOrderRef(id);
     const message = `Login details updated for order ${ref}`;
 
-    // In-app notifications: admin + sales roles
-    await db.query("INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)",
-      ['admin', 'login_updated', message, id, 'order']);
-    await db.query("INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)",
-      ['sales_lead', 'login_updated', message, id, 'order']);
-    await db.query("INSERT INTO notifications (role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?)",
-      ['sales_executive', 'login_updated', message, id, 'order']);
+    // In-app notifications: staff roles (persisted + live panel push) and
+    // every assigned tutor — they're the ones who need the fresh credentials.
+    {
+      const io = req.app.get('io');
+      const { notifyStaff, notifyTutor } = require('../services/notifyUser');
+      await notifyStaff(io, {
+        type: 'login_updated', message, referenceId: Number(id), referenceType: 'order',
+      }).catch(e => console.error('login staff notify failed:', e.message));
+      const [assignedTutors] = await db.query('SELECT tutor_id FROM order_tutors WHERE order_id = ?', [id]);
+      for (const t of assignedTutors) {
+        await notifyTutor(io, t.tutor_id, {
+          type: 'login_updated', message, referenceId: Number(id), referenceType: 'order',
+        }).catch(e => console.error('login tutor notify failed:', e.message));
+      }
+    }
 
-    // Email admin + every active sales user (non-blocking)
+    // Email admin + every active sales user + every assigned tutor — the
+    // tutor is the one who actually uses these credentials (non-blocking)
     const ADMIN_EMAIL = 'faruqui.a4u@gmail.com';
     const [sales] = await db.query("SELECT email FROM sales_users WHERE status = 'active' AND email IS NOT NULL");
-    const recipients = [ADMIN_EMAIL, ...sales.map(s => s.email)].filter(Boolean);
+    const [tutorEmails] = await db.query(
+      `SELECT t.email FROM order_tutors ot
+       JOIN tutors t ON ot.tutor_id = t.id
+       WHERE ot.order_id = ? AND t.email IS NOT NULL AND t.status = 'active'`,
+      [id]
+    );
+    const recipients = [...new Set([ADMIN_EMAIL, ...sales.map(s => s.email), ...tutorEmails.map(t => t.email)].filter(Boolean))];
     const { sendLoginDetailsUpdated } = require('../services/emailService');
     sendLoginDetailsUpdated({
       orderId: id,
@@ -347,7 +364,7 @@ exports.getOrderDetail = async (req, res) => {
 
     // Get assigned tutors
     const [tutors] = await db.query(
-      `SELECT t.id, t.name FROM order_tutors otr
+      `SELECT t.id, t.name, t.photo_url, t.rating FROM order_tutors otr
        JOIN tutors t ON otr.tutor_id = t.id
        WHERE otr.order_id = ?`,
       [id]

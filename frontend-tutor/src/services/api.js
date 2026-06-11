@@ -37,6 +37,11 @@ export const uploadChatAttachment = (orderId, file) => {
 export const uploadWorkFiles = (id, formData) => api.post(`/tutor/tasks/${id}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const getChatMessages = (orderId) => api.get(`/chat/messages/${orderId}`);
 export const getNotifications = () => api.get('/tutor/notifications');
+// Notification feed (bell panel)
+export const getNotificationsFeed = () => api.get('/tutor/notifications-feed');
+export const getNotificationsFeedUnread = () => api.get('/tutor/notifications-feed/unread-count');
+export const markFeedNotificationRead = (id) => api.put(`/tutor/notifications-feed/${id}/read`);
+export const markAllFeedNotificationsRead = () => api.put('/tutor/notifications-feed/read-all');
 export const getUnreadCount = () => api.get('/chat/unread');
 export const markAllRead = () => api.post('/chat/mark-all-read');
 export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');

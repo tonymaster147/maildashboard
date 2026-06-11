@@ -38,7 +38,10 @@ export default function ChatMonitor() {
       getFlaggedMessages(),
       getUnreadPerOrder().catch(() => ({ data: {} }))
     ]).then(([c, f, u]) => {
-      setChats(c.data); setFlagged(f.data); setUnreadMap(u.data || {});
+      // Orders with unread student messages first (stable sort)
+      const umap = u.data || {};
+      const sorted = [...c.data].sort((a, b) => ((umap[b.order_id] || 0) > 0 ? 1 : 0) - ((umap[a.order_id] || 0) > 0 ? 1 : 0));
+      setChats(sorted); setFlagged(f.data); setUnreadMap(umap);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);

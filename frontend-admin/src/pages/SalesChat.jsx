@@ -51,8 +51,12 @@ export default function SalesChat() {
       getUnreadPerOrder().catch(() => ({ data: {} }))
     ]).then(([res, unreadRes]) => {
       const orderList = res.data.orders || res.data || [];
-      setOrders(orderList.filter(o => o.chat_enabled));
-      setUnreadMap(unreadRes.data || {});
+      // Conversations with unread student messages first (stable sort)
+      const umap = unreadRes.data || {};
+      const enabled = orderList.filter(o => o.chat_enabled);
+      enabled.sort((a, b) => ((umap[b.id] || 0) > 0 ? 1 : 0) - ((umap[a.id] || 0) > 0 ? 1 : 0));
+      setOrders(enabled);
+      setUnreadMap(umap);
       setLoading(false);
       markAllRead().catch(() => {});
     }).catch(() => setLoading(false));

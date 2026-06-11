@@ -106,15 +106,24 @@ exports.getAllTutors = async (req, res) => {
   }
 };
 
+// Normalize a star rating: one-decimal precision (4.7, 4.8…), clamped to
+// 0–5; null when unset.
+const parseRating = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Math.round(parseFloat(v) * 10) / 10;
+  if (Number.isNaN(n)) return null;
+  return Math.min(5, Math.max(0, n));
+};
+
 exports.createTutor = async (req, res) => {
   try {
-    const { name, email, password, specialization } = req.body;
+    const { name, email, password, specialization, photo_url, rating } = req.body;
     const [existing] = await db.query('SELECT id FROM tutors WHERE email = ?', [email]);
     if (existing.length > 0) return res.status(400).json({ error: 'Email already exists' });
     const hashedPassword = await bcrypt.hash(password, 10);
     const [result] = await db.query(
-      'INSERT INTO tutors (name, email, password, specialization) VALUES (?, ?, ?, ?)',
-      [name, email, hashedPassword, specialization || null]
+      'INSERT INTO tutors (name, email, password, specialization, photo_url, rating) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, email, hashedPassword, specialization || null, photo_url || null, parseRating(rating)]
     );
 
     // Send welcome email with credentials (non-blocking)
@@ -130,11 +139,22 @@ exports.createTutor = async (req, res) => {
 exports.updateTutor = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, specialization, status, password } = req.body;
-    await db.query(
-      'UPDATE tutors SET name = ?, email = ?, specialization = ?, status = ? WHERE id = ?',
-      [name, email, specialization, status, id]
-    );
+    const { name, email, specialization, status, password, photo_url, rating } = req.body;
+    // photo_url / rating are optional — only update when the field is in the
+    // request body (so older forms that don't send them don't blank them out).
+    const updateParts = ['name = ?', 'email = ?', 'specialization = ?', 'status = ?'];
+    const updateVals = [name, email, specialization, status];
+    if (photo_url !== undefined) {
+      updateParts.push('photo_url = ?');
+      updateVals.push(photo_url || null);
+    }
+    if (rating !== undefined) {
+      updateParts.push('rating = ?');
+      updateVals.push(parseRating(rating));
+    }
+    updateVals.push(id);
+    await db.query(`UPDATE tutors SET ${updateParts.join(', ')} WHERE id = ?`, updateVals);
+
     // Optional password reset: only when a non-empty string is provided.
     if (typeof password === 'string' && password.trim().length >= 6) {
       const hashed = await bcrypt.hash(password, 10);
@@ -145,6 +165,20 @@ exports.updateTutor = async (req, res) => {
     res.json({ message: 'Tutor updated' });
   } catch (error) {
     console.error('Update tutor error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Photo upload — reuses the same uploads/ disk used by site logos so we
+// don't introduce a second storage path. Multer middleware handles the
+// disk write; this just returns the public URL.
+exports.uploadTutorPhoto = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const url = `/uploads/${req.file.filename}`;
+    res.json({ url });
+  } catch (error) {
+    console.error('Upload tutor photo error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -282,11 +316,14 @@ exports.updateOrderStatus = async (req, res) => {
     if (orders.length > 0) {
       const order = orders[0];
       const { formatOrderRef } = require('../utils/orderCode');
+      const { notifyUser } = require('../services/notifyUser');
       const ref = await formatOrderRef(id);
-      await db.query(
-        'INSERT INTO notifications (user_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [order.user_id, 'user', 'order_update', `Order ${ref} status: ${status}`, id, 'order']
-      );
+      await notifyUser(req.app.get('io'), order.user_id, {
+        type: 'order_update',
+        message: `Order ${ref} status: ${status}`,
+        referenceId: Number(id),
+        referenceType: 'order',
+      });
 
       // Send status change email to user (non-blocking)
       if (order.email && oldStatus !== status) {
@@ -335,14 +372,17 @@ exports.assignTutors = async (req, res) => {
     const assignRef = await formatOrderRef(id);
 
     // Add new assignments
+    const { notifyTutor } = require('../services/notifyUser');
     for (const tutorId of tutor_ids) {
       await db.query('INSERT INTO order_tutors (order_id, tutor_id) VALUES (?, ?)', [id, tutorId]);
 
-      // Save notification to DB
-      await db.query(
-        'INSERT INTO notifications (tutor_id, role, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
-        [tutorId, 'tutor', 'task_assigned', `New task assigned: Order ${assignRef}`, id, 'order']
-      );
+      // Bell-panel notification (persisted + live push to the tutor)
+      await notifyTutor(req.app.get('io'), tutorId, {
+        type: 'task_assigned',
+        message: `New task assigned: Order ${assignRef}`,
+        referenceId: Number(id),
+        referenceType: 'order',
+      }).catch(e => console.error('task_assigned notify failed:', e.message));
 
       // Get tutor details for email + emit targeted socket event
       const [tutorData] = await db.query('SELECT name, email FROM tutors WHERE id = ?', [tutorId]);
@@ -357,6 +397,27 @@ exports.assignTutors = async (req, res) => {
         
         // 2. Send email (non-blocking)
         sendTutorTaskEmail(email, name, orderDetails).catch(e => console.error('Tutor email error:', e));
+      }
+    }
+
+    // Notify the student — knowing a tutor picked up their order matters.
+    if (tutor_ids.length > 0) {
+      const [[orderOwner]] = await db.query('SELECT user_id FROM orders WHERE id = ?', [id]);
+      if (orderOwner?.user_id) {
+        const [tutorNames] = await db.query(
+          `SELECT GROUP_CONCAT(name SEPARATOR ', ') AS names FROM tutors WHERE id IN (${tutor_ids.map(() => '?').join(',')})`,
+          tutor_ids
+        );
+        const names = tutorNames[0]?.names;
+        const { notifyUser } = require('../services/notifyUser');
+        await notifyUser(req.app.get('io'), orderOwner.user_id, {
+          type: 'tutor_assigned',
+          message: names
+            ? `${names} ${tutor_ids.length > 1 ? 'have' : 'has'} been assigned to your order ${assignRef}`
+            : `A tutor has been assigned to your order ${assignRef}`,
+          referenceId: Number(id),
+          referenceType: 'order',
+        }).catch(e => console.error('tutor_assigned notify failed:', e.message));
       }
     }
 

@@ -202,12 +202,15 @@ exports.testEmail = async (req, res) => {
 exports.getPublicBranding = async (req, res) => {
   try {
     if (!req.site) return res.json({ site: null });
-    // Fetch meta + script fields directly (not in cache)
+    // Fetch meta + script + contact_email fields directly (not in cache).
+    // contact_email is the support address shown to students (GET HELP topbar
+    // button) — admin can set per-site, falls back to a system default.
     const [rows] = await db.query(
       `SELECT meta_title_login, meta_desc_login,
               meta_title_signup, meta_desc_signup,
               meta_title_dashboard, meta_desc_dashboard,
-              head_scripts, body_scripts
+              head_scripts, body_scripts,
+              contact_email
        FROM sites WHERE id = ?`,
       [req.site.id]
     );
@@ -220,6 +223,7 @@ exports.getPublicBranding = async (req, res) => {
         nickname: req.site.nickname || null,
         logo_url: req.site.logo_url || null,
         url: req.site.url,
+        contact_email: extras.contact_email || null,
         meta_title_login: extras.meta_title_login || null,
         meta_desc_login: extras.meta_desc_login || null,
         meta_title_signup: extras.meta_title_signup || null,

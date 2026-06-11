@@ -1,0 +1,166 @@
+/* ============================================================
+   v2 MOBILE POLISH — cross-cutting responsive fixes that didn't
+   fit neatly inside a single page's CSS file. Loaded LAST so it
+   wins specificity battles where needed.
+
+   Breakpoints recap:
+     ≤640 = mobile
+     641-1024 = tablet
+     >1024 = desktop
+   ============================================================ */
+
+/* ── Universal: keep long titles from breaking layouts ───── */
+@media (max-width: 640px) {
+  /* Active-order card grid was already stacked, just kill any leftover
+     fr-column logic for the order-info column when it lives inside a
+     Link wrapper (Orders page detailHref). */
+  .v2-order-grid > a { width: 100%; }
+}
+
+/* ── Topbar: profile chip on very narrow screens ─────────── */
+@media (max-width: 640px) {
+  /* Hide the chevron once the name is hidden — avatar is enough */
+  .v2-profile-chip svg:last-child { display: none; }
+  /* Tighten the chip so two icon-buttons + chip fit on a 360px screen */
+  .v2-profile-chip { padding: 4px 4px 4px 2px; gap: 6px; }
+  /* Trim topbar gap when GET HELP is hidden */
+  .v2-topbar-right { gap: 8px; }
+}
+
+/* ── Notification bell dropdown: always fit in viewport ──── */
+@media (max-width: 480px) {
+  .v2-popover {
+    max-height: calc(100vh - var(--v2-topbar-height) - 24px);
+  }
+}
+
+/* ── NewOrder step indicator: shrink labels, then numbers-only ─ */
+@media (max-width: 640px) {
+  .v2-step-indicator { padding: 12px 14px; }
+  .v2-step-label { font-size: 9px; letter-spacing: 0.2px; line-height: 1.2; }
+  .v2-step-circle { width: 26px; height: 26px; font-size: 11px; }
+  .v2-step:not(:last-child)::after { top: 13px; }
+}
+@media (max-width: 400px) {
+  /* Below 400px, the labels just compete with the line. Hide them. */
+  .v2-step-label { display: none; }
+  .v2-step-indicator { padding: 10px 14px; }
+}
+
+/* ── NewOrder plan cards: tighter padding on mobile ──────── */
+@media (max-width: 640px) {
+  .v2-plans-grid { gap: 10px !important; }
+  .v2-plans-grid > div {
+    padding: 18px !important;
+  }
+}
+
+/* ── OrderDetail header: status pill stays on its own line ── */
+@media (max-width: 480px) {
+  /* The header row already uses flex-wrap; force the pill to fall
+     under the title on tiny screens so it doesn't crowd the back arrow. */
+  .v2-detail-grid + * { gap: 14px; }
+}
+
+/* ── Chat: tighter input row on mobile ───────────────────── */
+@media (max-width: 480px) {
+  .v2-chat-input-area form input[type="text"] {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+  .v2-chat-input-area form button[type="submit"] {
+    width: 36px !important;
+    height: 36px !important;
+  }
+}
+
+/* ── EmbeddedCheckout wrapper: respect mobile main padding ── */
+@media (max-width: 640px) {
+  /* OrderDetail + NewOrder render the Stripe checkout inside a
+     Card padding=0 with `margin: 24px auto`. On mobile that 24px
+     becomes wasteful — let the main padding handle the spacing. */
+  .v2-main > div[style*="maxWidth: 720"] {
+    margin: 0 auto !important;
+  }
+}
+
+/* ── Auth: tighten card padding chain (desktop → tablet → mobile) ── */
+@media (max-width: 1024px) and (min-width: 481px) {
+  /* Tablet: card breathes a bit more than mobile */
+  .v2-auth-form-card { padding: 30px 26px; }
+}
+
+/* ── Form inputs: bump touch-target on mobile ────────────── */
+@media (max-width: 640px) {
+  .form-input,
+  .form-select,
+  .form-textarea {
+    font-size: 15px !important;   /* prevents iOS Safari zoom-on-focus */
+    padding: 11px 12px !important;
+  }
+}
+
+/* ── Sidebar drawer: keep nav content scrollable on short screens ── */
+@media (max-height: 560px) {
+  .v2-sidebar { padding-top: 12px; padding-bottom: 12px; }
+}
+
+/* ── Sidebar nav-label: keep ellipsis when site name is long ── */
+.v2-sidebar-brand-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Filter pills row: scroll horizontally on mobile rather than wrap ── */
+@media (max-width: 640px) {
+  .v2-filter-pills {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    margin-left: -14px;
+    margin-right: -14px;
+    padding-left: 14px;
+    padding-right: 14px;
+    scrollbar-width: thin;
+  }
+  .v2-filter-pills > button { flex-shrink: 0; }
+}
+
+/* ── PaymentHistory row: keep amount visible when stacked ── */
+@media (max-width: 640px) {
+  .v2-payment-grid > div:nth-child(3) {
+    text-align: left !important;
+  }
+}
+
+/* ── Marketing services grid stays 2x2 even on tablet (good touch density) ── */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .v2-services-grid { grid-template-columns: 1fr 1fr !important; }
+}
+
+/* ── Pulse keyframes for unread badges (shared) ──────────── */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+
+/* ── Reduced-motion: kill the testimonial slider + badge pulse ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Focus rings: keyboard-only accessibility ────────────── */
+:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+button:focus-visible,
+a:focus-visible {
+  outline-offset: 3px;
+  border-radius: 6px;
+}

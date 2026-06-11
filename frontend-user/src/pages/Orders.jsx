@@ -1,114 +1,154 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { FiChevronLeft, FiChevronRight, FiList } from 'react-icons/fi';
 import { getUserOrders, getPublicStatuses } from '../services/api';
-import { FiEye, FiUser, FiHeadphones, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { C } from '../theme/tokens';
+import { Card, ActiveOrderCard } from '../components/ui';
 
 const PER_PAGE = 25;
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('');   // admin_status_code
+  const [filter, setFilter] = useState('');           // admin_status_code
   const [adminStatuses, setAdminStatuses] = useState([]);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     setLoading(true);
-    getUserOrders(filter ? { admin_status_code: filter } : {}).then(res => {
-      setOrders(res.data);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    getUserOrders(filter ? { admin_status_code: filter } : {})
+      .then(res => setOrders(res.data || []))
+      .catch(() => setOrders([]))
+      .finally(() => setLoading(false));
   }, [filter]);
-  useEffect(() => { getPublicStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))).catch(() => {}); }, []);
 
-  const totalPages = Math.ceil(orders.length / PER_PAGE);
+  useEffect(() => {
+    getPublicStatuses('admin')
+      .then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active)))
+      .catch(() => {});
+  }, []);
+
+  const totalPages = Math.max(1, Math.ceil(orders.length / PER_PAGE));
   const paged = orders.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
 
   return (
     <div>
-      <div className="page-header">
-        <h2>My Orders</h2>
-        <p>View and manage all your orders</p>
+      <div style={{ marginBottom: 18 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: C.textPrimary, margin: 0, letterSpacing: 0.3 }}>
+          My Orders
+        </h2>
+        <p style={{ color: C.textMuted, fontSize: 13, margin: '4px 0 0' }}>
+          Every order you've placed — newest first.
+        </p>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-        <button key="all" className={`btn btn-sm ${filter === '' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(''); setPage(1); }}>All</button>
+      {/* Filter pill row */}
+      <div className="v2-filter-pills" style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        <FilterPill active={filter === ''} onClick={() => { setFilter(''); setPage(1); }}>
+          All
+        </FilterPill>
         {adminStatuses.map(s => (
-          <button key={s.code} className={`btn btn-sm ${filter === s.code ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s.code); setPage(1); }}>
+          <FilterPill
+            key={s.code}
+            active={filter === s.code}
+            onClick={() => { setFilter(s.code); setPage(1); }}
+          >
             {s.name}
-          </button>
+          </FilterPill>
         ))}
       </div>
 
-      {orders.length === 0 ? (
-        <div className="card text-center" style={{ padding: '60px 40px' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
-          <h3 style={{ marginBottom: 8 }}>No orders found</h3>
-          <p style={{ color: 'var(--text-secondary)' }}>
-            {filter ? 'No orders with this status' : 'You haven\'t placed any orders yet'}
-          </p>
+      {loading ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 240 }}>
+          <div className="loading-spinner" />
         </div>
+      ) : orders.length === 0 ? (
+        <Card style={{ padding: '50px 30px', textAlign: 'center' }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: '50%',
+            background: C.accentSoft, color: C.accent,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+          }}>
+            <FiList size={24} />
+          </div>
+          <h3 style={{ marginBottom: 6, color: C.textPrimary, fontSize: 16, fontWeight: 700 }}>
+            No orders found
+          </h3>
+          <p style={{ color: C.textMuted, fontSize: 13, margin: 0 }}>
+            {filter ? 'No orders with this status.' : 'You haven\'t placed any orders yet.'}
+          </p>
+        </Card>
       ) : (
         <>
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Course</th>
-                  <th>Type</th>
-                  <th>Subject</th>
-                  <th>Plan</th>
-                  <th>Total</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paged.map(order => (
-                  <tr key={order.id}>
-                    <td>{order.order_code || `#${order.id}`}</td>
-                    <td style={{ fontWeight: 500 }}>{order.course_name}</td>
-                    <td>{order.order_type_name}</td>
-                    <td>{order.subject_name}</td>
-                    <td>{order.plan_name || '—'}</td>
-                    <td style={{ color: 'var(--accent)', fontWeight: 600 }}>${parseFloat(order.total_price).toFixed(2)}</td>
-                    <td><span className={`badge-status badge-${order.status}`}>{order.admin_status_name || order.status}</span></td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{new Date(order.created_at).toLocaleDateString()}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <Link to={`/orders/${order.id}`} className="btn btn-sm btn-outline"><FiEye size={14} /></Link>
-                        {!!order.chat_enabled && (
-                          <>
-                            <Link to={`/chat/tutor/${order.id}`} className="btn btn-sm btn-secondary" title="Tutor Chat" style={{ color: '#6366f1' }}><FiUser size={14} /></Link>
-                            <Link to={`/chat/support/${order.id}`} className="btn btn-sm btn-secondary" title="Support Chat" style={{ color: '#84c225' }}><FiHeadphones size={14} /></Link>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {paged.map(o => (
+              <ActiveOrderCard key={o.id} order={o} detailHref={`/orders/${o.id}`} />
+            ))}
           </div>
+
           {totalPages > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 24 }}>
-              <button className="btn btn-sm btn-secondary" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                <FiChevronLeft size={14} /> Prev
-              </button>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-                Page {page} of {totalPages} <span style={{ color: 'var(--text-muted)' }}>({orders.length} orders)</span>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 14, marginTop: 24,
+            }}>
+              <PagerBtn disabled={page <= 1} onClick={() => setPage(p => p - 1)} icon={FiChevronLeft}>
+                Prev
+              </PagerBtn>
+              <span style={{ fontSize: 13, color: C.textSecondary, fontWeight: 600 }}>
+                Page {page} of {totalPages}
+                <span style={{ color: C.textMuted, fontWeight: 500 }}> ({orders.length} orders)</span>
               </span>
-              <button className="btn btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                Next <FiChevronRight size={14} />
-              </button>
+              <PagerBtn disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} iconRight={FiChevronRight}>
+                Next
+              </PagerBtn>
             </div>
           )}
         </>
       )}
     </div>
+  );
+}
+
+function FilterPill({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: 'none',
+        padding: '7px 14px',
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: 0.4,
+        cursor: 'pointer',
+        textTransform: 'uppercase',
+        background: active ? C.accent : '#eef2f7',
+        color: active ? '#fff' : C.textSecondary,
+        transition: C.transitionFast,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PagerBtn({ onClick, disabled, icon: Icon, iconRight: IconRight, children }) {
+  return (
+    <button
+      type="button" onClick={onClick} disabled={disabled}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '7px 14px', borderRadius: 8,
+        background: disabled ? '#eef2f7' : C.surface,
+        border: `1px solid ${C.border}`,
+        color: disabled ? C.textMuted : C.textPrimary,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+      }}
+    >
+      {Icon && <Icon size={14} />}
+      {children}
+      {IconRight && <IconRight size={14} />}
+    </button>
   );
 }
