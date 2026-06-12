@@ -62,6 +62,11 @@ router.get('/chats/flagged', requirePermission('chats'), adminController.getFlag
 
 // Reports (if permitted)
 router.get('/reports', requirePermission('reports'), adminController.getReports);
+// Detailed reporting suite (overview / tutors / customers)
+const reportsController = require('../controllers/reportsController');
+router.get('/reports/overview', requirePermission('reports'), reportsController.overview);
+router.get('/reports/tutors', requirePermission('reports'), reportsController.tutorReport);
+router.get('/reports/users', requirePermission('reports'), reportsController.userReport);
 
 // Settings (if permitted)
 router.get('/settings', requirePermission('settings'), adminController.getSettings);

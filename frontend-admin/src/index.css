@@ -876,3 +876,27 @@ tr:hover td {
 .gap-1 { gap: 8px; }
 .gap-2 { gap: 16px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+/* ── Dashboard entry animations (staggered via inline animation-delay) ── */
+.fade-up {
+  opacity: 0;
+  animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.bar-grow {
+  transform-origin: bottom;
+  animation: barGrow 0.7s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: 0.45s;
+}
+@keyframes barGrow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up, .bar-grow { animation: none; opacity: 1; transform: none; }
+}

@@ -11,6 +11,7 @@ const DEFAULT_BRAND = {
   name: 'EduPro',
   nickname: null,
   logoUrl: null,
+  faviconUrl: null,
   contactEmail: null,
   resolved: false
 };
@@ -25,10 +26,14 @@ export const SiteBrandingProvider = ({ children }) => {
       .then(res => {
         const s = res.data?.site;
         if (s) {
+          const faviconUrl = s.favicon_url
+            ? (s.favicon_url.startsWith('http') ? s.favicon_url : `${API_ORIGIN}${s.favicon_url}`)
+            : null;
           setBrand({
             name: s.name,
             nickname: s.nickname,
             logoUrl: s.logo_url ? (s.logo_url.startsWith('http') ? s.logo_url : `${API_ORIGIN}${s.logo_url}`) : null,
+            faviconUrl,
             contactEmail: s.contact_email || null,
             resolved: true,
             siteKey: s.site_key,
@@ -40,6 +45,17 @@ export const SiteBrandingProvider = ({ children }) => {
             }
           });
           document.title = s.name;
+
+          // Swap the browser tab icon to the site's favicon
+          if (faviconUrl) {
+            let link = document.querySelector("link[rel~='icon']");
+            if (!link) {
+              link = document.createElement('link');
+              link.rel = 'icon';
+              document.head.appendChild(link);
+            }
+            link.href = faviconUrl;
+          }
 
           // Inject head scripts (once)
           if (s.head_scripts && !document.getElementById('site-head-scripts')) {

@@ -36,6 +36,11 @@ export const getAllTutors = () => api.get('/admin/tutors');
 export const createTutor = (data) => api.post('/admin/tutors', data);
 export const updateTutor = (id, data) => api.put(`/admin/tutors/${id}`, data);
 export const deleteTutor = (id) => api.delete(`/admin/tutors/${id}`);
+// Detailed reports
+export const getReportsOverview = (params) => api.get('/admin/reports/overview', { params });
+export const getTutorReport = (params) => api.get('/admin/reports/tutors', { params });
+export const getUserReport = (params) => api.get('/admin/reports/users', { params });
+
 // Notification feed (bell panel) — role-aware; same paths exist under /sales
 export const getNotificationsFeed = () => api.get('/admin/notifications-feed');
 export const getNotificationsFeedUnread = () => api.get('/admin/notifications-feed/unread-count');
@@ -174,6 +179,9 @@ export const salesApi = {
   closeIssue: (id) => api.patch(`/sales/issues/${id}/close`),
   reopenIssue: (id) => api.patch(`/sales/issues/${id}/reopen`),
   getReports: (params) => api.get('/sales/reports', { params }),
+  getReportsOverview: (params) => api.get('/sales/reports/overview', { params }),
+  getTutorReport: (params) => api.get('/sales/reports/tutors', { params }),
+  getUserReport: (params) => api.get('/sales/reports/users', { params }),
   getSettings: () => api.get('/sales/settings'),
   updatePlan: (id, data) => api.put(`/sales/plans/${id}`, data),
   createCoupon: (data) => api.post('/sales/coupons', data),

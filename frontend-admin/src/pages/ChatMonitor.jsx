@@ -92,7 +92,7 @@ export default function ChatMonitor() {
                     ...(unread > 0 && !hasFlag ? { background: 'rgba(99, 102, 241, 0.08)', borderLeft: '3px solid var(--accent)' } : {})
                   }}>
                     <td>
-                      <span style={{ fontWeight: unread > 0 ? 700 : 400 }}>#{c.order_id}</span>
+                      <span style={{ fontWeight: unread > 0 ? 700 : 400 }}>{c.order_code || `#${c.order_id}`}</span>
                       {unread > 0 && (
                         <span style={{ background: 'var(--accent)', color: '#fff', fontSize: 10, padding: '1px 6px', borderRadius: 10, fontWeight: 700, marginLeft: 8 }}>{unread} new</span>
                       )}
@@ -118,7 +118,7 @@ export default function ChatMonitor() {
             <tbody>
               {flagged.map(m => (
                 <tr key={m.id}>
-                  <td>#{m.order_id}</td>
+                  <td>{m.order_code || `#${m.order_id}`}</td>
                   <td>{m.sender_name}</td>
                   <td><span className={`badge-status badge-${m.sender_role === 'tutor' ? 'active' : 'pending'}`}>{m.sender_role}</span></td>
                   <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.message}</td>

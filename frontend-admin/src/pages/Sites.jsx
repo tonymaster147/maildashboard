@@ -6,7 +6,7 @@ const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api')
 const resolveLogo = (url) => !url ? '' : (url.startsWith('http') ? url : `${API_ORIGIN}${url}`);
 
 const EMPTY_FORM = {
-  name: '', url: '', nickname: '', site_key: '', logo_url: '',
+  name: '', url: '', nickname: '', site_key: '', logo_url: '', favicon_url: '',
   from_name: '', from_email: '', contact_email: '',
   smtp_host: '', smtp_port: 587, smtp_secure: false,
   smtp_user: '', smtp_pass: '',
@@ -26,6 +26,7 @@ export default function Sites() {
   const [passTouched, setPassTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [faviconUploading, setFaviconUploading] = useState(false);
   const [testingId, setTestingId] = useState(null);
   const [testEmail, setTestEmail] = useState('');
 
@@ -55,6 +56,7 @@ export default function Sites() {
       nickname: site.nickname || '',
       site_key: site.site_key || '',
       logo_url: site.logo_url || '',
+      favicon_url: site.favicon_url || '',
       from_name: site.from_name || '',
       from_email: site.from_email || '',
       contact_email: site.contact_email || '',
@@ -90,6 +92,22 @@ export default function Sites() {
       alert(err.response?.data?.error || 'Logo upload failed');
     } finally {
       setLogoUploading(false);
+    }
+  };
+
+  const handleFaviconUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFaviconUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('logo', file);
+      const res = await adminApi.uploadSiteLogo(fd);
+      setForm(f => ({ ...f, favicon_url: res.data.url }));
+    } catch (err) {
+      alert(err.response?.data?.error || 'Favicon upload failed');
+    } finally {
+      setFaviconUploading(false);
     }
   };
 
@@ -265,6 +283,23 @@ export default function Sites() {
                   )}
                 </div>
                 <input className="form-input" value={form.logo_url} onChange={e => setForm(f => ({ ...f, logo_url: e.target.value }))} placeholder="or paste an image URL" />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Favicon <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 12 }}>(browser tab icon — square PNG/ICO, 32px+ recommended)</span></label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                  {form.favicon_url && (
+                    <img src={resolveLogo(form.favicon_url)} alt="favicon" style={{ width: 32, height: 32, objectFit: 'contain', background: 'var(--bg-input)', padding: 4, borderRadius: 6 }} />
+                  )}
+                  <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
+                    <FiUpload size={14} /> {faviconUploading ? 'Uploading...' : 'Upload'}
+                    <input type="file" accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/svg+xml,image/jpeg,image/webp" onChange={handleFaviconUpload} style={{ display: 'none' }} disabled={faviconUploading} />
+                  </label>
+                  {form.favicon_url && (
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setForm(f => ({ ...f, favicon_url: '' }))}>Clear</button>
+                  )}
+                </div>
+                <input className="form-input" value={form.favicon_url} onChange={e => setForm(f => ({ ...f, favicon_url: e.target.value }))} placeholder="or paste an image URL" />
               </div>
 
               <h4 style={{ margin: '20px 0 12px', fontSize: 13, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Email Identity</h4>

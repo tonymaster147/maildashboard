@@ -5,7 +5,7 @@ const TTL_MS = 60 * 1000;
 
 async function loadSites() {
   if (cache.list && Date.now() - cache.ts < TTL_MS) return cache.list;
-  const [rows] = await db.query('SELECT id, site_key, name, nickname, logo_url, url, is_active FROM sites WHERE is_active = 1');
+  const [rows] = await db.query('SELECT id, site_key, name, nickname, logo_url, favicon_url, url, is_active FROM sites WHERE is_active = 1');
   cache.list = rows;
   cache.ts = Date.now();
   return rows;

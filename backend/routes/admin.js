@@ -83,6 +83,11 @@ router.put('/notifications/:id/read', adminController.markNotificationRead);
 
 // Reports
 router.get('/reports', adminController.getReports);
+// Detailed reporting suite (overview / tutors / customers)
+const reportsController = require('../controllers/reportsController');
+router.get('/reports/overview', reportsController.overview);
+router.get('/reports/tutors', reportsController.tutorReport);
+router.get('/reports/users', reportsController.userReport);
 
 // Banned Words
 router.get('/banned-words', adminController.getBannedWords);

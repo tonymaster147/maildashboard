@@ -164,7 +164,7 @@ export default function SalesChat() {
   };
 
   const filteredOrders = orders.filter(o =>
-    !search || `#${o.id} ${o.title || ''} ${o.user_email || ''}`.toLowerCase().includes(search.toLowerCase())
+    !search || `#${o.id} ${o.order_code || ''} ${o.title || ''} ${o.user_email || ''} ${o.username || ''}`.toLowerCase().includes(search.toLowerCase())
   );
 
   const isMySentMessage = (msg) => {

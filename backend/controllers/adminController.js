@@ -11,29 +11,46 @@ exports.getDashboardStats = async (req, res) => {
     // Run all stat queries in parallel to reduce connection hold time
     const [
       [[totalSales]],
+      [[revenueThisMonth]],
       [[activeOrders]],
       [[completedOrders]],
       [[pendingOrders]],
       [[totalUsers]],
       [[totalTutors]],
       [[flaggedMessages]],
+      [[outstanding]],
+      [[unassignedPaid]],
+      [[workStopped]],
+      [[openIssues]],
+      [[overdueInstallments]],
       [recentOrders],
       [monthlyRevenue]
     ] = await Promise.all([
       db.query('SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = "completed"'),
+      db.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments
+                WHERE status = "completed" AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`),
       db.query('SELECT COUNT(*) as count FROM orders WHERE status IN ("active", "in_progress")'),
       db.query('SELECT COUNT(*) as count FROM orders WHERE status = "completed"'),
       db.query('SELECT COUNT(*) as count FROM orders WHERE status = "pending"'),
       db.query('SELECT COUNT(*) as count FROM users WHERE role = "user"'),
       db.query('SELECT COUNT(*) as count FROM tutors'),
       db.query('SELECT COUNT(*) as count FROM chats WHERE is_flagged = 1'),
+      db.query('SELECT COALESCE(SUM(amount_remaining), 0) as total FROM orders WHERE status NOT IN ("cancelled")'),
+      db.query(`SELECT COUNT(*) as count FROM orders o
+                WHERE o.status = 'active'
+                  AND NOT EXISTS (SELECT 1 FROM order_tutors ot WHERE ot.order_id = o.id)`),
+      db.query(`SELECT COUNT(*) as count FROM orders o
+                JOIN tutor_statuses ts ON o.tutor_status_id = ts.id
+                WHERE ts.code = 'work_stopped' AND o.status = 'active'`),
+      db.query("SELECT COUNT(*) as count FROM issues WHERE status = 'open'"),
+      db.query("SELECT COUNT(*) as count FROM order_installments WHERE status = 'overdue'"),
       db.query(`
         SELECT o.id, o.order_code, o.course_name, o.total_price, o.status, o.created_at, u.username
         FROM orders o JOIN users u ON o.user_id = u.id
         ORDER BY o.created_at DESC LIMIT 10
       `),
       db.query(`
-        SELECT DATE_FORMAT(created_at, '%Y-%m') as month, SUM(amount) as revenue
+        SELECT DATE_FORMAT(created_at, '%Y-%m') as month, SUM(amount) as revenue, COUNT(*) as payments
         FROM payments WHERE status = 'completed'
         GROUP BY month ORDER BY month DESC LIMIT 12
       `)
@@ -41,12 +58,18 @@ exports.getDashboardStats = async (req, res) => {
 
     res.json({
       total_sales: totalSales.total,
+      revenue_this_month: revenueThisMonth.total,
       active_orders: activeOrders.count,
       completed_orders: completedOrders.count,
       pending_orders: pendingOrders.count,
       total_users: totalUsers.count,
       total_tutors: totalTutors.count,
       flagged_messages: flaggedMessages.count,
+      outstanding: outstanding.total,
+      unassigned_paid: unassignedPaid.count,
+      work_stopped: workStopped.count,
+      open_issues: openIssues.count,
+      overdue_installments: overdueInstallments.count,
       recent_orders: recentOrders,
       monthly_revenue: monthlyRevenue.reverse()
     });
@@ -222,7 +245,7 @@ exports.getAllOrders = async (req, res) => {
     const params = [];
     if (admin_status_code) { query += ' AND astat.code = ?'; params.push(admin_status_code); }
     else if (status)       { query += ' AND o.status = ?';   params.push(status); }
-    if (search) { query += ' AND (o.course_name LIKE ? OR u.username LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+    if (search) { query += ' AND (o.course_name LIKE ? OR u.username LIKE ? OR o.order_code LIKE ? OR o.id = ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`, search); }
     query += ' GROUP BY o.id';
     if (unassigned === 'true') { query += ' HAVING tutor_names IS NULL'; }
     query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
@@ -234,7 +257,7 @@ exports.getAllOrders = async (req, res) => {
     const countParams = [];
     if (admin_status_code) { countQuery += ' AND astat.code = ?'; countParams.push(admin_status_code); }
     else if (status)       { countQuery += ' AND o.status = ?';   countParams.push(status); }
-    if (search) { countQuery += ' AND (o.course_name LIKE ? OR u.username LIKE ?)'; countParams.push(`%${search}%`, `%${search}%`); }
+    if (search) { countQuery += ' AND (o.course_name LIKE ? OR u.username LIKE ? OR o.order_code LIKE ? OR o.id = ?)'; countParams.push(`%${search}%`, `%${search}%`, `%${search}%`, search); }
     if (unassigned === 'true') { countQuery += ' AND otr.order_id IS NULL'; }
     const [[{ total }]] = await db.query(countQuery, countParams);
     res.json({ orders, total, page: parseInt(page), limit: parseInt(limit) });
@@ -459,7 +482,7 @@ exports.reopenChat = async (req, res) => {
 exports.getAllChats = async (req, res) => {
   try {
     const [chats] = await db.query(`
-      SELECT DISTINCT o.id as order_id, o.course_name, u.username,
+      SELECT DISTINCT o.id as order_id, o.order_code, o.course_name, u.username,
         (SELECT COUNT(*) FROM chats WHERE order_id = o.id) as message_count,
         (SELECT COUNT(*) FROM chats WHERE order_id = o.id AND is_flagged = 1) as flagged_count,
         (SELECT MAX(created_at) FROM chats WHERE order_id = o.id) as last_message_at
@@ -478,7 +501,7 @@ exports.getAllChats = async (req, res) => {
 exports.getFlaggedMessages = async (req, res) => {
   try {
     const [messages] = await db.query(`
-      SELECT c.*, o.course_name,
+      SELECT c.*, o.course_name, o.order_code,
         CASE
           WHEN c.sender_role = 'user' THEN u.username
           WHEN c.sender_role = 'tutor' THEN t.name
@@ -591,8 +614,9 @@ exports.getReports = async (req, res) => {
     } = req.query;
 
     let query = `
-      SELECT 
+      SELECT
         o.id as order_id,
+        o.order_code,
         o.course_name as project_name,
         o.status as order_status,
         o.total_price as amount,
@@ -619,8 +643,9 @@ exports.getReports = async (req, res) => {
 
     // Apply filters
     if (search) {
-      query += ' AND (o.course_name LIKE ? OR o.id = ?)';
-      params.push(`%${search}%`, search);
+      // Match course name, numeric id, or the friendly order code (MMT018…)
+      query += ' AND (o.course_name LIKE ? OR o.id = ? OR o.order_code LIKE ?)';
+      params.push(`%${search}%`, search, `%${search}%`);
     }
     
     if (status) {
