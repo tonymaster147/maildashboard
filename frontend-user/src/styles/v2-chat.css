@@ -16,8 +16,10 @@
 /* ── Chat room container ─────────────────────────────────── */
 .v2-chat-container {
   /* Fill the area between the topbar (~68px) and the bottom of the page.
-     Main padding is 24px top/bottom on desktop. */
-  height: calc(100vh - var(--v2-topbar-height) - 48px);
+     Main padding is 24px top/bottom on desktop, plus a 40px breathing gap
+     below the input so it isn't glued to the viewport edge. */
+  height: calc(100vh - var(--v2-topbar-height) - 48px - 64px);
+  margin-bottom: 64px;
   display: flex;
   flex-direction: column;
   background: var(--v2-surface);
@@ -55,13 +57,16 @@
 /* Tablet + below: tighten + use more vertical space */
 @media (max-width: 1024px) {
   .v2-chat-container {
-    height: calc(100vh - var(--v2-topbar-height) - 40px);
+    /* -40px layout + -64px breathing gap (see desktop rule) */
+    height: calc(100vh - var(--v2-topbar-height) - 40px - 64px);
   }
 }
 
 @media (max-width: 640px) {
   .v2-chat-container {
-    height: calc(100vh - var(--v2-topbar-height) - 32px);
+    /* Smaller 32px gap on mobile to conserve vertical space */
+    height: calc(100vh - var(--v2-topbar-height) - 32px - 32px);
+    margin-bottom: 32px;
     border-radius: 10px;
   }
   .v2-chat-header { padding: 12px 14px; gap: 10px; }

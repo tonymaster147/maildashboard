@@ -355,7 +355,7 @@ export default function NewOrder() {
   }
 
   return (
-    <div>
+    <div style={{ paddingBottom: 64 }}>
       {/* Page header */}
       <div style={{ marginBottom: 18 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, color: C.textPrimary, margin: 0, letterSpacing: 0.3 }}>

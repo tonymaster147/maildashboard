@@ -475,6 +475,19 @@ exports.createDraftOrder = async (req, res) => {
       io.to('admin_monitor').emit('newOrderNotification', { orderId: result.insertId });
     }
 
+    // Persist a staff bell notification so a brand-new (still unpaid) order
+    // shows up immediately — mirrors the draft confirmation email. The paid
+    // path emits its own 'new paid order' later; this is the earlier signal.
+    // 'new_order' is a QUIET_TYPE on the admin side, so the Orders-badge
+    // handler owns the sound and this won't double-beep.
+    const { notifyStaff } = require('../services/notifyUser');
+    await notifyStaff(io, {
+      type: 'new_order',
+      message: `New order ${orderCode} started (unpaid) — ${course_name}`,
+      referenceId: result.insertId,
+      referenceType: 'order',
+    }).catch(e => console.error('staff draft notify failed:', e.message));
+
     res.status(201).json({ order_id: result.insertId, message: 'Draft order created' });
   } catch (error) {
     console.error('Create draft order error:', error);
