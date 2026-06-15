@@ -70,6 +70,7 @@ router.get('/reports/users', requirePermission('reports'), reportsController.use
 
 // Settings (if permitted)
 router.get('/settings', requirePermission('settings'), adminController.getSettings);
+router.put('/notification-emails', requirePermission('settings'), adminController.updateNotificationEmails);
 router.put('/plans/:id', requirePermission('settings'), adminController.updatePlan);
 router.post('/coupons', requirePermission('settings'), adminController.createCoupon);
 router.delete('/coupons/:id', requirePermission('settings'), adminController.deleteCoupon);

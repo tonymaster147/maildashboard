@@ -11,6 +11,7 @@ const {
   sendIssueReplyToUser,
   sendIssueReplyToAdmin
 } = require('../services/emailService');
+const { getAdminEmails } = require('../services/settings');
 
 const ALLOWED_CATEGORIES = [
   'Unresponsive Tutor',
@@ -19,11 +20,10 @@ const ALLOWED_CATEGORIES = [
   "Can't reach customer service",
   'Other'
 ];
-const ADMIN_EMAIL = 'faruqui.a4u@gmail.com';
-
 async function getAdminAndSalesRecipients() {
   const [sales] = await db.query("SELECT email FROM sales_users WHERE status = 'active' AND email IS NOT NULL");
-  return [ADMIN_EMAIL, ...sales.map(s => s.email)].filter(Boolean);
+  const adminEmails = await getAdminEmails();
+  return [...adminEmails, ...sales.map(s => s.email)].filter(Boolean);
 }
 
 function isStaff(role) {

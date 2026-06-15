@@ -53,6 +53,7 @@ router.get('/chats/flagged', adminController.getFlaggedMessages);
 
 // Settings
 router.get('/settings', adminController.getSettings);
+router.put('/notification-emails', adminController.updateNotificationEmails);
 router.put('/plans/:id', adminController.updatePlan);
 router.post('/coupons', adminController.createCoupon);
 router.delete('/coupons/:id', adminController.deleteCoupon);

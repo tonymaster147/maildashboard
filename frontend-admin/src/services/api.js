@@ -78,6 +78,7 @@ export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');
 
 // Settings
 export const getSettings = () => api.get('/admin/settings');
+export const updateNotificationEmails = (data) => api.put('/admin/notification-emails', data);
 export const updatePlan = (id, data) => api.put(`/admin/plans/${id}`, data);
 export const createCoupon = (data) => api.post('/admin/coupons', data);
 export const deleteCoupon = (id) => api.delete(`/admin/coupons/${id}`);
@@ -183,6 +184,7 @@ export const salesApi = {
   getTutorReport: (params) => api.get('/sales/reports/tutors', { params }),
   getUserReport: (params) => api.get('/sales/reports/users', { params }),
   getSettings: () => api.get('/sales/settings'),
+  updateNotificationEmails: (data) => api.put('/sales/notification-emails', data),
   updatePlan: (id, data) => api.put(`/sales/plans/${id}`, data),
   createCoupon: (data) => api.post('/sales/coupons', data),
   deleteCoupon: (id) => api.delete(`/sales/coupons/${id}`),

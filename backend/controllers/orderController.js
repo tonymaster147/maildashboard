@@ -290,7 +290,8 @@ exports.updateOrderLoginDetails = async (req, res) => {
 
     // Email admin + every active sales user + every assigned tutor — the
     // tutor is the one who actually uses these credentials (non-blocking)
-    const ADMIN_EMAIL = 'faruqui.a4u@gmail.com';
+    const { getAdminEmails } = require('../services/settings');
+    const adminEmails = await getAdminEmails();
     const [sales] = await db.query("SELECT email FROM sales_users WHERE status = 'active' AND email IS NOT NULL");
     const [tutorEmails] = await db.query(
       `SELECT t.email FROM order_tutors ot
@@ -298,7 +299,7 @@ exports.updateOrderLoginDetails = async (req, res) => {
        WHERE ot.order_id = ? AND t.email IS NOT NULL AND t.status = 'active'`,
       [id]
     );
-    const recipients = [...new Set([ADMIN_EMAIL, ...sales.map(s => s.email), ...tutorEmails.map(t => t.email)].filter(Boolean))];
+    const recipients = [...new Set([...adminEmails, ...sales.map(s => s.email), ...tutorEmails.map(t => t.email)].filter(Boolean))];
     const { sendLoginDetailsUpdated } = require('../services/emailService');
     sendLoginDetailsUpdated({
       orderId: id,

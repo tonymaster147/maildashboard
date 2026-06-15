@@ -4,7 +4,7 @@ const { decryptSecret } = require('../utils/crypto');
 const { formatOrderRef } = require('../utils/orderCode');
 require('dotenv').config();
 
-const ADMIN_EMAIL = 'faruqui.a4u@gmail.com';
+const { getAdminEmails } = require('./settings');
 
 // Master fallback transporter (env-based)
 const masterTransporter = nodemailer.createTransport({
@@ -309,7 +309,7 @@ async function sendNewOrderAdmin(orderDetails) {
     ${footer(ctx.brand)}
   `;
   const ok = await sendViaContext(ctx, {
-    to: ADMIN_EMAIL,
+    to: (await getAdminEmails()).join(', '),
     subject: `Order ${ref} - ${status === 'incomplete' ? 'New Draft' : status === 'active' ? 'Payment Confirmed' : 'Updated'} - ${ctx.brand.name}`,
     html
   });
@@ -503,7 +503,7 @@ async function sendInstallmentPlanCreated(email, details) {
 async function sendInstallmentReminder(email, details) {
   const { orderId, username, installmentNumber, amount, dueDate, daysUntilDue, siteId, recipient } = details;
   const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
-  const to = recipient === 'admin' ? ADMIN_EMAIL : email;
+  const to = recipient === 'admin' ? (await getAdminEmails()).join(', ') : email;
   if (!to) return;
   const ref = await formatOrderRef(orderId);
 

@@ -531,9 +531,36 @@ exports.getSettings = async (req, res) => {
     const [educationLevels] = await db.query('SELECT * FROM education_levels ORDER BY id');
     const [plans] = await db.query('SELECT * FROM plans ORDER BY sort_order');
     const [coupons] = await db.query('SELECT * FROM coupons ORDER BY created_at DESC');
-    res.json({ orderTypes, subjects, educationLevels, plans, coupons });
+    const { getSetting, DEFAULT_ADMIN_EMAILS } = require('../services/settings');
+    const adminNotificationEmails = await getSetting('admin_notification_emails', DEFAULT_ADMIN_EMAILS);
+    res.json({ orderTypes, subjects, educationLevels, plans, coupons, adminNotificationEmails });
   } catch (error) {
     console.error('Get settings error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Update the global admin notification email list (comma/newline separated).
+exports.updateNotificationEmails = async (req, res) => {
+  try {
+    const { emails } = req.body;
+    const { setSetting, parseEmailList } = require('../services/settings');
+    const list = parseEmailList(emails);
+
+    if (list.length === 0) {
+      return res.status(400).json({ error: 'Enter at least one email address.' });
+    }
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalid = list.filter(e => !emailRe.test(e));
+    if (invalid.length) {
+      return res.status(400).json({ error: `Invalid email${invalid.length > 1 ? 's' : ''}: ${invalid.join(', ')}` });
+    }
+
+    const value = list.join(', ');
+    await setSetting('admin_notification_emails', value);
+    res.json({ message: 'Notification emails updated', adminNotificationEmails: value });
+  } catch (error) {
+    console.error('Update notification emails error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };

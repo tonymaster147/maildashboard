@@ -1,21 +1,25 @@
 import { useState, useEffect } from 'react';
-import { FiSave, FiPlus, FiTrash2, FiShield } from 'react-icons/fi';
+import { FiSave, FiPlus, FiTrash2, FiShield, FiMail } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
 import StatusListEditor from '../components/StatusListEditor';
 
 export default function Settings() {
-  const { getSettings, updatePlan, createCoupon, deleteCoupon, getBannedWords, addBannedWord, deleteBannedWord } = useApi();
+  const { getSettings, updateNotificationEmails, updatePlan, createCoupon, deleteCoupon, getBannedWords, addBannedWord, deleteBannedWord } = useApi();
   const [settings, setSettings] = useState(null);
   const [bannedWords, setBannedWords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newCoupon, setNewCoupon] = useState({ code: '', discount_percent: '', max_uses: '', expires_at: '' });
   const [editingPlan, setEditingPlan] = useState(null);
   const [newPhrase, setNewPhrase] = useState('');
+  const [notifEmails, setNotifEmails] = useState('');
+  const [savingNotif, setSavingNotif] = useState(false);
+  const [notifMsg, setNotifMsg] = useState(null);
 
   const fetchSettings = async () => {
     try {
       const [setRes, banRes] = await Promise.all([getSettings(), getBannedWords()]);
       setSettings(setRes.data);
+      setNotifEmails(setRes.data.adminNotificationEmails || '');
       setBannedWords(banRes.data.banned_words);
     } catch (e) {
       console.error(e);
@@ -24,6 +28,21 @@ export default function Settings() {
     }
   };
   useEffect(() => { fetchSettings(); }, []);
+
+  const handleSaveNotifEmails = async (e) => {
+    e.preventDefault();
+    setSavingNotif(true);
+    setNotifMsg(null);
+    try {
+      const res = await updateNotificationEmails({ emails: notifEmails });
+      setNotifEmails(res.data.adminNotificationEmails);
+      setNotifMsg({ type: 'success', text: 'Saved. Notifications will go to these addresses.' });
+    } catch (err) {
+      setNotifMsg({ type: 'error', text: err.response?.data?.error || 'Failed to save' });
+    } finally {
+      setSavingNotif(false);
+    }
+  };
 
   const handlePlanSave = async (plan) => {
     await updatePlan(plan.id, plan);
@@ -69,6 +88,33 @@ export default function Settings() {
   return (
     <div>
       <div className="page-header"><h2>Settings</h2><p>Manage plans, coupons, and chat security</p></div>
+
+      {/* Admin Notification Emails */}
+      <div className="card mb-3">
+        <h3 style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FiMail className="text-info" /> Notification Emails
+        </h3>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: 16, fontSize: 14 }}>
+          These addresses receive new-order, support-issue, and login-update emails. Add one or more, separated by commas.
+        </p>
+        <form onSubmit={handleSaveNotifEmails} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            className="form-input"
+            placeholder="faruqui.a4u@gmail.com, admin@example.com"
+            value={notifEmails}
+            onChange={e => setNotifEmails(e.target.value)}
+            style={{ flex: 1, minWidth: 280 }}
+          />
+          <button type="submit" className="btn btn-primary" disabled={savingNotif}>
+            <FiSave size={14} /> {savingNotif ? 'Saving…' : 'Save'}
+          </button>
+        </form>
+        {notifMsg && (
+          <p style={{ marginTop: 10, fontSize: 13, color: notifMsg.type === 'error' ? 'var(--error)' : 'var(--success, #16a34a)' }}>
+            {notifMsg.text}
+          </p>
+        )}
+      </div>
 
       {/* Plans */}
       <div className="card mb-3">
