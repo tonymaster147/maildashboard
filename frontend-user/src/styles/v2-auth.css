@@ -5,9 +5,27 @@
    Tablet+:  hero hidden, form full-width with mobile brand
    ============================================================ */
 
-.v2-auth-shell {
+/* Full viewport — light backdrop with breathing room so the card floats
+   centered with gaps on every side (matches the Figma frame). */
+.v2-auth-page {
   min-height: 100vh;
   background: var(--v2-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+/* The card itself: white, rounded, soft shadow, hero + form side by side */
+.v2-auth-shell {
+  width: 100%;
+  max-width: 1080px;
+  min-height: 620px;
+  background: var(--v2-surface);
+  border: 1px solid var(--v2-border);
+  border-radius: 24px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
   display: grid;
   grid-template-columns: 1.05fr 1fr;
 }
@@ -18,7 +36,9 @@
   overflow: hidden;
   background: var(--v2-grad-hero);
   color: #fff;
-  padding: 60px 56px;
+  padding: 56px 52px;
+  margin: 16px;
+  border-radius: 18px;
   display: flex;
   align-items: center;
 }
@@ -60,6 +80,16 @@
   margin: 0;
 }
 
+/* Copyright pinned to the bottom-left of the hero */
+.v2-auth-copyright {
+  position: absolute;
+  left: 56px;
+  bottom: 40px;
+  z-index: 1;
+  font-size: 13px;
+  opacity: 0.82;
+}
+
 /* ── Form card (right) ───────────────────────────────────── */
 .v2-auth-form-wrap {
   display: flex;
@@ -70,13 +100,42 @@
 
 .v2-auth-form-card {
   width: 100%;
-  max-width: 420px;
-  background: var(--v2-surface);
-  border: 1px solid var(--v2-border);
-  border-radius: var(--v2-radius-xl);
-  box-shadow: var(--v2-shadow);
-  padding: 32px;
+  max-width: 400px;
+  padding: 0;
 }
+
+/* ── Auth field labels (Title Case, darker) ──────────────── */
+.v2-auth-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+  margin-bottom: 7px;
+}
+.v2-auth-label .req { color: #ef4444; margin-left: 2px; }
+.v2-auth-hint { color: var(--v2-text-muted); font-size: 12px; margin: 6px 0 0; }
+
+/* Roomier, more rounded inputs — scoped to auth cards only so other
+   pages (New Order, etc.) keep their existing input sizing. */
+.v2-auth-form-card .form-input,
+.v2-auth-form-card .form-select {
+  padding: 13px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+/* Leading-icon inputs */
+.v2-input-icon-wrap { position: relative; }
+.v2-input-icon-wrap .v2-input-lead {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--v2-text-muted);
+  display: flex;
+  pointer-events: none;
+}
+.v2-input-icon-wrap .form-input { padding-left: 42px; }
 
 /* Mobile-only brand block above the form card */
 .v2-auth-form-brand {
@@ -101,21 +160,20 @@
 .v2-auth-link-strip::after {
   content: '';
   flex: 1;
-  height: 1px;
-  background: var(--v2-border);
+  height: 0;
+  border-top: 1px dashed var(--v2-border-strong, var(--v2-border));
 }
 
 .v2-auth-secondary-btn {
   width: 100%;
-  padding: 11px 18px;
+  padding: 13px 18px;
   border-radius: 10px;
   border: 1px solid var(--v2-border);
   background: var(--v2-surface);
   color: var(--v2-text-primary);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -142,16 +200,19 @@
 
 /* ── Tablet + mobile: hide hero, full-width form ─────────── */
 @media (max-width: 1024px) {
-  .v2-auth-shell { grid-template-columns: 1fr; }
+  .v2-auth-page { padding: 24px; }
+  .v2-auth-shell {
+    grid-template-columns: 1fr;
+    min-height: 0;
+    max-width: 460px;
+  }
   .v2-auth-hero  { display: none; }
-  .v2-auth-form-wrap { padding: 32px 20px; }
+  .v2-auth-form-wrap { padding: 36px 28px; }
+  .v2-auth-form-brand { display: flex; }
 }
 
 @media (max-width: 480px) {
-  .v2-auth-form-card { padding: 24px 20px; }
-  .v2-auth-form-brand { display: flex; }
-}
-
-@media (min-width: 481px) and (max-width: 1024px) {
-  .v2-auth-form-brand { display: flex; }
+  .v2-auth-page { padding: 14px; }
+  .v2-auth-shell { border-radius: 18px; }
+  .v2-auth-form-wrap { padding: 28px 20px; }
 }

@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { FiLogIn, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiLogIn, FiEye, FiEyeOff, FiUser, FiKey } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
-import { useSiteBranding } from '../context/SiteBrandingContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { login } from '../services/api';
 import Notice from '../components/Notice';
@@ -13,7 +12,6 @@ import { AuthShell } from '../components/ui';
 
 export default function Login() {
   usePageMeta('login');
-  const brand = useSiteBranding();
   const [username, setUsername] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [showCode, setShowCode] = useState(false);
@@ -41,23 +39,29 @@ export default function Login() {
 
   return (
     <AuthShell
-      title="Welcome back"
-      subtitle={`Sign in to your ${brand.name} account to continue.`}
+      title="Sign In"
+      subtitle="Please enter your details to access your account."
+      heroTitle="Welcome Back"
+      heroSubtitle="Sign in to manage your assignments, message tutors, and track your progress all in one place."
     >
       {successMessage && <Notice type="success">{successMessage}</Notice>}
       {error && <Notice type="error">{error}</Notice>}
 
       <form onSubmit={handleSubmit}>
         <Field label="Username">
-          <input
-            type="text" className="form-input"
-            placeholder="Enter your username"
-            value={username} onChange={e => setUsername(e.target.value)}
-            required autoComplete="username"
-          />
+          <div className="v2-input-icon-wrap">
+            <span className="v2-input-lead"><FiUser size={16} /></span>
+            <input
+              type="text" className="form-input"
+              placeholder="Enter your username"
+              value={username} onChange={e => setUsername(e.target.value)}
+              required autoComplete="username"
+            />
+          </div>
         </Field>
         <Field label="Access Code">
-          <div style={{ position: 'relative' }}>
+          <div className="v2-input-icon-wrap">
+            <span className="v2-input-lead"><FiKey size={16} /></span>
             <input
               type={showCode ? 'text' : 'password'} className="form-input"
               placeholder="Enter your access code"
@@ -78,7 +82,7 @@ export default function Login() {
             </button>
           </div>
           <Link to="/forgot-access-code" className="v2-auth-forgot">
-            Forgot access code?
+            Forgot Access Code?
           </Link>
         </Field>
 
@@ -102,23 +106,18 @@ export default function Login() {
 
 function Field({ label, children }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <label style={fieldLabelStyle}>{label}</label>
+    <div style={{ marginBottom: 16 }}>
+      <label className="v2-auth-label">{label}</label>
       {children}
     </div>
   );
 }
 
-const fieldLabelStyle = {
-  display: 'block', fontSize: 11, fontWeight: 700, color: C.textMuted,
-  letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6,
-};
-
 const primaryBtnStyle = (loading) => ({
-  width: '100%', marginTop: 8, padding: '12px 18px', borderRadius: 10,
+  width: '100%', marginTop: 8, padding: '13px 18px', borderRadius: 10,
   border: 'none', background: C.accent, color: '#fff',
   cursor: loading ? 'not-allowed' : 'pointer',
-  fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase',
+  fontSize: 14, fontWeight: 600, letterSpacing: 0.2,
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
   opacity: loading ? 0.7 : 1,
 });

@@ -5,13 +5,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FiMail, FiArrowLeft } from 'react-icons/fi';
 import { forgotAccessCode } from '../services/api';
-import { useSiteBranding } from '../context/SiteBrandingContext';
 import Notice from '../components/Notice';
 import { C } from '../theme/tokens';
 import { AuthShell } from '../components/ui';
 
 export default function ForgotAccessCode() {
-  const brand = useSiteBranding();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -34,27 +32,25 @@ export default function ForgotAccessCode() {
 
   return (
     <AuthShell
-      title="Forgot access code?"
-      subtitle={`Enter your ${brand.name} email and we'll send a new access code right away.`}
-      heroTitle="Lost access? We've got you."
-      heroSubtitle="One quick email and you're back in — no support ticket needed."
-      bullets={[
-        'New access code delivered in seconds',
-        'No password reset hoops',
-        'Same account, same orders, picked up where you left off',
-      ]}
+      title="Forgot Access Code?"
+      subtitle="Enter your email and we'll send a new access code right away."
+      heroTitle="Reset access"
+      heroSubtitle="Enter your email and we'll send a fresh access code so you can get back in — no support ticket needed."
     >
       {error && <Notice type="error">{error}</Notice>}
       {message && <Notice type="success">{message}</Notice>}
 
       <form onSubmit={handleSubmit}>
         <Field label="Email Address">
-          <input
-            type="email" className="form-input"
-            placeholder="your@email.com"
-            value={email} onChange={e => setEmail(e.target.value)}
-            required autoComplete="email"
-          />
+          <div className="v2-input-icon-wrap">
+            <span className="v2-input-lead"><FiMail size={16} /></span>
+            <input
+              type="email" className="form-input"
+              placeholder="your@email.com"
+              value={email} onChange={e => setEmail(e.target.value)}
+              required autoComplete="email"
+            />
+          </div>
         </Field>
 
         <button
@@ -77,23 +73,18 @@ export default function ForgotAccessCode() {
 
 function Field({ label, children }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{
-        display: 'block', fontSize: 11, fontWeight: 700, color: C.textMuted,
-        letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6,
-      }}>
-        {label}
-      </label>
+    <div style={{ marginBottom: 16 }}>
+      <label className="v2-auth-label">{label}</label>
       {children}
     </div>
   );
 }
 
 const primaryBtnStyle = (loading) => ({
-  width: '100%', marginTop: 8, padding: '12px 18px', borderRadius: 10,
+  width: '100%', marginTop: 8, padding: '13px 18px', borderRadius: 10,
   border: 'none', background: C.accent, color: '#fff',
   cursor: loading ? 'not-allowed' : 'pointer',
-  fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase',
+  fontSize: 14, fontWeight: 600, letterSpacing: 0.2,
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
   opacity: loading ? 0.7 : 1,
 });

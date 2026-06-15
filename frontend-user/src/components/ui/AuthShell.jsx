@@ -8,7 +8,7 @@
 // Site branding (logo + name) is read from useSiteBranding(). Same
 // fallback chain the legacy auth pages used.
 
-import { FiBookOpen, FiCheck } from 'react-icons/fi';
+import { FiBookOpen } from 'react-icons/fi';
 import { useSiteBranding } from '../../context/SiteBrandingContext';
 import { C } from '../../theme/tokens';
 
@@ -17,19 +17,13 @@ export default function AuthShell({
   subtitle,
   heroTitle,
   heroSubtitle,
-  bullets,
   children,
 }) {
   const brand = useSiteBranding();
-
-  const defaultBullets = [
-    'Tutors matched to your subject in minutes',
-    'Plagiarism-free, AI-free deliverables',
-    '24/7 chat with your tutor & support team',
-  ];
-  const heroBullets = bullets || defaultBullets;
+  const year = new Date().getFullYear();
 
   return (
+    <div className="v2-auth-page">
     <div className="v2-auth-shell">
       {/* ── LEFT: gradient hero (desktop only) ────────────────── */}
       <div className="v2-auth-hero" aria-hidden="true">
@@ -74,27 +68,16 @@ export default function AuthShell({
 
           {/* Hero copy */}
           <h2 className="v2-auth-hero-title">
-            {heroTitle || 'Get expert help on every assignment.'}
+            {heroTitle || 'Welcome Back'}
           </h2>
           <p className="v2-auth-hero-sub">
-            {heroSubtitle || 'Tutors that respond fast, deliver on time, and explain the work in plain English.'}
+            {heroSubtitle || 'Sign in to manage your assignments, message tutors, and track your progress all in one place.'}
           </p>
+        </div>
 
-          {/* Trust bullets */}
-          <ul style={{ listStyle: 'none', padding: 0, margin: '24px 0 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {heroBullets.map((b, i) => (
-              <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14, fontWeight: 500, opacity: 0.95 }}>
-                <span style={{
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(6px)',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
-                }}>
-                  <FiCheck size={12} />
-                </span>
-                {b}
-              </li>
-            ))}
-          </ul>
+        {/* Copyright pinned to the bottom of the hero */}
+        <div className="v2-auth-copyright">
+          © {year} {brand.name}. All rights reserved.
         </div>
       </div>
 
@@ -139,6 +122,7 @@ export default function AuthShell({
           {children}
         </div>
       </div>
+    </div>
     </div>
   );
 }

@@ -3,9 +3,8 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiUserPlus } from 'react-icons/fi';
+import { FiUserPlus, FiUser, FiAtSign, FiMail, FiPhone } from 'react-icons/fi';
 import { signup, getPublicGeo } from '../services/api';
-import { useSiteBranding } from '../context/SiteBrandingContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { COUNTRY_CODES, DEFAULT_DIAL, findByIso } from '../utils/countryCodes';
 import Notice from '../components/Notice';
@@ -14,7 +13,6 @@ import { AuthShell } from '../components/ui';
 
 export default function Signup() {
   usePageMeta('signup');
-  const brand = useSiteBranding();
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -53,41 +51,45 @@ export default function Signup() {
 
   return (
     <AuthShell
-      title="Create your account"
-      subtitle={`Start your first order on ${brand.name} in under a minute.`}
-      heroTitle="Get matched with a tutor in minutes."
-      heroSubtitle="Sign up free — pay only when you place an order. Your access code arrives by email."
-      bullets={[
-        'Free to sign up — no card required',
-        'Subject-matched tutors with proven results',
-        'All work delivered plagiarism- and AI-free',
-      ]}
+      title="Sign Up"
+      subtitle="Fill in the details below to get started."
+      heroTitle="Create your account"
+      heroSubtitle="Create a new account to manage your assignments, message tutors, and track your progress all in one place."
     >
       {error && <Notice type="error">{error}</Notice>}
 
       <form onSubmit={handleSubmit}>
+        <Field label="Name" required>
+          <div className="v2-input-icon-wrap">
+            <span className="v2-input-lead"><FiUser size={16} /></span>
+            <input
+              type="text" className="form-input" placeholder="Your full name"
+              value={name} onChange={e => setName(e.target.value)}
+              required minLength={2} maxLength={100} autoComplete="name"
+            />
+          </div>
+        </Field>
+
         <Field label="Username" required>
-          <input
-            type="text" className="form-input" placeholder="Choose a username"
-            value={username} onChange={e => setUsername(e.target.value)}
-            required minLength={3} autoComplete="username"
-          />
+          <div className="v2-input-icon-wrap">
+            <span className="v2-input-lead"><FiAtSign size={16} /></span>
+            <input
+              type="text" className="form-input" placeholder="Choose a username"
+              value={username} onChange={e => setUsername(e.target.value)}
+              required minLength={3} autoComplete="username"
+            />
+          </div>
         </Field>
 
-        <Field label="Email" required hint="Your access code will be sent here.">
-          <input
-            type="email" className="form-input" placeholder="your@email.com"
-            value={email} onChange={e => setEmail(e.target.value)}
-            required autoComplete="email"
-          />
-        </Field>
-
-        <Field label="Full Name" required>
-          <input
-            type="text" className="form-input" placeholder="Your full name"
-            value={name} onChange={e => setName(e.target.value)}
-            required minLength={2} maxLength={100} autoComplete="name"
-          />
+        <Field label="Email" required hint="Your access code will be sent to this email.">
+          <div className="v2-input-icon-wrap">
+            <span className="v2-input-lead"><FiMail size={16} /></span>
+            <input
+              type="email" className="form-input" placeholder="your@email.com"
+              value={email} onChange={e => setEmail(e.target.value)}
+              required autoComplete="email"
+            />
+          </div>
         </Field>
 
         <Field label="Phone Number" required>
@@ -102,15 +104,18 @@ export default function Signup() {
                 <option key={c.iso} value={c.dial}>{c.iso} {c.dial}</option>
               ))}
             </select>
-            <input
-              type="tel" className="form-input" placeholder="555 123 4567"
-              value={phone} onChange={e => setPhone(e.target.value)}
-              required
-              pattern="^[0-9\s\-()]{6,18}$"
-              title="Enter a valid phone number (digits, spaces, -, parentheses)"
-              style={{ flex: 1 }}
-              autoComplete="tel-national"
-            />
+            <div className="v2-input-icon-wrap" style={{ flex: 1 }}>
+              <span className="v2-input-lead"><FiPhone size={16} /></span>
+              <input
+                type="tel" className="form-input" placeholder="555 123 4567"
+                value={phone} onChange={e => setPhone(e.target.value)}
+                required
+                pattern="^[0-9\s\-()]{6,18}$"
+                title="Enter a valid phone number (digits, spaces, -, parentheses)"
+                style={{ width: '100%' }}
+                autoComplete="tel-national"
+              />
+            </div>
           </div>
         </Field>
 
@@ -134,28 +139,21 @@ export default function Signup() {
 
 function Field({ label, required, hint, children }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <label style={fieldLabelStyle}>
-        {label} {required && <span style={{ color: C.red }}>*</span>}
+    <div style={{ marginBottom: 16 }}>
+      <label className="v2-auth-label">
+        {label}{required && <span className="req">*</span>}
       </label>
       {children}
-      {hint && (
-        <p style={{ color: C.textMuted, fontSize: 11, margin: '6px 0 0' }}>{hint}</p>
-      )}
+      {hint && <p className="v2-auth-hint">{hint}</p>}
     </div>
   );
 }
 
-const fieldLabelStyle = {
-  display: 'block', fontSize: 11, fontWeight: 700, color: C.textMuted,
-  letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6,
-};
-
 const primaryBtnStyle = (loading) => ({
-  width: '100%', marginTop: 8, padding: '12px 18px', borderRadius: 10,
+  width: '100%', marginTop: 8, padding: '13px 18px', borderRadius: 10,
   border: 'none', background: C.accent, color: '#fff',
   cursor: loading ? 'not-allowed' : 'pointer',
-  fontSize: 13, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase',
+  fontSize: 14, fontWeight: 600, letterSpacing: 0.2,
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
   opacity: loading ? 0.7 : 1,
 });
