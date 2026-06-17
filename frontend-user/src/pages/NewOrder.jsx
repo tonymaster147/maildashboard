@@ -401,19 +401,25 @@ export default function NewOrder() {
                   searchSubjects(e.target.value);
                   update('subject_name', ''); update('subject_id', '');
                 }}
-                onFocus={() => {
-                  if (subjects.length > 0) setShowSubjectDropdown(true);
-                  else searchSubjects('');
+                onFocus={() => { searchSubjects(subjectSearch); }}
+                onBlur={() => {
+                  // Strict combobox: a typed value that wasn't picked from the
+                  // list isn't a real subject — clear it on blur so the field
+                  // never holds an invalid subject. (Delay lets option clicks register.)
+                  setTimeout(() => {
+                    setShowSubjectDropdown(false);
+                    if (!formData.subject_id) setSubjectSearch('');
+                  }, 150);
                 }}
               />
-              {showSubjectDropdown && subjects.length > 0 && (
+              {showSubjectDropdown && (
                 <div style={{
                   position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
                   background: C.surface, border: `1px solid ${C.border}`,
                   borderRadius: 8, maxHeight: 220, overflowY: 'auto', zIndex: 50,
                   boxShadow: C.shadow,
                 }}>
-                  {subjects.map(s => (
+                  {subjects.length > 0 ? subjects.map(s => (
                     <div
                       key={s.id}
                       onClick={() => {
@@ -431,8 +437,17 @@ export default function NewOrder() {
                     >
                       {s.name}
                     </div>
-                  ))}
+                  )) : (
+                    <div style={{ padding: '12px 14px', fontSize: 13, color: C.textMuted }}>
+                      No matches found
+                    </div>
+                  )}
                 </div>
+              )}
+              {subjectSearch && !formData.subject_id && (
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: C.red }}>
+                  Please pick a subject from the list.
+                </p>
               )}
             </Field>
             <Field label="Education Level" required>

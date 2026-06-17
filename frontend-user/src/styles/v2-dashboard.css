@@ -59,15 +59,9 @@
   align-items: center;
 }
 
-/* Marketing row — magazine-style asymmetric on desktop */
-.v2-mkt-grid {
-  grid-template-columns: 1.7fr 1fr;
-}
-
-/* ── Tablet + below: stack everything ─────────────────────── */
+/* ── Tablet + below: stack the main dashboard grid ─────────── */
 @media (max-width: 1024px) {
   .v2-dash-grid { grid-template-columns: minmax(0, 1fr); }
-  .v2-mkt-grid  { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
 /* ── Mobile only ──────────────────────────────────────────── */

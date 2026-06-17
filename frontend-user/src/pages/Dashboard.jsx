@@ -9,7 +9,9 @@ import {
   SubmitAssignmentBanner,
   ActiveOrderCard,
   LoginDetailsCard,
-  MarketingRow,
+  StudentVoiceCard,
+  BlogCard,
+  ServicesCard,
 } from '../components/ui';
 
 const MAX_ACTIVE_ON_DASHBOARD = 3;
@@ -69,13 +71,18 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* ── Right rail: Login Details ── */}
-        <div>
+        {/* ── Right rail: Login Details + Student Voice (fills the rail) ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <LoginDetailsCard orders={orders} onChanged={fetchOrders} />
+          <StudentVoiceCard />
         </div>
       </div>
 
-      <MarketingRow />
+      {/* ── Blog (full-width banner) + Services (full-width strip) ── */}
+      <div style={{ marginTop: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <BlogCard />
+        <ServicesCard />
+      </div>
     </div>
   );
 }

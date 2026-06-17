@@ -14,7 +14,7 @@ export { default as UpdateCredentialModal } from './UpdateCredentialModal';
 export { default as SubmitAssignmentBanner } from './SubmitAssignmentBanner';
 export { default as ActiveOrderCard } from './ActiveOrderCard';
 export { default as LoginDetailsCard } from './LoginDetailsCard';
-export { default as MarketingRow } from './MarketingRow';
+export { default as MarketingRow, StudentVoiceCard, BlogCard, ServicesCard } from './MarketingRow';
 export { default as ChatBubble } from './ChatBubble';
 export { default as AuthShell } from './AuthShell';
 export { default as NotificationPanel } from './NotificationPanel';
