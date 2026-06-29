@@ -2,12 +2,29 @@ const bcrypt = require('bcryptjs');
 const db = require('../config/db');
 const { sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail } = require('../services/emailService');
 const { invalidateBannedWordsCache } = require('../services/contentFilter');
+const { decryptSecret } = require('../utils/crypto');
+
+// Sanitize a sales executive's data-window (days). Default 60, clamped 1..3650.
+function clampWindowDays(v) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return 60;
+  return Math.min(3650, Math.max(1, n));
+}
 
 /**
  * Admin Dashboard Stats
  */
 exports.getDashboardStats = async (req, res) => {
   try {
+    // Sales executives only see KPIs for data within their window. Build a
+    // safe `AND <col> >= '<datetime>'` fragment (cutoff is a server-side Date,
+    // not user input). Empty for admin / sales lead.
+    const cutSql = (col) => {
+      if (!req.salesCutoff) return '';
+      const d = req.salesCutoff, p = n => String(n).padStart(2, '0');
+      const dt = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+      return ` AND ${col} >= '${dt}'`;
+    };
     // Run all stat queries in parallel to reduce connection hold time
     const [
       [[totalSales]],
@@ -26,32 +43,33 @@ exports.getDashboardStats = async (req, res) => {
       [recentOrders],
       [monthlyRevenue]
     ] = await Promise.all([
-      db.query('SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = "completed"'),
+      db.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE status = "completed"${cutSql('created_at')}`),
       db.query(`SELECT COALESCE(SUM(amount), 0) as total FROM payments
-                WHERE status = "completed" AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`),
-      db.query('SELECT COUNT(*) as count FROM orders WHERE status IN ("active", "in_progress")'),
-      db.query('SELECT COUNT(*) as count FROM orders WHERE status = "completed"'),
-      db.query('SELECT COUNT(*) as count FROM orders WHERE status = "pending"'),
-      db.query('SELECT COUNT(*) as count FROM users WHERE role = "user"'),
+                WHERE status = "completed" AND created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')${cutSql('created_at')}`),
+      db.query(`SELECT COUNT(*) as count FROM orders WHERE status IN ("active", "in_progress")${cutSql('created_at')}`),
+      db.query(`SELECT COUNT(*) as count FROM orders WHERE status = "completed"${cutSql('created_at')}`),
+      db.query(`SELECT COUNT(*) as count FROM orders WHERE status = "pending"${cutSql('created_at')}`),
+      db.query(`SELECT COUNT(*) as count FROM users WHERE role = "user"${cutSql('created_at')}`),
       db.query('SELECT COUNT(*) as count FROM tutors'),
-      db.query('SELECT COUNT(*) as count FROM chats WHERE is_flagged = 1'),
-      db.query('SELECT COALESCE(SUM(amount_remaining), 0) as total FROM orders WHERE status NOT IN ("cancelled")'),
+      db.query(`SELECT COUNT(*) as count FROM chats WHERE is_flagged = 1${cutSql('created_at')}`),
+      db.query(`SELECT COALESCE(SUM(amount_remaining), 0) as total FROM orders WHERE status NOT IN ("cancelled")${cutSql('created_at')}`),
       db.query(`SELECT COUNT(*) as count FROM orders o
                 WHERE o.status = 'active'
-                  AND NOT EXISTS (SELECT 1 FROM order_tutors ot WHERE ot.order_id = o.id)`),
+                  AND NOT EXISTS (SELECT 1 FROM order_tutors ot WHERE ot.order_id = o.id)${cutSql('o.created_at')}`),
       db.query(`SELECT COUNT(*) as count FROM orders o
                 JOIN tutor_statuses ts ON o.tutor_status_id = ts.id
-                WHERE ts.code = 'work_stopped' AND o.status = 'active'`),
-      db.query("SELECT COUNT(*) as count FROM issues WHERE status = 'open'"),
-      db.query("SELECT COUNT(*) as count FROM order_installments WHERE status = 'overdue'"),
+                WHERE ts.code = 'work_stopped' AND o.status = 'active'${cutSql('o.created_at')}`),
+      db.query(`SELECT COUNT(*) as count FROM issues WHERE status = 'open'${cutSql('created_at')}`),
+      db.query(`SELECT COUNT(*) as count FROM order_installments WHERE status = 'overdue'${cutSql('created_at')}`),
       db.query(`
         SELECT o.id, o.order_code, o.course_name, o.total_price, o.status, o.created_at, u.username
         FROM orders o JOIN users u ON o.user_id = u.id
+        WHERE 1=1${cutSql('o.created_at')}
         ORDER BY o.created_at DESC LIMIT 10
       `),
       db.query(`
         SELECT DATE_FORMAT(created_at, '%Y-%m') as month, SUM(amount) as revenue, COUNT(*) as payments
-        FROM payments WHERE status = 'completed'
+        FROM payments WHERE status = 'completed'${cutSql('created_at')}
         GROUP BY month ORDER BY month DESC LIMIT 12
       `)
     ]);
@@ -84,16 +102,23 @@ exports.getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 20, search } = req.query;
     const offset = (page - 1) * limit;
-    let query = 'SELECT id, username, name, email, phone, country, signup_ip, role, is_active, created_at FROM users WHERE role = "user"';
+    let query = 'SELECT id, username, name, access_code_plain, email, phone, country, signup_ip, role, is_active, created_at FROM users WHERE role = "user"';
     const params = [];
     if (search) {
       query += ' AND (username LIKE ? OR name LIKE ? OR email LIKE ? OR phone LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
+    if (req.salesCutoff) { query += ' AND created_at >= ?'; params.push(req.salesCutoff); }
     query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
     const [users] = await db.query(query, params);
-    const [[{ total }]] = await db.query('SELECT COUNT(*) as total FROM users WHERE role = "user"');
+    // Decrypt the access code for display; drop the encrypted blob from the payload.
+    // null for users created before the encrypted-copy feature (unrecoverable).
+    users.forEach(u => { u.access_code = decryptSecret(u.access_code_plain); delete u.access_code_plain; });
+    let countQuery = 'SELECT COUNT(*) as total FROM users WHERE role = "user"';
+    const countParams = [];
+    if (req.salesCutoff) { countQuery += ' AND created_at >= ?'; countParams.push(req.salesCutoff); }
+    const [[{ total }]] = await db.query(countQuery, countParams);
     res.json({ users, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (error) {
     console.error('Get all users error:', error);
@@ -246,6 +271,7 @@ exports.getAllOrders = async (req, res) => {
     if (admin_status_code) { query += ' AND astat.code = ?'; params.push(admin_status_code); }
     else if (status)       { query += ' AND o.status = ?';   params.push(status); }
     if (search) { query += ' AND (o.course_name LIKE ? OR u.username LIKE ? OR o.order_code LIKE ? OR o.id = ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`, search); }
+    if (req.salesCutoff) { query += ' AND o.created_at >= ?'; params.push(req.salesCutoff); }
     query += ' GROUP BY o.id';
     if (unassigned === 'true') { query += ' HAVING tutor_names IS NULL'; }
     query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
@@ -258,6 +284,7 @@ exports.getAllOrders = async (req, res) => {
     if (admin_status_code) { countQuery += ' AND astat.code = ?'; countParams.push(admin_status_code); }
     else if (status)       { countQuery += ' AND o.status = ?';   countParams.push(status); }
     if (search) { countQuery += ' AND (o.course_name LIKE ? OR u.username LIKE ? OR o.order_code LIKE ? OR o.id = ?)'; countParams.push(`%${search}%`, `%${search}%`, `%${search}%`, search); }
+    if (req.salesCutoff) { countQuery += ' AND o.created_at >= ?'; countParams.push(req.salesCutoff); }
     if (unassigned === 'true') { countQuery += ' AND otr.order_id IS NULL'; }
     const [[{ total }]] = await db.query(countQuery, countParams);
     res.json({ orders, total, page: parseInt(page), limit: parseInt(limit) });
@@ -481,16 +508,18 @@ exports.reopenChat = async (req, res) => {
 // ============= CHAT MONITORING =============
 exports.getAllChats = async (req, res) => {
   try {
-    const [chats] = await db.query(`
+    let chatQuery = `
       SELECT DISTINCT o.id as order_id, o.order_code, o.course_name, u.username,
         (SELECT COUNT(*) FROM chats WHERE order_id = o.id) as message_count,
         (SELECT COUNT(*) FROM chats WHERE order_id = o.id AND is_flagged = 1) as flagged_count,
         (SELECT MAX(created_at) FROM chats WHERE order_id = o.id) as last_message_at
       FROM orders o
       JOIN users u ON o.user_id = u.id
-      WHERE EXISTS (SELECT 1 FROM chats WHERE order_id = o.id)
-      ORDER BY last_message_at DESC
-    `);
+      WHERE EXISTS (SELECT 1 FROM chats WHERE order_id = o.id)`;
+    const chatParams = [];
+    if (req.salesCutoff) { chatQuery += ' AND o.created_at >= ?'; chatParams.push(req.salesCutoff); }
+    chatQuery += ' ORDER BY last_message_at DESC';
+    const [chats] = await db.query(chatQuery, chatParams);
     res.json(chats);
   } catch (error) {
     console.error('Get all chats error:', error);
@@ -500,7 +529,7 @@ exports.getAllChats = async (req, res) => {
 
 exports.getFlaggedMessages = async (req, res) => {
   try {
-    const [messages] = await db.query(`
+    let flaggedQuery = `
       SELECT c.*, o.course_name, o.order_code,
         CASE
           WHEN c.sender_role = 'user' THEN u.username
@@ -513,9 +542,11 @@ exports.getFlaggedMessages = async (req, res) => {
       LEFT JOIN users u ON c.sender_id = u.id AND c.sender_role = 'user'
       LEFT JOIN tutors t ON c.sender_id = t.id AND c.sender_role = 'tutor'
       LEFT JOIN sales_users su ON c.sender_id = su.id AND c.sender_role IN ('sales_lead', 'sales_executive')
-      WHERE c.is_flagged = 1
-      ORDER BY c.created_at DESC
-    `);
+      WHERE c.is_flagged = 1`;
+    const flaggedParams = [];
+    if (req.salesCutoff) { flaggedQuery += ' AND c.created_at >= ?'; flaggedParams.push(req.salesCutoff); }
+    flaggedQuery += ' ORDER BY c.created_at DESC';
+    const [messages] = await db.query(flaggedQuery, flaggedParams);
     res.json(messages);
   } catch (error) {
     console.error('Get flagged messages error:', error);
@@ -705,6 +736,8 @@ exports.getReports = async (req, res) => {
       params.push(end_date + ' 23:59:59');
     }
 
+    if (req.salesCutoff) { query += ' AND o.created_at >= ?'; params.push(req.salesCutoff); }
+
     query += ' GROUP BY o.id ORDER BY o.created_at DESC';
 
     const [reports] = await db.query(query, params);
@@ -778,7 +811,7 @@ const AVAILABLE_MENUS = ['dashboard', 'users', 'tutors', 'orders', 'chats', 'iss
 exports.getAllSalesUsers = async (req, res) => {
   try {
     const [salesUsers] = await db.query(
-      'SELECT id, name, email, role, status, created_at, updated_at FROM sales_users ORDER BY created_at DESC'
+      'SELECT id, name, email, role, status, data_window_days, created_at, updated_at FROM sales_users ORDER BY created_at DESC'
     );
     // Load permissions for each
     for (const su of salesUsers) {
@@ -797,17 +830,18 @@ exports.getAllSalesUsers = async (req, res) => {
 
 exports.createSalesUser = async (req, res) => {
   try {
-    const { name, email, password, role, permissions } = req.body;
+    const { name, email, password, role, permissions, data_window_days } = req.body;
     if (!['sales_lead', 'sales_executive'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
+    const windowDays = clampWindowDays(data_window_days);
     const [existing] = await db.query('SELECT id FROM sales_users WHERE email = ?', [email]);
     if (existing.length > 0) return res.status(400).json({ error: 'Email already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const [result] = await db.query(
-      'INSERT INTO sales_users (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [name, email, hashedPassword, role]
+      'INSERT INTO sales_users (name, email, password, role, data_window_days) VALUES (?, ?, ?, ?, ?)',
+      [name, email, hashedPassword, role, windowDays]
     );
 
     // Save permissions
@@ -841,13 +875,14 @@ exports.createSalesUser = async (req, res) => {
 exports.updateSalesUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, status, permissions } = req.body;
+    const { name, email, role, status, permissions, data_window_days } = req.body;
     if (role && !['sales_lead', 'sales_executive'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
+    const windowDays = clampWindowDays(data_window_days);
     await db.query(
-      'UPDATE sales_users SET name = ?, email = ?, role = ?, status = ? WHERE id = ?',
-      [name, email, role, status, id]
+      'UPDATE sales_users SET name = ?, email = ?, role = ?, status = ?, data_window_days = ? WHERE id = ?',
+      [name, email, role, status, windowDays, id]
     );
 
     // Update permissions if provided

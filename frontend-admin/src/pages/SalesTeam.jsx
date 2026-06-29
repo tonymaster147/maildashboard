@@ -18,7 +18,7 @@ export default function SalesTeam() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'sales_executive', status: 'active', permissions: [] });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'sales_executive', status: 'active', permissions: [], data_window_days: 60 });
 
   const fetchSalesUsers = () => {
     getAllSalesUsers().then(res => { setSalesUsers(res.data); setLoading(false); }).catch(() => setLoading(false));
@@ -26,7 +26,7 @@ export default function SalesTeam() {
   useEffect(() => { fetchSalesUsers(); }, []);
 
   const openAdd = () => {
-    setForm({ name: '', email: '', password: '', role: 'sales_executive', status: 'active', permissions: ['dashboard', 'orders'] });
+    setForm({ name: '', email: '', password: '', role: 'sales_executive', status: 'active', permissions: ['dashboard', 'orders'], data_window_days: 60 });
     setEditing(null);
     setShowModal(true);
   };
@@ -38,7 +38,8 @@ export default function SalesTeam() {
       password: '',
       role: u.role,
       status: u.status,
-      permissions: u.permissions || []
+      permissions: u.permissions || [],
+      data_window_days: u.data_window_days ?? 60
     });
     setEditing(u.id);
     setShowModal(true);
@@ -166,6 +167,21 @@ export default function SalesTeam() {
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                   </select>
+                </div>
+              )}
+
+              {form.role === 'sales_executive' && (
+                <div className="form-group">
+                  <label className="form-label">Data access window (days)</label>
+                  <input
+                    type="number" className="form-input" min={1} max={3650}
+                    value={form.data_window_days}
+                    onChange={e => setForm({ ...form, data_window_days: e.target.value })}
+                    placeholder="60"
+                  />
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+                    This executive can only see orders, users, issues, chats &amp; reports from the last {form.data_window_days || 60} days. Older data is hidden and blocked.
+                  </p>
                 </div>
               )}
 

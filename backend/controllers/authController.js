@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../config/db');
 const { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode } = require('../services/emailService');
 const { getClientIp, normalizeIp, lookupCountry } = require('../utils/geoip');
+const { encryptSecret } = require('../utils/crypto');
 require('dotenv').config();
 
 /**
@@ -29,8 +30,8 @@ exports.signup = async (req, res) => {
 
     // Insert user
     const [result] = await db.query(
-      'INSERT INTO users (username, name, access_code, email, phone, country, signup_ip, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [username, name, hashedCode, email || null, phone, country, signupIp, 'user']
+      'INSERT INTO users (username, name, access_code, access_code_plain, email, phone, country, signup_ip, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [username, name, hashedCode, encryptSecret(rawAccessCode), email || null, phone, country, signupIp, 'user']
     );
 
     // Send access code via email (branded to originating site)
@@ -239,7 +240,7 @@ exports.changePassword = async (req, res) => {
     }
 
     const hashedCode = await bcrypt.hash(new_access_code, 10);
-    await db.query('UPDATE users SET access_code = ? WHERE id = ?', [hashedCode, userId]);
+    await db.query('UPDATE users SET access_code = ?, access_code_plain = ? WHERE id = ?', [hashedCode, encryptSecret(new_access_code), userId]);
 
     res.json({ message: 'Access code updated successfully' });
   } catch (error) {
@@ -288,7 +289,7 @@ exports.forgotAccessCode = async (req, res) => {
     const newAccessCode = uuidv4().slice(0, 8).toUpperCase();
     const hashedCode = await bcrypt.hash(newAccessCode, 10);
 
-    await db.query('UPDATE users SET access_code = ? WHERE id = ?', [hashedCode, user.id]);
+    await db.query('UPDATE users SET access_code = ?, access_code_plain = ? WHERE id = ?', [hashedCode, encryptSecret(newAccessCode), user.id]);
     await sendForgotAccessCode(user.email, user.username, newAccessCode, req.site?.id);
 
     res.json({ message: 'If an account with that email exists, a new access code has been sent.' });

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toggleUserStatus } from '../services/api';
-import { FiSearch, FiToggleLeft, FiToggleRight } from 'react-icons/fi';
+import { FiSearch, FiToggleLeft, FiToggleRight, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
 
 export default function Users() {
@@ -36,13 +36,14 @@ export default function Users() {
       {loading ? <div className="flex-center"><div className="loading-spinner"></div></div> : (
         <div className="table-container">
           <table>
-            <thead><tr><th>ID</th><th>Username</th><th>Name</th><th>Email</th><th>Phone</th><th>Country</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
+            <thead><tr><th>ID</th><th>Username</th><th>Name</th><th>Access Code</th><th>Email</th><th>Phone</th><th>Country</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
             <tbody>
               {users.map(u => (
                 <tr key={u.id}>
                   <td>#{u.id}</td>
                   <td style={{ fontWeight: 500 }}>{u.username}</td>
                   <td>{u.name || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                  <AccessCodeCell code={u.access_code} />
                   <td style={{ color: 'var(--text-muted)' }}>{u.email || '—'}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{u.phone || '—'}</td>
                   <td style={{ color: 'var(--text-muted)' }}>{u.country || '—'}</td>
@@ -60,5 +61,32 @@ export default function Users() {
         </div>
       )}
     </div>
+  );
+}
+
+// Access code cell — masked by default, click the eye to reveal. Shows "—"
+// for users created before the access code was stored in recoverable form.
+function AccessCodeCell({ code }) {
+  const [show, setShow] = useState(false);
+  if (!code) {
+    return <td style={{ color: 'var(--text-muted)' }} title="Not available — set before codes were viewable">—</td>;
+  }
+  return (
+    <td>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 600, letterSpacing: 0.5 }}>
+          {show ? code : '•'.repeat(Math.min(code.length, 8))}
+        </span>
+        <button
+          type="button"
+          className="btn btn-sm btn-secondary"
+          onClick={() => setShow(s => !s)}
+          title={show ? 'Hide access code' : 'Show access code'}
+          style={{ padding: '2px 7px' }}
+        >
+          {show ? <FiEyeOff size={14} /> : <FiEye size={14} />}
+        </button>
+      </div>
+    </td>
   );
 }

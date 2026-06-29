@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const db = require('../config/db');
 require('dotenv').config();
 
 /**
@@ -33,4 +34,28 @@ const requireRole = (...roles) => {
   };
 };
 
-module.exports = { verifyToken, requireRole };
+/**
+ * Sales data window — a sales_executive may only see records created within
+ * the last `data_window_days` days. Sets:
+ *   req.salesCutoff      Date | null   (null = unrestricted: lead/admin)
+ *   req.salesWindowDays  number | null
+ * Controllers add `AND <table>.created_at >= req.salesCutoff` when it's set,
+ * and route guards block direct access to older single records.
+ */
+const attachSalesWindow = async (req, res, next) => {
+  req.salesCutoff = null;
+  req.salesWindowDays = null;
+  try {
+    if (req.user && req.user.role === 'sales_executive') {
+      const [rows] = await db.query('SELECT data_window_days FROM sales_users WHERE id = ?', [req.user.id]);
+      const days = rows.length && rows[0].data_window_days != null ? rows[0].data_window_days : 60;
+      req.salesWindowDays = days;
+      req.salesCutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    }
+  } catch (e) {
+    console.error('attachSalesWindow error:', e.message);
+  }
+  next();
+};
+
+module.exports = { verifyToken, requireRole, attachSalesWindow };

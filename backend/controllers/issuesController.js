@@ -191,11 +191,12 @@ exports.unreadCount = async (req, res) => {
       );
       count = rows[0].n;
     } else if (isStaff(role)) {
-      const [rows] = await db.query(
-        `SELECT COUNT(*) AS n FROM issues
+      let q = `SELECT COUNT(*) AS n FROM issues
          WHERE last_message_role = 'user'
-           AND (staff_seen_at IS NULL OR last_message_at > staff_seen_at)`
-      );
+           AND (staff_seen_at IS NULL OR last_message_at > staff_seen_at)`;
+      const p = [];
+      if (req.salesCutoff) { q += ' AND created_at >= ?'; p.push(req.salesCutoff); }
+      const [rows] = await db.query(q, p);
       count = rows[0].n;
     }
     res.json({ unread: count });
@@ -287,6 +288,7 @@ exports.listAllIssues = async (req, res) => {
       q += ' AND (i.subject LIKE ? OR i.category LIKE ? OR u.username LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
+    if (req.salesCutoff) { q += ' AND i.created_at >= ?'; params.push(req.salesCutoff); }
     q += ' ORDER BY i.last_message_at DESC, i.created_at DESC';
     const [rows] = await db.query(q, params);
     res.json({ issues: rows });

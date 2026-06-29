@@ -27,11 +27,20 @@ function dateRange(col, start, end) {
   return { sql, params };
 }
 
+// A sales_executive may only report on data within their window. Clamp the
+// effective start_date to no earlier than the cutoff (returns YYYY-MM-DD).
+function clampStart(req, start) {
+  if (!req.salesCutoff) return start;
+  const cut = new Date(req.salesCutoff).toISOString().slice(0, 10);
+  return (start && start > cut) ? start : cut;
+}
+
 exports.overview = async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
-    const o = dateRange('o.created_at', start_date, end_date);
-    const p = dateRange('p.created_at', start_date, end_date);
+    const startEff = clampStart(req, start_date);
+    const o = dateRange('o.created_at', startEff, end_date);
+    const p = dateRange('p.created_at', startEff, end_date);
 
     // KPI totals
     const [[orderTotals]] = await db.query(
@@ -55,12 +64,17 @@ exports.overview = async (req, res) => {
     );
 
     // Monthly revenue, last 12 months (independent of the date filter so the
-    // trend strip always has context)
+    // trend strip always has context) — but never earlier than a sales
+    // executive's data window.
+    const monthlyParams = [];
+    let monthlyFloor = "p.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)";
+    if (req.salesCutoff) { monthlyFloor = 'p.created_at >= ?'; monthlyParams.push(req.salesCutoff); }
     const [monthly] = await db.query(
       `SELECT DATE_FORMAT(p.created_at, '%Y-%m') AS month, IFNULL(SUM(p.amount), 0) AS revenue, COUNT(*) AS payments
        FROM payments p
-       WHERE p.status = 'completed' AND p.created_at >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-       GROUP BY month ORDER BY month`
+       WHERE p.status = 'completed' AND ${monthlyFloor}
+       GROUP BY month ORDER BY month`,
+      monthlyParams
     );
 
     // Breakdown: orders + revenue by service type
@@ -115,7 +129,8 @@ exports.overview = async (req, res) => {
 exports.tutorReport = async (req, res) => {
   try {
     const { start_date, end_date, tutor_id } = req.query;
-    const o = dateRange('o.created_at', start_date, end_date);
+    const startEff = clampStart(req, start_date);
+    const o = dateRange('o.created_at', startEff, end_date);
 
     const [tutors] = await db.query(
       `SELECT
@@ -148,7 +163,7 @@ exports.tutorReport = async (req, res) => {
     // Optional drill-down: one tutor's order list
     let detail = null;
     if (tutor_id) {
-      const d = dateRange('o.created_at', start_date, end_date);
+      const d = dateRange('o.created_at', startEff, end_date);
       const [orders] = await db.query(
         `SELECT o.id, o.order_code, o.course_name, o.total_price, o.status,
                 o.created_at, o.end_date, ot2.assigned_at,
@@ -177,7 +192,8 @@ exports.tutorReport = async (req, res) => {
 exports.userReport = async (req, res) => {
   try {
     const { start_date, end_date, user_id } = req.query;
-    const o = dateRange('o.created_at', start_date, end_date);
+    const startEff = clampStart(req, start_date);
+    const o = dateRange('o.created_at', startEff, end_date);
 
     const [users] = await db.query(
       `SELECT
@@ -202,7 +218,7 @@ exports.userReport = async (req, res) => {
     // Optional drill-down: one customer's order list
     let detail = null;
     if (user_id) {
-      const d = dateRange('o.created_at', start_date, end_date);
+      const d = dateRange('o.created_at', startEff, end_date);
       const [orders] = await db.query(
         `SELECT o.id, o.order_code, o.course_name, o.total_price, o.amount_paid,
                 o.amount_remaining, o.status, o.created_at,
