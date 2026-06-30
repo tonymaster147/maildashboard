@@ -60,13 +60,13 @@ export const getAllOrders = (params) => api.get('/admin/orders', { params });
 export const updateOrderStatus = (id, data) => api.put(`/admin/orders/${id}/status`, data);
 export const assignTutors = (id, data) => api.put(`/admin/orders/${id}/assign`, data);
 export const reopenChat = (id) => api.put(`/admin/orders/${id}/reopen-chat`);
-export const markRemainingPaid = (orderId) => api.post(`/admin/orders/${orderId}/mark-remaining-paid`);
+export const markRemainingPaid = (orderId, data) => api.post(`/admin/orders/${orderId}/mark-remaining-paid`, data);
 export const createInstallmentPlan = (orderId, data) => api.post(`/admin/orders/${orderId}/installments`, data);
 export const updateInstallmentPlan = (orderId, data) => api.put(`/admin/orders/${orderId}/installments`, data);
 export const getInstallments = (orderId) => api.get(`/admin/orders/${orderId}/installments`);
 export const deleteInstallmentPlan = (orderId) => api.delete(`/admin/orders/${orderId}/installments`);
-export const markInstallmentPaid = (installmentId) => api.post(`/admin/installments/${installmentId}/mark-paid`);
-export const markAllInstallmentsPaid = (orderId) => api.post(`/admin/orders/${orderId}/installments/mark-all-paid`);
+export const markInstallmentPaid = (installmentId, data) => api.post(`/admin/installments/${installmentId}/mark-paid`, data);
+export const markAllInstallmentsPaid = (orderId, data) => api.post(`/admin/orders/${orderId}/installments/mark-all-paid`, data);
 
 // Chat
 export const getAllChats = () => api.get('/admin/chats');
@@ -164,13 +164,13 @@ export const salesApi = {
   updateOrderStatus: (id, data) => api.put(`/sales/orders/${id}/status`, data),
   assignTutors: (id, data) => api.put(`/sales/orders/${id}/assign`, data),
   reopenChat: (id) => api.put(`/sales/orders/${id}/reopen-chat`),
-  markRemainingPaid: (orderId) => api.post(`/sales/orders/${orderId}/mark-remaining-paid`),
+  markRemainingPaid: (orderId, data) => api.post(`/sales/orders/${orderId}/mark-remaining-paid`, data),
   createInstallmentPlan: (orderId, data) => api.post(`/sales/orders/${orderId}/installments`, data),
   updateInstallmentPlan: (orderId, data) => api.put(`/sales/orders/${orderId}/installments`, data),
   getInstallments: (orderId) => api.get(`/sales/orders/${orderId}/installments`),
   deleteInstallmentPlan: (orderId) => api.delete(`/sales/orders/${orderId}/installments`),
-  markInstallmentPaid: (installmentId) => api.post(`/sales/installments/${installmentId}/mark-paid`),
-  markAllInstallmentsPaid: (orderId) => api.post(`/sales/orders/${orderId}/installments/mark-all-paid`),
+  markInstallmentPaid: (installmentId, data) => api.post(`/sales/installments/${installmentId}/mark-paid`, data),
+  markAllInstallmentsPaid: (orderId, data) => api.post(`/sales/orders/${orderId}/installments/mark-all-paid`, data),
   getChats: () => api.get('/sales/chats'),
   getFlaggedMessages: () => api.get('/sales/chats/flagged'),
   getIssuesUnreadCount: () => api.get('/sales/issues/unread-count'),

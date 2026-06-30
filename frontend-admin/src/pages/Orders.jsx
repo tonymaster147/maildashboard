@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { FiSearch, FiEye, FiUserPlus, FiX, FiRefreshCw, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
 import { getPublicStatuses } from '../services/api';
 import CancelOrderModal from '../components/CancelOrderModal';
+import PaymentCollectionModal from '../components/PaymentCollectionModal';
+import InstallmentPlanModal from '../components/InstallmentPlanModal';
+import { isPartialEligible, PARTIAL_PAYMENT_AMOUNT } from '../utils/partialPayment';
 
 const VIEWED_ORDERS_KEY = 'admin_viewed_orders';
 
@@ -32,6 +36,10 @@ export default function Orders() {
   const [totalOrders, setTotalOrders] = useState(0);
   const perPage = 50;
   const { getAllOrders, updateOrderStatus, assignTutors, reopenChat, getAllTutors } = useApi();
+  const { isAdmin, user } = useAuth();
+  const canMarkPaid = isAdmin || user?.role === 'sales_lead';
+  const [paymentModal, setPaymentModal] = useState(null);     // { order, targetCode, paymentType }
+  const [installmentModal, setInstallmentModal] = useState(null); // order-like object
 
   const fetchOrders = () => {
     setLoading(true);
@@ -47,9 +55,27 @@ export default function Orders() {
   const [cancelTarget, setCancelTarget] = useState(null); // { orderId }
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
-  const handleStatusChange = async (id, admin_status_code, orderCode) => {
+  const handleStatusChange = async (order, admin_status_code) => {
+    const id = order.id;
     if (admin_status_code === 'cancelled') {
-      setCancelTarget({ orderId: id, orderCode });
+      setCancelTarget({ orderId: id, orderCode: order.order_code });
+      return;
+    }
+    // Unpaid → Paid (Full/Partial): collect payment info via modal, role-gated.
+    const targetIsPaid = /^paid_(full|partial)/.test(admin_status_code || '');
+    if (order.admin_status_code === 'unpaid' && targetIsPaid) {
+      if (!canMarkPaid) {
+        alert('Only an Admin or Sales Lead can mark an order as paid.');
+        fetchOrders(); // revert the dropdown
+        return;
+      }
+      const isPartial = admin_status_code.startsWith('paid_partial');
+      if (isPartial && !isPartialEligible(order)) {
+        alert('Partial payment is only available for eligible Online Class orders (total ≥ $455 or 45+ days).');
+        fetchOrders(); // revert the dropdown
+        return;
+      }
+      setPaymentModal({ order, targetCode: admin_status_code, paymentType: isPartial ? 'partial' : 'full' });
       return;
     }
     try {
@@ -60,6 +86,7 @@ export default function Orders() {
       fetchOrders(); // revert UI to true server state
     }
   };
+
 
   const confirmCancel = async (note) => {
     if (!cancelTarget) return;
@@ -137,7 +164,7 @@ export default function Orders() {
                   </td>
                   <td style={{ fontSize: 13 }}>{o.tutor_names || <span style={{ color: 'var(--text-muted)' }}>Unassigned</span>}</td>
                   <td>
-                    <select className="form-select" value={o.admin_status_code || ''} onChange={e => handleStatusChange(o.id, e.target.value, o.order_code)} style={{ padding: '4px 8px', fontSize: 12, minWidth: 140 }}>
+                    <select className="form-select" value={o.admin_status_code || ''} onChange={e => handleStatusChange(o, e.target.value)} style={{ padding: '4px 8px', fontSize: 12, minWidth: 140 }}>
                       {!o.admin_status_code && <option value="" disabled>—</option>}
                       {adminStatuses.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
                     </select>
@@ -182,6 +209,40 @@ export default function Orders() {
           onConfirm={confirmCancel}
           onCancel={() => setCancelTarget(null)}
           submitting={cancelSubmitting}
+        />
+      )}
+      {paymentModal && (() => {
+        const { order, targetCode, paymentType } = paymentModal;
+        const isPartial = paymentType === 'partial';
+        const total = parseFloat(order.total_price || 0);
+        return (
+          <PaymentCollectionModal
+            title={`Record Payment — Order ${order.order_code || `#${order.id}`}`}
+            subtitle={`Marking as ${isPartial ? 'Paid — Partial' : 'Paid — Full'} · Order total $${total.toFixed(2)}`}
+            amountLabel={isPartial ? 'Upfront amount' : 'Amount'}
+            amount={isPartial ? Math.min(PARTIAL_PAYMENT_AMOUNT, total) : total}
+            maxAmount={total}
+            noteRequiredWhenDifferent={!isPartial}
+            showRemaining={isPartial}
+            remainingBase={total}
+            onClose={() => { setPaymentModal(null); fetchOrders(); }}
+            onSubmit={async (payment) => {
+              await updateOrderStatus(order.id, { admin_status_code: targetCode, payment });
+              const remaining = Math.max(0, total - payment.amount);
+              setPaymentModal(null);
+              fetchOrders();
+              if (isPartial && remaining > 0) {
+                setInstallmentModal({ ...order, payment_type: 'partial', amount_remaining: remaining, has_installments: 0 });
+              }
+            }}
+          />
+        );
+      })()}
+      {installmentModal && (
+        <InstallmentPlanModal
+          order={installmentModal}
+          onClose={() => { setInstallmentModal(null); fetchOrders(); }}
+          onCreated={() => { setInstallmentModal(null); fetchOrders(); }}
         />
       )}
       {assignModal && (

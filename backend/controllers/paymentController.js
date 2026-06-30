@@ -21,6 +21,11 @@ function isPartialEligible(order, orderTypeName) {
   return days >= 45;
 }
 
+// Reused by the admin/sales manual Unpaid→Paid flow to apply the same rule.
+exports.isPartialEligible = isPartialEligible;
+exports.PARTIAL_PAYMENT_AMOUNT = PARTIAL_PAYMENT_AMOUNT;
+exports.PARTIAL_PRICE_THRESHOLD = PARTIAL_PRICE_THRESHOLD;
+
 exports.checkPartialEligibility = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -568,12 +573,19 @@ exports.markRemainingPaid = async (req, res) => {
     const order = orders[0];
     const remaining = parseFloat(order.amount_remaining);
 
+    // Require + record the payment-collection details (mode, invoice, date…)
+    const { validateCollectionFields, recordCollection } = require('../services/paymentCollections');
+    const vErr = validateCollectionFields(req.body.payment);
+    if (vErr) return res.status(400).json({ error: vErr });
+
     await db.query(
       `UPDATE orders
        SET amount_paid = amount_paid + ?, amount_remaining = 0, payment_type = 'full'
        WHERE id = ?`,
       [remaining, order_id]
     );
+
+    await recordCollection(req, { orderId: order_id, paymentType: 'full', amount: remaining, payment: req.body.payment });
 
     // Log offline payment
     await db.query(

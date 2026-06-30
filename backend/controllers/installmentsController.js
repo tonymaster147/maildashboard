@@ -287,7 +287,12 @@ exports.markInstallmentPaid = async (req, res) => {
     const inst = rows[0];
     if (inst.status === 'paid') return res.status(400).json({ error: 'Already paid' });
 
+    const { validateCollectionFields, recordCollection } = require('../services/paymentCollections');
+    const vErr = validateCollectionFields(req.body.payment);
+    if (vErr) return res.status(400).json({ error: vErr });
+
     const amount = parseFloat(inst.amount);
+    let clearedAll = false;
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
@@ -309,6 +314,7 @@ exports.markInstallmentPaid = async (req, res) => {
         [inst.order_id]
       );
       if (remaining[0].cnt === 0) {
+        clearedAll = true;
         await conn.query("UPDATE orders SET payment_type = 'full' WHERE id = ?", [inst.order_id]);
         await require('../utils/statuses').promotePartialToFullIfCleared(inst.order_id, conn);
       }
@@ -319,6 +325,12 @@ exports.markInstallmentPaid = async (req, res) => {
     } finally {
       conn.release();
     }
+
+    await recordCollection(req, {
+      orderId: inst.order_id,
+      paymentType: clearedAll ? 'full' : 'partial',
+      amount, payment: req.body.payment,
+    });
 
     if (inst.email) {
       sendInstallmentPaid(inst.email, {
@@ -360,6 +372,10 @@ exports.markAllInstallmentsPaid = async (req, res) => {
     );
     if (pending.length === 0) return res.status(400).json({ error: 'No pending installments' });
 
+    const { validateCollectionFields, recordCollection } = require('../services/paymentCollections');
+    const vErr = validateCollectionFields(req.body.payment);
+    if (vErr) return res.status(400).json({ error: vErr });
+
     const total = pending.reduce((s, p) => s + parseFloat(p.amount), 0);
     const [orderRows] = await db.query('SELECT user_id, site_id FROM orders WHERE id = ?', [orderId]);
     if (orderRows.length === 0) return res.status(404).json({ error: 'Order not found' });
@@ -389,6 +405,8 @@ exports.markAllInstallmentsPaid = async (req, res) => {
     } finally {
       conn.release();
     }
+
+    await recordCollection(req, { orderId, paymentType: 'full', amount: total, payment: req.body.payment });
 
     const [userRows] = await db.query('SELECT email, username FROM users WHERE id = ?', [userId]);
     if (userRows.length > 0 && userRows[0].email) {

@@ -383,6 +383,17 @@ exports.getOrderDetail = async (req, res) => {
     );
     order.quiz_items = quizItems;
 
+    // Manual payment-collection history (Unpaid→Paid records) — staff only
+    if (['admin', 'sales_lead', 'sales_executive'].includes(role)) {
+      const [collections] = await db.query(
+        `SELECT id, payment_type, mode_of_communication, invoice_no, payment_date,
+                amount, note, collected_by_role, collected_by_name, created_at
+         FROM order_payment_collections WHERE order_id = ? ORDER BY created_at DESC`,
+        [id]
+      );
+      order.payment_collections = collections;
+    }
+
     // Remove sensitive info for tutor role
     if (role === 'tutor') {
       delete order.school_url;

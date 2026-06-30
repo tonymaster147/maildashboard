@@ -347,6 +347,80 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
+    // ── Unpaid → Paid (Full / Partial): collect payment info; only Admin or
+    // Sales Lead may do it. Records an audit row, updates the order's
+    // paid/remaining balances, and books a completed payment for revenue. ──
+    const order0 = orders[0];
+    let currentCode = null;
+    if (order0 && order0.admin_status_id) {
+      const [[c]] = await db.query('SELECT code FROM admin_statuses WHERE id = ?', [order0.admin_status_id]);
+      currentCode = c ? c.code : null;
+    }
+    const targetIsPaid = /^paid_(full|partial)/.test(admin_status_code || '');
+    if (order0 && currentCode === 'unpaid' && targetIsPaid) {
+      if (!['admin', 'sales_lead'].includes(req.user.role)) {
+        return res.status(403).json({ error: 'Only an Admin or Sales Lead can mark an order as paid.' });
+      }
+      const pay = req.body.payment || {};
+      const mode = String(pay.mode_of_communication || '').trim();
+      const invoiceNo = String(pay.invoice_no || '').trim();
+      const payDate = String(pay.payment_date || '').trim();
+      const amount = parseFloat(pay.amount);
+      const payNote = String(pay.note || '').trim();
+      const isPartial = admin_status_code.startsWith('paid_partial');
+      const total = parseFloat(order0.total_price);
+
+      // Partial is only allowed for eligible Online Class orders (same rule as
+      // the student Stripe flow: Online Class + total >= $455 or 45+ days).
+      if (isPartial) {
+        const { isPartialEligible, PARTIAL_PAYMENT_AMOUNT } = require('./paymentController');
+        const [[ot]] = await db.query('SELECT name FROM order_types WHERE id = ?', [order0.order_type_id]);
+        if (!isPartialEligible(order0, ot ? ot.name : '') || total <= PARTIAL_PAYMENT_AMOUNT) {
+          return res.status(400).json({ error: 'Partial payment is only available for eligible Online Class orders (total ≥ $455 or 45+ days).' });
+        }
+      }
+
+      if (!mode) return res.status(400).json({ error: 'Mode of communication is required.' });
+      if (!invoiceNo) return res.status(400).json({ error: 'Invoice number is required.' });
+      if (!payDate) return res.status(400).json({ error: 'Date of payment is required.' });
+      if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ error: 'A valid payment amount is required.' });
+      if (amount > total + 0.001) return res.status(400).json({ error: `Amount cannot exceed the order total ($${total.toFixed(2)}).` });
+      // Note mandatory when a FULL payment's amount differs from the order total.
+      if (!isPartial && Math.abs(amount - total) > 0.001 && !payNote) {
+        return res.status(400).json({ error: 'A note is required when the amount differs from the order total.' });
+      }
+
+      const amountPaid = Math.round(amount * 100) / 100;
+      const amountRemaining = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
+      const paymentType = isPartial ? 'partial' : 'full';
+
+      // Best-effort collector name for the audit trail
+      let collectorName = req.user.name || req.user.username || null;
+      if (!collectorName) {
+        if (req.user.role === 'admin') collectorName = 'Admin';
+        else {
+          const [[su]] = await db.query('SELECT name FROM sales_users WHERE id = ?', [req.user.id]);
+          collectorName = su ? su.name : null;
+        }
+      }
+
+      await db.query(
+        'UPDATE orders SET payment_type = ?, amount_paid = ?, amount_remaining = ? WHERE id = ?',
+        [paymentType, amountPaid, amountRemaining, id]
+      );
+      await db.query(
+        `INSERT INTO order_payment_collections
+           (order_id, payment_type, mode_of_communication, invoice_no, payment_date, amount, note, collected_by_id, collected_by_role, collected_by_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, paymentType, mode, invoiceNo, payDate, amountPaid, payNote || null, req.user.id, req.user.role, collectorName]
+      );
+      // Book a completed payment so the amount counts toward revenue/reports.
+      await db.query(
+        'INSERT INTO payments (order_id, user_id, amount, status) VALUES (?, ?, ?, ?)',
+        [id, order0.user_id, amountPaid, 'completed']
+      );
+    }
+
     if (adminStatusId !== null) {
       if (isCancelling) {
         await db.query('UPDATE orders SET status = ?, admin_status_id = ?, cancellation_note = ? WHERE id = ?', [status, adminStatusId, note, id]);

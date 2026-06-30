@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { salesApi, getChatMessages, getUnreadPerOrder, markAllRead, uploadChatAttachment } from '../services/api';
+import { useApi } from '../hooks/useApi';
+import { getChatMessages, getUnreadPerOrder, markAllRead, uploadChatAttachment } from '../services/api';
 import { connectSocket, getSocket } from '../services/socket';
 import { FiSend, FiMessageCircle, FiSearch } from 'react-icons/fi';
 import { AttachButton, AttachPreview, AttachmentBubble } from '../components/ChatAttachment';
@@ -26,6 +27,7 @@ function useNotificationSound() {
 
 export default function SalesChat() {
   const { user, token } = useAuth();
+  const { getAllOrders } = useApi(); // role-aware: admin → /admin/orders, sales → /sales/orders
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -47,7 +49,7 @@ export default function SalesChat() {
   // Fetch orders that have chat enabled + unread counts
   useEffect(() => {
     Promise.all([
-      salesApi.getOrders({ limit: 200 }),
+      getAllOrders({ limit: 200 }),
       getUnreadPerOrder().catch(() => ({ data: {} }))
     ]).then(([res, unreadRes]) => {
       const orderList = res.data.orders || res.data || [];
@@ -168,7 +170,7 @@ export default function SalesChat() {
   );
 
   const isMySentMessage = (msg) => {
-    return (msg.sender_role === 'sales_lead' || msg.sender_role === 'sales_executive') && msg.sender_id === user.id;
+    return (msg.sender_role === 'admin' || msg.sender_role === 'sales_lead' || msg.sender_role === 'sales_executive') && msg.sender_id === user.id;
   };
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;

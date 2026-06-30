@@ -53,6 +53,13 @@ const SalesOnlyRoute = ({ children }) => {
   return isSalesUser ? children : <Navigate to="/" />;
 };
 
+// Customer Chat is available to admin AND sales users.
+const ChatRoute = ({ children }) => {
+  const { isAdmin, isSalesUser, loading } = useAuth();
+  if (loading) return <div className="loading-page"><div className="loading-spinner"></div></div>;
+  return (isAdmin || isSalesUser) ? children : <Navigate to="/" />;
+};
+
 function AppRoutes() {
   return (
     <Routes>
@@ -76,7 +83,7 @@ function AppRoutes() {
         <Route path="settings" element={<PermissionRoute menuKey="settings"><Settings /></PermissionRoute>} />
         <Route path="sites" element={<AdminOnlyRoute><Sites /></AdminOnlyRoute>} />
         <Route path="sales-team" element={<AdminOnlyRoute><SalesTeam /></AdminOnlyRoute>} />
-        <Route path="sales-chat" element={<SalesOnlyRoute><SalesChat /></SalesOnlyRoute>} />
+        <Route path="sales-chat" element={<ChatRoute><SalesChat /></ChatRoute>} />
       </Route>
     </Routes>
   );

@@ -354,7 +354,7 @@ export default function Layout() {
             </React.Fragment>
           ))}
 
-          {isSalesUser && (
+          {(isSalesUser || isAdmin) && (
             <NavLink to="/sales-chat" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <FiMessageCircle size={18} /> Customer Chat
               {unreadChat > 0 && !isOnChatPage(location.pathname) && (

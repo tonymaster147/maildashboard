@@ -4,7 +4,10 @@ import { getOrderDetail, getOrderFiles, uploadFiles, deleteFile, getPublicStatus
 import InstallmentPlanModal from '../components/InstallmentPlanModal';
 import EditInstallmentModal from '../components/EditInstallmentModal';
 import CancelOrderModal from '../components/CancelOrderModal';
+import PaymentCollectionModal from '../components/PaymentCollectionModal';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../context/AuthContext';
+import { isPartialEligible, PARTIAL_PAYMENT_AMOUNT } from '../utils/partialPayment';
 import { FiArrowLeft, FiUpload, FiTrash2, FiDownload, FiUserPlus, FiX } from 'react-icons/fi';
 
 function ServiceDetails({ order }) {
@@ -103,9 +106,43 @@ export default function OrderDetail() {
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const { isAdmin, user } = useAuth();
+  const canMarkPaid = isAdmin || user?.role === 'sales_lead';
+  const [paymentModal, setPaymentModal] = useState(null); // { targetCode, paymentType }
 
   const handleAdminStatusChange = async (code) => {
     if (code === 'cancelled') { setCancelOpen(true); return; }
+    const targetIsPaid = /^paid_(full|partial)/.test(code || '');
+    if (order?.admin_status_code === 'unpaid' && targetIsPaid) {
+      if (!canMarkPaid) {
+        alert('Only an Admin or Sales Lead can mark an order as paid.');
+        fetchOrder();
+        return;
+      }
+      const isPartial = code.startsWith('paid_partial');
+      if (isPartial && !isPartialEligible(order)) {
+        alert('Partial payment is only available for eligible Online Class orders (total ≥ $455 or 45+ days).');
+        fetchOrder();
+        return;
+      }
+      const total = parseFloat(order.total_price || 0);
+      setPaymentModal({
+        title: `Record Payment — Order ${order.order_code || `#${order.id}`}`,
+        subtitle: `Marking as ${isPartial ? 'Paid — Partial' : 'Paid — Full'} · Order total $${total.toFixed(2)}`,
+        amountLabel: isPartial ? 'Upfront amount' : 'Amount',
+        amount: isPartial ? Math.min(PARTIAL_PAYMENT_AMOUNT, total) : total,
+        maxAmount: total,
+        noteRequiredWhenDifferent: !isPartial,
+        showRemaining: isPartial,
+        remainingBase: total,
+        onSubmit: async (payment) => {
+          await updateOrderStatus(id, { admin_status_code: code, payment });
+          setPaymentModal(null);
+          fetchOrder();
+        },
+      });
+      return;
+    }
     try {
       await updateOrderStatus(id, { admin_status_code: code });
       fetchOrder();
@@ -222,6 +259,7 @@ export default function OrderDetail() {
           <h4 style={{ marginBottom: 16 }}>Order Info</h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
+              ['Placed', order.created_at ? new Date(order.created_at).toLocaleString() : '—'],
               ['Source', order.source_url || 'Direct'],
               ['Type', order.order_type_name],
               ['Course', order.course_name || '—'],
@@ -259,14 +297,20 @@ export default function OrderDetail() {
               {!order.has_installments && (
                 <>
                   <button className="btn btn-sm btn-primary" style={{ background: '#f59e0b', width: '100%', marginBottom: 6 }} onClick={() => setShowInstallmentModal(true)}>Split into Installments</button>
-                  <button className="btn btn-sm btn-secondary" style={{ width: '100%' }} onClick={async () => {
-                    if (!confirm(`Mark remaining $${parseFloat(order.amount_remaining).toFixed(2)} as paid?`)) return;
-                    try {
-                      await markRemainingPaid(order.id);
-                      fetchOrder();
-                    } catch (e) {
-                      alert(e.response?.data?.error || 'Failed to mark paid');
-                    }
+                  <button className="btn btn-sm btn-secondary" style={{ width: '100%' }} onClick={() => {
+                    const remaining = parseFloat(order.amount_remaining);
+                    setPaymentModal({
+                      title: `Record Remaining Payment — Order ${order.order_code || `#${order.id}`}`,
+                      subtitle: `Marking the remaining $${remaining.toFixed(2)} as paid`,
+                      amount: remaining,
+                      amountEditable: false,
+                      submitLabel: 'Mark Remaining Paid',
+                      onSubmit: async (payment) => {
+                        await markRemainingPaid(order.id, { payment });
+                        setPaymentModal(null);
+                        fetchOrder();
+                      },
+                    });
                   }}>Mark Remaining Paid</button>
                 </>
               )}
@@ -281,14 +325,19 @@ export default function OrderDetail() {
                           <strong>${parseFloat(i.amount).toFixed(2)}</strong>
                           <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: i.status === 'paid' ? '#16a34a' : i.status === 'overdue' ? '#dc2626' : '#d97706', color: '#fff' }}>{i.status}</span>
                           {i.status !== 'paid' && (
-                            <button className="btn btn-sm" style={{ background: '#16a34a', color: '#fff', padding: '2px 8px', fontSize: 11 }} onClick={async () => {
-                              if (!confirm(`Mark installment #${i.installment_number} ($${parseFloat(i.amount).toFixed(2)}) as paid?`)) return;
-                              try {
-                                await markInstallmentPaid(i.id);
-                                fetchOrder();
-                              } catch (e) {
-                                alert(e.response?.data?.error || 'Failed to mark paid');
-                              }
+                            <button className="btn btn-sm" style={{ background: '#16a34a', color: '#fff', padding: '2px 8px', fontSize: 11 }} onClick={() => {
+                              setPaymentModal({
+                                title: `Record Installment Payment — Order ${order.order_code || `#${order.id}`}`,
+                                subtitle: `Installment #${i.installment_number} · $${parseFloat(i.amount).toFixed(2)}`,
+                                amount: parseFloat(i.amount),
+                                amountEditable: false,
+                                submitLabel: 'Mark Installment Paid',
+                                onSubmit: async (payment) => {
+                                  await markInstallmentPaid(i.id, { payment });
+                                  setPaymentModal(null);
+                                  fetchOrder();
+                                },
+                              });
                             }}>Mark Paid</button>
                           )}
                         </div>
@@ -299,15 +348,20 @@ export default function OrderDetail() {
                     <button className="btn btn-sm btn-secondary" style={{ width: '100%', marginBottom: 6 }} onClick={() => setShowEditInstallmentModal(true)}>Edit Plan</button>
                   )}
                   {installments.some(i => i.status !== 'paid') && (
-                    <button className="btn btn-sm btn-primary" style={{ width: '100%', background: '#16a34a', marginBottom: 6 }} onClick={async () => {
+                    <button className="btn btn-sm btn-primary" style={{ width: '100%', background: '#16a34a', marginBottom: 6 }} onClick={() => {
                       const pendingSum = installments.filter(i => i.status !== 'paid').reduce((s, i) => s + parseFloat(i.amount), 0);
-                      if (!confirm(`Mark ALL remaining installments ($${pendingSum.toFixed(2)}) as paid?`)) return;
-                      try {
-                        await markAllInstallmentsPaid(order.id);
-                        fetchOrder();
-                      } catch (e) {
-                        alert(e.response?.data?.error || 'Failed to mark all paid');
-                      }
+                      setPaymentModal({
+                        title: `Record Payment — Order ${order.order_code || `#${order.id}`}`,
+                        subtitle: `Marking ALL remaining installments ($${pendingSum.toFixed(2)}) as paid`,
+                        amount: pendingSum,
+                        amountEditable: false,
+                        submitLabel: 'Mark All Remaining Paid',
+                        onSubmit: async (payment) => {
+                          await markAllInstallmentsPaid(order.id, { payment });
+                          setPaymentModal(null);
+                          fetchOrder();
+                        },
+                      });
                     }}>Mark All Remaining Paid</button>
                   )}
                   {installments.every(i => i.status !== 'paid') && (
@@ -350,6 +404,12 @@ export default function OrderDetail() {
               submitting={cancelSubmitting}
             />
           )}
+          {paymentModal && (
+            <PaymentCollectionModal
+              {...paymentModal}
+              onClose={() => { setPaymentModal(null); fetchOrder(); }}
+            />
+          )}
           <div style={{ marginTop: 16, padding: 12, background: 'var(--bg-input)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>Payment Status</span>
             <span className={`badge-status ${order.payment_status === 'completed' ? 'badge-active' : order.payment_status === 'pending' ? 'badge-in_progress' : order.payment_status === 'cancelled' ? 'badge-cancelled' : 'badge-incomplete'}`} style={{ fontSize: 12, padding: '4px 12px', textTransform: 'capitalize' }}>
@@ -374,6 +434,30 @@ export default function OrderDetail() {
         </div>
       </div>
       <ServiceDetails order={order} />
+
+      {order.payment_collections && order.payment_collections.length > 0 && (
+        <div className="card mt-2">
+          <h4 style={{ marginBottom: 12 }}>Payment Records</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {order.payment_collections.map(pc => (
+              <div key={pc.id} style={{ padding: 12, background: 'var(--bg-input)', borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--accent)' }}>${parseFloat(pc.amount).toFixed(2)}</span>
+                  <span className={`badge-status ${pc.payment_type === 'full' ? 'badge-active' : 'badge-in_progress'}`} style={{ fontSize: 11, textTransform: 'capitalize' }}>{pc.payment_type}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <div>Invoice: <strong style={{ color: 'var(--text-primary)' }}>{pc.invoice_no || '—'}</strong></div>
+                  <div>Date of payment: <strong style={{ color: 'var(--text-primary)' }}>{pc.payment_date ? new Date(pc.payment_date).toLocaleDateString() : '—'}</strong></div>
+                  <div>Mode: <strong style={{ color: 'var(--text-primary)' }}>{pc.mode_of_communication || '—'}</strong></div>
+                  <div>By: <strong style={{ color: 'var(--text-primary)' }}>{pc.collected_by_name || '—'}{pc.collected_by_role ? ` (${pc.collected_by_role.replace('_', ' ')})` : ''}</strong></div>
+                </div>
+                {pc.note && <div style={{ marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>Note: <span style={{ color: 'var(--text-primary)' }}>{pc.note}</span></div>}
+                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>Recorded {new Date(pc.created_at).toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {order.additional_instructions && <div className="card mt-2"><h4 style={{ marginBottom: 8 }}>Instructions</h4><p style={{ color: 'var(--text-secondary)' }}>{order.additional_instructions}</p></div>}
 
