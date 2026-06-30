@@ -330,7 +330,13 @@ exports.getOrderDetail = async (req, res) => {
         p.name as plan_name,
         pr.plan_tier,
         u.username,
-        IFNULL(pay.status, 'unpaid') as payment_status,
+        CASE
+          WHEN astat.code = 'cancelled' THEN 'cancelled'
+          WHEN o.amount_remaining <= 0 AND (o.amount_paid > 0 OR EXISTS (SELECT 1 FROM payments WHERE order_id = o.id AND status = 'completed')) THEN 'completed'
+          WHEN o.amount_paid > 0 OR EXISTS (SELECT 1 FROM payments WHERE order_id = o.id AND status = 'completed') THEN 'partial'
+          WHEN EXISTS (SELECT 1 FROM payments WHERE order_id = o.id AND status = 'pending') THEN 'pending'
+          ELSE 'unpaid'
+        END as payment_status,
         site.contact_email as site_contact_email,
         site.name as site_name,
         astat.code as admin_status_code, astat.name as admin_status_name,
@@ -342,7 +348,6 @@ exports.getOrderDetail = async (req, res) => {
       LEFT JOIN plans p ON o.plan_id = p.id
       LEFT JOIN pricing_rules pr ON o.pricing_rule_id = pr.id
       JOIN users u ON o.user_id = u.id
-      LEFT JOIN payments pay ON o.id = pay.order_id
       LEFT JOIN sites site ON o.site_id = site.id
       LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
       LEFT JOIN tutor_statuses tstat ON o.tutor_status_id = tstat.id

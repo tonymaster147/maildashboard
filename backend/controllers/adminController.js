@@ -421,6 +421,21 @@ exports.updateOrderStatus = async (req, res) => {
       );
     }
 
+    // Keep the assigned/unassigned suffix honest: a "(Assigned)" paid status
+    // with no tutor becomes "(Not Assigned)", and vice-versa. Mirrors how
+    // assignTutors promotes the status when a tutor is added.
+    if (admin_status_code && /^paid_(full|partial)_(assigned|unassigned)$/.test(admin_status_code)) {
+      const [[tc]] = await db.query('SELECT COUNT(*) AS cnt FROM order_tutors WHERE order_id = ?', [id]);
+      const wantCode = admin_status_code.replace(/_(assigned|unassigned)$/, tc.cnt > 0 ? '_assigned' : '_unassigned');
+      if (wantCode !== admin_status_code) {
+        const [rows] = await db.query('SELECT id FROM admin_statuses WHERE code = ?', [wantCode]);
+        if (rows.length) {
+          adminStatusId = rows[0].id;
+          status = ADMIN_CODE_TO_LEGACY[wantCode] || status;
+        }
+      }
+    }
+
     if (adminStatusId !== null) {
       if (isCancelling) {
         await db.query('UPDATE orders SET status = ?, admin_status_id = ?, cancellation_note = ? WHERE id = ?', [status, adminStatusId, note, id]);
