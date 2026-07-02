@@ -161,9 +161,9 @@ exports.updateInstallmentPlan = async (req, res) => {
     const [orders] = await db.query('SELECT * FROM orders WHERE id = ?', [orderId]);
     if (orders.length === 0) return res.status(404).json({ error: 'Order not found' });
 
-    // Fetch all existing installments
+    // Fetch all existing installments (incl. old due_date/number for the audit)
     const [existing] = await db.query(
-      'SELECT id, amount, status FROM order_installments WHERE order_id = ?',
+      'SELECT id, installment_number, amount, status, due_date FROM order_installments WHERE order_id = ?',
       [orderId]
     );
     const existingMap = new Map(existing.map(e => [e.id, e]));
@@ -194,6 +194,19 @@ exports.updateInstallmentPlan = async (req, res) => {
     for (const id of unpaidIds) {
       if (!submittedIds.has(id)) {
         return res.status(400).json({ error: `Missing installment id ${id} in update payload` });
+      }
+    }
+
+    // Diff old vs new to build the audit + staff notification of what changed.
+    const norm = (d) => d instanceof Date ? d.toISOString().slice(0, 10) : String(d || '').slice(0, 10);
+    const changes = [];
+    for (const upd of installments) {
+      const old = existingMap.get(parseInt(upd.id));
+      if (!old) continue;
+      const prevDate = norm(old.due_date), newDate = norm(upd.due_date);
+      const prevAmount = parseFloat(old.amount), newAmount = parseFloat(upd.amount);
+      if (prevDate !== newDate || Math.abs(prevAmount - newAmount) > 0.001) {
+        changes.push({ installmentId: parseInt(upd.id), installmentNumber: old.installment_number, prevDate, newDate, prevAmount, newAmount });
       }
     }
 
@@ -232,6 +245,48 @@ exports.updateInstallmentPlan = async (req, res) => {
           referenceType: 'order',
         }).catch(e => console.error('installment_plan notify failed:', e.message));
       }
+    }
+
+    // Audit the edits + notify admin and all sales leads (bell + email).
+    if (changes.length > 0) {
+      let editorName = req.user.name || req.user.username || null;
+      if (!editorName) {
+        if (req.user.role === 'admin') editorName = 'Admin';
+        else { const [[su]] = await db.query('SELECT name FROM sales_users WHERE id = ?', [req.user.id]); editorName = su ? su.name : null; }
+      }
+      for (const c of changes) {
+        await db.query(
+          `INSERT INTO order_installment_changes
+             (order_id, installment_id, installment_number, previous_amount, new_amount, previous_due_date, new_due_date, edited_by_id, edited_by_role, edited_by_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [orderId, c.installmentId, c.installmentNumber, c.prevAmount, c.newAmount, c.prevDate, c.newDate, req.user.id, req.user.role, editorName]
+        );
+      }
+      try {
+        const { notifyStaff } = require('../services/notifyUser');
+        const ref = await require('../utils/orderCode').formatOrderRef(orderId);
+        await notifyStaff(req.app.get('io'), {
+          type: 'installment_edited',
+          message: `Installment plan on order ${ref} edited by ${editorName || 'staff'}`,
+          referenceId: Number(orderId),
+          referenceType: 'order',
+          roles: ['admin', 'sales_lead'],
+        });
+      } catch (e) { console.error('installment edited staff notify failed:', e.message); }
+      try {
+        const { getAdminEmails } = require('../services/settings');
+        const [leads] = await db.query("SELECT email FROM sales_users WHERE role = 'sales_lead' AND status = 'active' AND email IS NOT NULL");
+        const recipients = [...(await getAdminEmails()), ...leads.map(l => l.email)];
+        require('../services/emailService').sendInstallmentEditedStaff({
+          orderId,
+          courseName: orders[0].course_name,
+          editedByName: editorName,
+          editedByRole: req.user.role,
+          changes,
+          recipients,
+          siteId: orders[0].site_id,
+        }).catch(e => console.error('installment edited email failed:', e.message));
+      } catch (e) { console.error('installment edited email prep failed:', e.message); }
     }
 
     res.json({ message: 'Installment plan updated', installments: rows });

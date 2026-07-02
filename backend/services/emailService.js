@@ -553,4 +553,60 @@ async function sendInstallmentPaid(email, details) {
   if (ok) console.log(`✅ Installment paid email sent to ${email} for order ${ref}`);
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid, sendLoginDetailsUpdated, sendIssueCreated, sendIssueReplyToUser, sendIssueReplyToAdmin };
+// Admin email when staff record a manual payment (Unpaid→Paid collection).
+async function sendPaymentCollectedAdmin(details) {
+  const { orderId, courseName, username, paymentType, amount, remaining, mode, invoiceNo, paymentDate, note, collectedByName, collectedByRole, siteId } = details;
+  const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
+  const isPartial = paymentType === 'partial';
+  const row = (label, value) => `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 0;color:#64748b;font-size:14px;">${label}</td><td style="padding:10px 0;color:#334155;text-align:right;">${value}</td></tr>`;
+  const html = `
+    ${header(ctx.brand, '💰 Payment Collected')}
+      <p style="color:#334155;font-size:16px;margin-bottom:20px;">A ${isPartial ? 'partial' : 'full'} payment was recorded for order ${ref}.</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+        ${row('Order', `<strong>${ref}</strong>`)}
+        ${row('Course', courseName || '—')}
+        ${row('Customer', username || '—')}
+        ${row('Payment type', `<span style="text-transform:capitalize;">${paymentType || 'full'}</span>`)}
+        ${row('Amount', `<span style="color:#16a34a;font-weight:700;font-size:18px;">$${parseFloat(amount || 0).toFixed(2)}</span>`)}
+        ${isPartial ? row('Remaining', `<span style="color:#d97706;font-weight:600;">$${parseFloat(remaining || 0).toFixed(2)}</span>`) : ''}
+        ${row('Mode of communication', mode || '—')}
+        ${row('Invoice No', invoiceNo || '—')}
+        ${row('Date of payment', paymentDate || '—')}
+        ${note ? row('Note', note) : ''}
+        ${row('Recorded by', `${collectedByName || '—'}${collectedByRole ? ` (${collectedByRole.replace('_', ' ')})` : ''}`)}
+      </table>
+    ${footer(ctx.brand)}
+  `;
+  const ok = await sendViaContext(ctx, { to: (await getAdminEmails()).join(', '), subject: `Payment collected - Order ${ref} - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Payment-collected email sent for order ${ref}`);
+}
+
+// Notify admin + sales leads when an installment plan is edited (dates/amounts).
+async function sendInstallmentEditedStaff(details) {
+  const { orderId, courseName, editedByName, editedByRole, changes, recipients, siteId } = details;
+  const to = [...new Set((recipients || []).filter(Boolean))].join(', ');
+  if (!to) return;
+  const ctx = await resolveContext(siteId || await getOrderSiteId(orderId));
+  const ref = await formatOrderRef(orderId);
+  const rows = (changes || []).map(c => {
+    const parts = [];
+    if (c.prevDate !== c.newDate) parts.push(`Due date: <strong>${c.prevDate || '—'}</strong> → <strong>${c.newDate || '—'}</strong>`);
+    if (c.prevAmount != null && parseFloat(c.prevAmount) !== parseFloat(c.newAmount)) parts.push(`Amount: <strong>$${parseFloat(c.prevAmount).toFixed(2)}</strong> → <strong>$${parseFloat(c.newAmount).toFixed(2)}</strong>`);
+    return `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 0;color:#64748b;font-size:14px;">Installment #${c.installmentNumber}</td><td style="padding:10px 0;color:#334155;text-align:right;">${parts.join('<br>')}</td></tr>`;
+  }).join('');
+  const html = `
+    ${header(ctx.brand, '✏️ Installment Plan Edited')}
+      <p style="color:#334155;font-size:16px;margin-bottom:20px;">The installment plan for order ${ref} was edited by <strong>${editedByName || 'staff'}</strong>${editedByRole ? ` (${editedByRole.replace('_', ' ')})` : ''}.</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+        <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 0;color:#64748b;font-size:14px;">Order</td><td style="padding:10px 0;color:#334155;font-weight:600;text-align:right;">${ref}</td></tr>
+        <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:10px 0;color:#64748b;font-size:14px;">Course</td><td style="padding:10px 0;color:#334155;text-align:right;">${courseName || '—'}</td></tr>
+        ${rows}
+      </table>
+    ${footer(ctx.brand)}
+  `;
+  const ok = await sendViaContext(ctx, { to, subject: `Installment plan edited - Order ${ref} - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Installment-edited email sent for order ${ref}`);
+}
+
+module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid, sendLoginDetailsUpdated, sendIssueCreated, sendIssueReplyToUser, sendIssueReplyToAdmin, sendPaymentCollectedAdmin, sendInstallmentEditedStaff };

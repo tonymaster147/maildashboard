@@ -419,6 +419,32 @@ exports.updateOrderStatus = async (req, res) => {
         'INSERT INTO payments (order_id, user_id, amount, status) VALUES (?, ?, ?, ?)',
         [id, order0.user_id, amountPaid, 'completed']
       );
+
+      // Notify the admin of the collected payment (non-blocking)
+      require('../services/emailService').sendPaymentCollectedAdmin({
+        orderId: id,
+        courseName: order0.course_name,
+        username: order0.username,
+        paymentType,
+        amount: amountPaid,
+        remaining: amountRemaining,
+        mode, invoiceNo, paymentDate: payDate, note: payNote,
+        collectedByName: collectorName,
+        collectedByRole: req.user.role,
+        siteId: order0.site_id,
+      }).catch(e => console.error('payment collected email failed:', e.message));
+
+      // Bell notification to staff (admin + sales)
+      try {
+        const { notifyStaff } = require('../services/notifyUser');
+        const refLabel = await require('../utils/orderCode').formatOrderRef(id);
+        await notifyStaff(req.app.get('io'), {
+          type: 'payment_collected',
+          message: `Payment collected on order ${refLabel} — $${amountPaid.toFixed(2)} (${paymentType}) by ${collectorName || req.user.role}`,
+          referenceId: Number(id),
+          referenceType: 'order',
+        });
+      } catch (e) { console.error('payment collected staff notify failed:', e.message); }
     }
 
     // Keep the assigned/unassigned suffix honest: a "(Assigned)" paid status
@@ -560,21 +586,33 @@ exports.assignTutors = async (req, res) => {
       }
     }
 
-    // Update order status to active if pending; also promote admin/tutor status.
-    // Pick partial vs full assigned variant from the current payment_type.
+    // Keep the paid_* admin status' assigned/unassigned suffix honest with the
+    // actual assignment: assigning flips to (Assigned), removing all tutors
+    // flips back to (Not Assigned). Only touches paid_* statuses.
     const statuses = require('../utils/statuses');
-    const [[currentOrder]] = await db.query('SELECT payment_type FROM orders WHERE id = ?', [id]);
-    const assignedCode = currentOrder?.payment_type === 'partial' ? 'paid_partial_assigned' : 'paid_full_assigned';
-    const adminAssignedId   = await statuses.adminId(assignedCode);
-    const tutorInProgressId = await statuses.tutorId('in_progress');
-    await db.query(
-      `UPDATE orders
-       SET status = "active",
-           admin_status_id = COALESCE(?, admin_status_id),
-           tutor_status_id = COALESCE(tutor_status_id, ?)
-       WHERE id = ? AND status IN ('pending', 'active')`,
-      [adminAssignedId, tutorInProgressId, id]
+    const [[cur]] = await db.query(
+      `SELECT astat.code AS admin_code
+       FROM orders o LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
+       WHERE o.id = ?`, [id]
     );
+    if (cur?.admin_code && /^paid_(full|partial)_(assigned|unassigned)$/.test(cur.admin_code)) {
+      const hasTutor = tutor_ids.length > 0;
+      const wantCode = cur.admin_code.replace(/_(assigned|unassigned)$/, hasTutor ? '_assigned' : '_unassigned');
+      const wantId = await statuses.adminId(wantCode);
+      const legacy = ADMIN_CODE_TO_LEGACY[wantCode] || (hasTutor ? 'active' : 'pending');
+      const tutorInProgressId = await statuses.tutorId('in_progress');
+      if (hasTutor) {
+        await db.query(
+          'UPDATE orders SET status = ?, admin_status_id = COALESCE(?, admin_status_id), tutor_status_id = COALESCE(tutor_status_id, ?) WHERE id = ?',
+          [legacy, wantId, tutorInProgressId, id]
+        );
+      } else {
+        await db.query(
+          'UPDATE orders SET status = ?, admin_status_id = COALESCE(?, admin_status_id) WHERE id = ?',
+          [legacy, wantId, id]
+        );
+      }
+    }
 
     res.json({ message: 'Tutors assigned successfully' });
   } catch (error) {
