@@ -63,7 +63,7 @@ export default function Issues() {
       }}>
         <div style={{ flex: 1, minWidth: 220 }}>
           <h2 style={{ fontSize: 22, fontWeight: 800, color: C.textPrimary, margin: 0, letterSpacing: 0.3 }}>
-            Issues
+            Escalation
           </h2>
           <p style={{ color: C.textMuted, fontSize: 13, margin: '4px 0 0' }}>
             Open a support ticket and chat with our team.

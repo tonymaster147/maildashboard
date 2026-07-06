@@ -28,6 +28,7 @@ function timeAgo(iso) {
 }
 
 function targetFor(n) {
+  if (n.reference_type === 'issue' && n.reference_id) return `/escalations/${n.reference_id}`;
   if (n.reference_type === 'order' && n.reference_id) return `/tasks/${n.reference_id}`;
   if (n.reference_type === 'chat_tutor' && n.reference_id) return `/chat/${n.reference_id}`;
   return null;

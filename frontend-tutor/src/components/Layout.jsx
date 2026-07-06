@@ -2,12 +2,12 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-  getUnreadCount,
+  getUnreadCount, getEscalationsUnread,
   getNotificationsFeed, getNotificationsFeedUnread,
   markFeedNotificationRead, markAllFeedNotificationsRead,
 } from '../services/api';
 import { connectSocket } from '../services/socket';
-import { FiBookOpen, FiLogOut, FiAward, FiMessageSquare, FiBell } from 'react-icons/fi';
+import { FiBookOpen, FiLogOut, FiAward, FiMessageSquare, FiBell, FiAlertCircle } from 'react-icons/fi';
 import NotificationPanel from './NotificationPanel';
 
 export default function Layout() {
@@ -16,6 +16,7 @@ export default function Layout() {
   const location = useLocation();
   const [unreadChat, setUnreadChat] = useState(0);
   const [unreadTasks, setUnreadTasks] = useState(0);
+  const [unreadEsc, setUnreadEsc] = useState(0);
   // Notification feed (floating bell)
   const [bellOpen, setBellOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -58,6 +59,18 @@ export default function Layout() {
     const interval = setInterval(fetchUnread, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // Escalation unread — poll every 30s; clears when viewing an escalation.
+  useEffect(() => {
+    const fetchEsc = () => {
+      if (locationRef.current.startsWith('/escalations')) { setUnreadEsc(0); return; }
+      getEscalationsUnread().then(res => setUnreadEsc(res.data.unread || 0)).catch(() => {});
+    };
+    fetchEsc();
+    const interval = setInterval(fetchEsc, 30000);
+    return () => clearInterval(interval);
+  }, []);
+  useEffect(() => { if (location.pathname.startsWith('/escalations')) setUnreadEsc(0); }, [location.pathname]);
 
   // Bell: close on route change / outside click
   useEffect(() => { setBellOpen(false); }, [location.pathname]);
@@ -211,6 +224,12 @@ export default function Layout() {
             <FiMessageSquare size={18} /> Chat
             {unreadChat > 0 && !isOnChatPage(location.pathname) && (
               <span style={{ background: 'var(--error)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadChat}</span>
+            )}
+          </NavLink>
+          <NavLink to="/escalations" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <FiAlertCircle size={18} /> Escalation
+            {unreadEsc > 0 && !location.pathname.startsWith('/escalations') && (
+              <span style={{ background: 'var(--error)', color: '#fff', fontSize: 11, padding: '2px 7px', borderRadius: 10, marginLeft: 'auto', fontWeight: 700, minWidth: 20, textAlign: 'center', animation: 'pulse 2s infinite' }}>{unreadEsc}</span>
             )}
           </NavLink>
         </nav>

@@ -21,7 +21,7 @@ export default function Issues() {
   return (
     <div>
       <div className="page-header">
-        <h2>Issues</h2>
+        <h2>Escalation</h2>
         <p>Support tickets from students</p>
       </div>
 

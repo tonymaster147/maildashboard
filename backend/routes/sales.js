@@ -79,6 +79,7 @@ router.delete('/tutors/:id', requirePermission('tutors'), adminController.delete
 
 // Orders (if permitted)
 router.get('/orders', requirePermission('orders'), adminController.getAllOrders);
+router.get('/orders/filter-options', requirePermission('orders'), adminController.getOrderFilterOptions);
 router.put('/orders/:id/status', requirePermission('orders'), guardOrderWindow, adminController.updateOrderStatus);
 router.put('/orders/:id/assign', requirePermission('orders'), guardOrderWindow, adminController.assignTutors);
 router.put('/orders/:id/reopen-chat', requirePermission('orders'), guardOrderWindow, adminController.reopenChat);
@@ -136,6 +137,7 @@ router.get('/issues/unread-count',  requirePermission('issues'), issuesControlle
 router.get('/issues',               requirePermission('issues'), issuesController.listAllIssues);
 router.get('/issues/:id',           requirePermission('issues'), guardIssueWindow, issuesController.getIssueDetail);
 router.post('/issues/:id/messages', requirePermission('issues'), guardIssueWindow, issuesController.addMessage);
+router.post('/issues/:id/escalate', requirePermission('issues'), guardIssueWindow, issuesController.escalateToTutor);
 router.patch('/issues/:id/close',   requirePermission('issues'), guardIssueWindow, issuesController.closeIssue);
 router.patch('/issues/:id/reopen',  requirePermission('issues'), guardIssueWindow, issuesController.reopenIssue);
 

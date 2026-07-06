@@ -246,8 +246,34 @@ exports.deleteTutor = async (req, res) => {
 // ============= ORDER MANAGEMENT =============
 exports.getAllOrders = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, admin_status_code, search, unassigned } = req.query;
-    const offset = (page - 1) * limit;
+    const {
+      page = 1, limit = 20, status, admin_status_code, search, unassigned,
+      code_prefix, order_type_id, plan_tier, tutor_id, source_url, tutor_status_code, start_date, end_date,
+    } = req.query;
+    const lim = parseInt(limit);
+    const offset = (parseInt(page) - 1) * lim;
+
+    // Shared WHERE — subqueries for tutor/plan/tutor-status so the count query
+    // needs no extra joins. Applied to both the data page and the count.
+    const build = () => {
+      let sql = ' WHERE 1=1';
+      const p = [];
+      if (admin_status_code) { sql += ' AND astat.code = ?'; p.push(admin_status_code); }
+      else if (status) { sql += ' AND o.status = ?'; p.push(status); }
+      if (search) { sql += ' AND (o.course_name LIKE ? OR u.username LIKE ? OR o.order_code LIKE ? OR o.id = ?)'; p.push(`%${search}%`, `%${search}%`, `%${search}%`, search); }
+      if (code_prefix) { sql += ' AND o.order_code LIKE CONCAT(?, "%")'; p.push(code_prefix); }
+      if (order_type_id) { sql += ' AND o.order_type_id = ?'; p.push(order_type_id); }
+      if (plan_tier) { sql += ' AND o.pricing_rule_id IN (SELECT id FROM pricing_rules WHERE plan_tier = ?)'; p.push(plan_tier); }
+      if (tutor_id) { sql += ' AND o.id IN (SELECT order_id FROM order_tutors WHERE tutor_id = ?)'; p.push(tutor_id); }
+      if (source_url) { sql += ' AND o.source_url = ?'; p.push(source_url); }
+      if (tutor_status_code) { sql += ' AND o.tutor_status_id IN (SELECT id FROM tutor_statuses WHERE code = ?)'; p.push(tutor_status_code); }
+      if (start_date) { sql += ' AND o.created_at >= ?'; p.push(start_date + ' 00:00:00'); }
+      if (end_date) { sql += ' AND o.created_at <= ?'; p.push(end_date + ' 23:59:59'); }
+      if (req.salesCutoff) { sql += ' AND o.created_at >= ?'; p.push(req.salesCutoff); }
+      return { sql, p };
+    };
+    const f = build();
+
     let query = `
       SELECT o.*, u.username, ot.name as order_type_name, s.name as subject_name,
         p.name as plan_name, pr.plan_tier,
@@ -265,31 +291,53 @@ exports.getAllOrders = async (req, res) => {
       LEFT JOIN tutors t ON otr.tutor_id = t.id
       LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
       LEFT JOIN tutor_statuses tstat ON o.tutor_status_id = tstat.id
-      WHERE 1=1
-    `;
-    const params = [];
-    if (admin_status_code) { query += ' AND astat.code = ?'; params.push(admin_status_code); }
-    else if (status)       { query += ' AND o.status = ?';   params.push(status); }
-    if (search) { query += ' AND (o.course_name LIKE ? OR u.username LIKE ? OR o.order_code LIKE ? OR o.id = ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`, search); }
-    if (req.salesCutoff) { query += ' AND o.created_at >= ?'; params.push(req.salesCutoff); }
-    query += ' GROUP BY o.id';
-    if (unassigned === 'true') { query += ' HAVING tutor_names IS NULL'; }
+      ${f.sql} GROUP BY o.id`;
+    const params = [...f.p];
+    if (unassigned === 'true') query += ' HAVING tutor_names IS NULL';
     query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
+    params.push(lim, offset);
     const [orders] = await db.query(query, params);
-    let countQuery = `SELECT COUNT(DISTINCT o.id) as total FROM orders o JOIN users u ON o.user_id = u.id
+
+    let countQuery = `SELECT COUNT(DISTINCT o.id) as total FROM orders o
+      JOIN users u ON o.user_id = u.id
       LEFT JOIN order_tutors otr ON o.id = otr.order_id
-      LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id WHERE 1=1`;
-    const countParams = [];
-    if (admin_status_code) { countQuery += ' AND astat.code = ?'; countParams.push(admin_status_code); }
-    else if (status)       { countQuery += ' AND o.status = ?';   countParams.push(status); }
-    if (search) { countQuery += ' AND (o.course_name LIKE ? OR u.username LIKE ? OR o.order_code LIKE ? OR o.id = ?)'; countParams.push(`%${search}%`, `%${search}%`, `%${search}%`, search); }
-    if (req.salesCutoff) { countQuery += ' AND o.created_at >= ?'; countParams.push(req.salesCutoff); }
-    if (unassigned === 'true') { countQuery += ' AND otr.order_id IS NULL'; }
+      LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
+      ${f.sql}`;
+    const countParams = [...f.p];
+    if (unassigned === 'true') countQuery += ' AND otr.order_id IS NULL';
     const [[{ total }]] = await db.query(countQuery, countParams);
-    res.json({ orders, total, page: parseInt(page), limit: parseInt(limit) });
+
+    res.json({ orders, total, page: parseInt(page), limit: lim });
   } catch (error) {
     console.error('Get all orders error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Dropdown options for the Orders page filters (types, tutors, tutor statuses,
+// distinct order-code prefixes, distinct sources, plan tiers).
+exports.getOrderFilterOptions = async (req, res) => {
+  try {
+    const [orderTypes] = await db.query('SELECT id, name FROM order_types WHERE is_active = 1 ORDER BY name');
+    const [tutors] = await db.query("SELECT id, name FROM tutors WHERE status = 'active' ORDER BY name");
+    const [tutorStatuses] = await db.query('SELECT code, name FROM tutor_statuses WHERE is_active = 1 ORDER BY sort_order, name');
+    const [prefixRows] = await db.query(
+      "SELECT DISTINCT REGEXP_REPLACE(order_code, '[0-9]+$', '') AS prefix FROM orders WHERE order_code IS NOT NULL AND order_code <> '' ORDER BY prefix"
+    );
+    const [sourceRows] = await db.query(
+      "SELECT DISTINCT source_url FROM orders WHERE source_url IS NOT NULL AND source_url <> '' ORDER BY source_url"
+    );
+    const [tierRows] = await db.query('SELECT DISTINCT plan_tier FROM pricing_rules WHERE plan_tier IS NOT NULL ORDER BY plan_tier');
+    res.json({
+      orderTypes,
+      tutors,
+      tutorStatuses,
+      prefixes: prefixRows.map(r => r.prefix).filter(Boolean),
+      sources: sourceRows.map(r => r.source_url),
+      planTiers: tierRows.map(r => r.plan_tier),
+    });
+  } catch (error) {
+    console.error('Get order filter options error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 };
@@ -798,21 +846,31 @@ exports.getReports = async (req, res) => {
       end_date // order created_at end
     } = req.query;
 
-    let query = `
-      SELECT
-        o.id as order_id,
-        o.order_code,
-        o.course_name as project_name,
-        o.status as order_status,
-        o.total_price as amount,
-        o.created_at as order_created_date,
-        u.username as user_name,
-        u.email as user_email,
-        GROUP_CONCAT(DISTINCT t.name) as assigned_tutors,
-        ot.name as order_type,
-        s.name as subject,
-        p.name as plan,
-        IFNULL(pay.status, 'unpaid') as payment_status
+    // Server-side sort (whitelisted) + pagination. all=1 skips LIMIT (CSV export).
+    const allowed = {
+      order_code: 'o.order_code', project_name: 'o.course_name', order_created_date: 'o.created_at',
+      user_name: 'u.username', payment_status: 'payment_status', amount: 'o.total_price', order_status: 'o.status',
+    };
+    const dir = String(req.query.sort_dir || '').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const orderBy = (req.query.sort_by && allowed[req.query.sort_by]) ? `${allowed[req.query.sort_by]} ${dir}` : 'o.created_at DESC';
+    const isAll = ['1', 'true'].includes(String(req.query.all || ''));
+    const lim = Math.min(1000, Math.max(1, parseInt(req.query.limit) || 100));
+    const pageNum = Math.max(1, parseInt(req.query.page) || 1);
+    const limitSql = isAll ? '' : `LIMIT ${lim} OFFSET ${(pageNum - 1) * lim}`;
+
+    // Shared FROM + WHERE (filters) — used by both the data page and the count.
+    let where = ' WHERE 1=1';
+    const params = [];
+    if (search) { where += ' AND (o.course_name LIKE ? OR o.id = ? OR o.order_code LIKE ?)'; params.push(`%${search}%`, search, `%${search}%`); }
+    if (status) { where += ' AND IFNULL(pay.status, "unpaid") = ?'; params.push(status); }
+    if (order_status) { where += ' AND o.status = ?'; params.push(order_status); }
+    if (user_id) { where += ' AND o.user_id = ?'; params.push(user_id); }
+    if (tutor_id) { where += ' AND o.id IN (SELECT order_id FROM order_tutors WHERE tutor_id = ?)'; params.push(tutor_id); }
+    if (start_date) { where += ' AND o.created_at >= ?'; params.push(start_date + ' 00:00:00'); }
+    if (end_date) { where += ' AND o.created_at <= ?'; params.push(end_date + ' 23:59:59'); }
+    if (req.salesCutoff) { where += ' AND o.created_at >= ?'; params.push(req.salesCutoff); }
+
+    const fromClause = `
       FROM orders o
       JOIN users u ON o.user_id = u.id
       JOIN order_types ot ON o.order_type_id = ot.id
@@ -820,65 +878,29 @@ exports.getReports = async (req, res) => {
       LEFT JOIN plans p ON o.plan_id = p.id
       LEFT JOIN order_tutors otr ON o.id = otr.order_id
       LEFT JOIN tutors t ON otr.tutor_id = t.id
-      LEFT JOIN payments pay ON o.id = pay.order_id
-      WHERE 1=1
-    `;
-    
-    const params = [];
+      LEFT JOIN payments pay ON o.id = pay.order_id`;
 
-    // Apply filters
-    if (search) {
-      // Match course name, numeric id, or the friendly order code (MMT018…)
-      query += ' AND (o.course_name LIKE ? OR o.id = ? OR o.order_code LIKE ?)';
-      params.push(`%${search}%`, search, `%${search}%`);
-    }
-    
-    if (status) {
-      query += ' AND IFNULL(pay.status, "unpaid") = ?';
-      params.push(status);
-    }
+    const [reports] = await db.query(
+      `SELECT o.id as order_id, o.order_code, o.course_name as project_name, o.status as order_status,
+              o.total_price as amount, o.created_at as order_created_date,
+              u.username as user_name, u.email as user_email,
+              GROUP_CONCAT(DISTINCT t.name) as assigned_tutors,
+              ot.name as order_type, s.name as subject, p.name as plan,
+              IFNULL(pay.status, 'unpaid') as payment_status
+       ${fromClause} ${where}
+       GROUP BY o.id ORDER BY ${orderBy} ${limitSql}`,
+      params
+    );
 
-    if (order_status) {
-      query += ' AND o.status = ?';
-      params.push(order_status);
-    }
-    
-    if (user_id) {
-      query += ' AND o.user_id = ?';
-      params.push(user_id);
-    }
-    
-    if (tutor_id) {
-      query += ' AND o.id IN (SELECT order_id FROM order_tutors WHERE tutor_id = ?)';
-      params.push(tutor_id);
-    }
-    
-    if (start_date) {
-      query += ' AND o.created_at >= ?';
-      params.push(start_date + ' 00:00:00');
-    }
-    
-    if (end_date) {
-      query += ' AND o.created_at <= ?';
-      params.push(end_date + ' 23:59:59');
-    }
+    const [[cnt]] = await db.query(`SELECT COUNT(DISTINCT o.id) AS total ${fromClause} ${where}`, params);
 
-    if (req.salesCutoff) { query += ' AND o.created_at >= ?'; params.push(req.salesCutoff); }
-
-    query += ' GROUP BY o.id ORDER BY o.created_at DESC';
-
-    const [reports] = await db.query(query, params);
-    
-    // Also get all users and tutors for dropdown filters
+    // Users and tutors for dropdown filters
     const [filterUsers] = await db.query('SELECT id, username FROM users WHERE role = "user" ORDER BY username');
     const [filterTutors] = await db.query('SELECT id, name FROM tutors ORDER BY name');
 
     res.json({
       data: reports,
-      meta: {
-        users: filterUsers,
-        tutors: filterTutors
-      }
+      meta: { users: filterUsers, tutors: filterTutors, total: cnt.total, page: pageNum, limit: lim },
     });
 
   } catch (error) {

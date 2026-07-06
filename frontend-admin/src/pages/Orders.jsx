@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiSearch, FiEye, FiUserPlus, FiX, FiRefreshCw, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiSearch, FiEye, FiUserPlus, FiX, FiRefreshCw, FiChevronLeft, FiChevronRight, FiFilter } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { getPublicStatuses } from '../services/api';
@@ -34,21 +34,39 @@ export default function Orders() {
   const [viewedIds, setViewedIds] = useState(getViewedOrders);
   const [page, setPage] = useState(1);
   const [totalOrders, setTotalOrders] = useState(0);
-  const perPage = 50;
-  const { getAllOrders, updateOrderStatus, assignTutors, reopenChat, getAllTutors } = useApi();
+  const perPage = 100;
+  const { getAllOrders, getOrderFilterOptions, updateOrderStatus, assignTutors, reopenChat, getAllTutors } = useApi();
   const { isAdmin, user } = useAuth();
   const canMarkPaid = isAdmin || user?.role === 'sales_lead';
   const [paymentModal, setPaymentModal] = useState(null);     // { order, targetCode, paymentType }
   const [installmentModal, setInstallmentModal] = useState(null); // order-like object
 
+  // Advanced filters (ID prefix, type, plan, tutor, source, tutor status, dates)
+  const emptyAdv = { code_prefix: '', order_type_id: '', plan_tier: '', tutor_id: '', source_url: '', tutor_status_code: '', start_date: '', end_date: '' };
+  const [showFilters, setShowFilters] = useState(false);
+  const [advForm, setAdvForm] = useState(emptyAdv);   // in-progress form
+  const [adv, setAdv] = useState(emptyAdv);           // applied
+  const [filterOptions, setFilterOptions] = useState({ orderTypes: [], tutors: [], tutorStatuses: [], prefixes: [], sources: [], planTiers: [] });
+  const activeAdvCount = Object.values(adv).filter(Boolean).length;
+
+  useEffect(() => {
+    getOrderFilterOptions().then(res => setFilterOptions(res.data)).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchOrders = () => {
     setLoading(true);
-    getAllOrders({ admin_status_code: filter || undefined, search, page, limit: perPage })
+    const advParams = {};
+    Object.entries(adv).forEach(([k, v]) => { if (v) advParams[k] = v; });
+    getAllOrders({ admin_status_code: filter || undefined, search, page, limit: perPage, ...advParams })
       .then(res => { setOrders(res.data.orders); setTotalOrders(res.data.total); setLoading(false); })
       .catch(() => setLoading(false));
   };
 
-  useEffect(() => { fetchOrders(); }, [filter, page]);
+  useEffect(() => { fetchOrders(); }, [filter, page, adv]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applyAdv = () => { setPage(1); setAdv(advForm); };
+  const clearAdv = () => { setAdvForm(emptyAdv); setPage(1); setAdv(emptyAdv); };
   useEffect(() => { getAllTutors().then(res => setTutors(res.data)); }, []);
   useEffect(() => { getPublicStatuses('admin').then(res => setAdminStatuses((res.data.statuses || []).filter(s => s.is_active))); }, []);
 
@@ -137,10 +155,48 @@ export default function Orders() {
           <button key={s.code} className={`btn btn-sm ${filter === s.code ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setFilter(s.code); setPage(1); }}>{s.name}</button>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <input className="form-input" placeholder="Search orders..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 300 }} onKeyDown={e => e.key === 'Enter' && fetchOrders()} />
         <button className="btn btn-secondary" onClick={() => { setPage(1); fetchOrders(); }}><FiSearch size={16} /></button>
+        <button className={`btn btn-sm ${showFilters || activeAdvCount ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setShowFilters(s => !s)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <FiFilter size={15} /> Filters{activeAdvCount ? ` (${activeAdvCount})` : ''}
+        </button>
+        {activeAdvCount > 0 && (
+          <button className="btn btn-sm btn-secondary" onClick={clearAdv} title="Clear filters"><FiX size={14} /> Clear</button>
+        )}
       </div>
+
+      {showFilters && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 14, alignItems: 'end' }}>
+            <FilterSelect label="By ID (prefix)" value={advForm.code_prefix} onChange={v => setAdvForm(f => ({ ...f, code_prefix: v }))}
+              options={filterOptions.prefixes.map(p => ({ value: p, label: p }))} />
+            <FilterSelect label="By Type" value={advForm.order_type_id} onChange={v => setAdvForm(f => ({ ...f, order_type_id: v }))}
+              options={filterOptions.orderTypes.map(t => ({ value: String(t.id), label: t.name }))} />
+            <FilterSelect label="By Plan" value={advForm.plan_tier} onChange={v => setAdvForm(f => ({ ...f, plan_tier: v }))}
+              options={filterOptions.planTiers.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))} />
+            <FilterSelect label="By Tutor" value={advForm.tutor_id} onChange={v => setAdvForm(f => ({ ...f, tutor_id: v }))}
+              options={filterOptions.tutors.map(t => ({ value: String(t.id), label: t.name }))} />
+            <FilterSelect label="By Source" value={advForm.source_url} onChange={v => setAdvForm(f => ({ ...f, source_url: v }))}
+              options={filterOptions.sources.map(s => ({ value: s, label: s }))} />
+            <FilterSelect label="By Tutor Status" value={advForm.tutor_status_code} onChange={v => setAdvForm(f => ({ ...f, tutor_status_code: v }))}
+              options={filterOptions.tutorStatuses.map(s => ({ value: s.code, label: s.name }))} />
+            <div className="form-group mb-0">
+              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Start Date</label>
+              <input type="date" className="form-input" value={advForm.start_date} onChange={e => setAdvForm(f => ({ ...f, start_date: e.target.value }))} />
+            </div>
+            <div className="form-group mb-0">
+              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>End Date</label>
+              <input type="date" className="form-input" value={advForm.end_date} onChange={e => setAdvForm(f => ({ ...f, end_date: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <button className="btn btn-primary btn-sm" onClick={applyAdv}><FiFilter size={14} /> Apply Filters</button>
+            <button className="btn btn-secondary btn-sm" onClick={clearAdv}><FiRefreshCw size={14} /> Clear</button>
+          </div>
+        </div>
+      )}
+
       {loading ? <div className="flex-center"><div className="loading-spinner"></div></div> : (
         <div className="table-container">
           <table>
@@ -265,6 +321,19 @@ export default function Orders() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Small labelled dropdown used by the Orders filter panel.
+function FilterSelect({ label, value, onChange, options }) {
+  return (
+    <div className="form-group mb-0">
+      <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</label>
+      <select className="form-select" value={value} onChange={e => onChange(e.target.value)}>
+        <option value="">All</option>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
     </div>
   );
 }

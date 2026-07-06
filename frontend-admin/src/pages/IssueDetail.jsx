@@ -1,19 +1,38 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FiArrowLeft, FiSend, FiCheckSquare, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiSend, FiCheckSquare, FiRefreshCw, FiUserPlus } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 
 export default function IssueDetail() {
   const { id } = useParams();
   const { user } = useAuth();
-  const { getIssue, addIssueMessage, closeIssue, reopenIssue } = useApi();
+  const { getIssue, addIssueMessage, escalateIssue, closeIssue, reopenIssue, getAllTutors } = useApi();
   const [issue, setIssue] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [tutors, setTutors] = useState([]);
+  const [escTutorId, setEscTutorId] = useState('');
+  const [escalating, setEscalating] = useState(false);
   const bottomRef = useRef(null);
+
+  useEffect(() => { getAllTutors().then(r => setTutors((r.data || []).filter(t => t.status === 'active'))).catch(() => {}); }, []);
+
+  const handleEscalate = async () => {
+    if (!escTutorId) return;
+    setEscalating(true);
+    try {
+      await escalateIssue(id, { tutor_id: escTutorId });
+      setEscTutorId('');
+      load();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to escalate');
+    } finally {
+      setEscalating(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -89,6 +108,27 @@ export default function IssueDetail() {
         {isClosed
           ? <button className="btn btn-sm btn-secondary" onClick={onReopen}><FiRefreshCw size={13} /> Reopen</button>
           : <button className="btn btn-sm btn-secondary" onClick={onClose}><FiCheckSquare size={13} /> Close</button>}
+      </div>
+
+      {/* Escalate to tutor */}
+      <div className="card" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        {issue.escalated_tutor_id ? (
+          <span style={{ fontSize: 13 }}>
+            <span style={{ color: '#f59e0b', fontWeight: 700 }}>🔺 Escalated to tutor:</span>{' '}
+            <strong>{issue.escalated_tutor_name || `#${issue.escalated_tutor_id}`}</strong>
+          </span>
+        ) : (
+          <span className="text-secondary" style={{ fontSize: 13 }}>Not escalated to a tutor yet.</span>
+        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select className="form-select" value={escTutorId} onChange={e => setEscTutorId(e.target.value)} style={{ minWidth: 180 }}>
+            <option value="">{issue.escalated_tutor_id ? 'Re-escalate to…' : 'Select tutor…'}</option>
+            {tutors.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <button className="btn btn-sm btn-primary" onClick={handleEscalate} disabled={!escTutorId || escalating}>
+            <FiUserPlus size={14} /> {escalating ? 'Escalating…' : (issue.escalated_tutor_id ? 'Re-escalate' : 'Escalate to Tutor')}
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>

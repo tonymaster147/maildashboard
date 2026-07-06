@@ -609,4 +609,22 @@ async function sendInstallmentEditedStaff(details) {
   if (ok) console.log(`✅ Installment-edited email sent for order ${ref}`);
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid, sendLoginDetailsUpdated, sendIssueCreated, sendIssueReplyToUser, sendIssueReplyToAdmin, sendPaymentCollectedAdmin, sendInstallmentEditedStaff };
+// Notify a tutor a support ticket was escalated to them.
+async function sendIssueEscalatedTutor({ issueId, subject, tutorName, to }) {
+  if (!to) return;
+  const ctx = await resolveContext(null);
+  const html = `
+    ${header(ctx.brand, '🔺 Escalation Assigned to You')}
+      <p style="color:#334155;font-size:16px;margin-bottom:20px;">Hi ${tutorName || 'there'}, a support ticket has been escalated to you.</p>
+      <div style="background:#f0f9ff;padding:20px;border-radius:8px;border-left:4px solid #3b82f6;margin-bottom:20px;">
+        <p style="margin:5px 0;color:#334155;"><strong>Ticket:</strong> #${issueId}</p>
+        <p style="margin:5px 0;color:#334155;"><strong>Subject:</strong> ${subject || '—'}</p>
+      </div>
+      <p style="color:#64748b;font-size:14px;">Open your Tutor panel → <strong>Escalation</strong> to view and reply.</p>
+    ${footer(ctx.brand)}
+  `;
+  const ok = await sendViaContext(ctx, { to, subject: `Escalation assigned - #${issueId} - ${ctx.brand.name}`, html });
+  if (ok) console.log(`✅ Escalation email sent to tutor for issue #${issueId}`);
+}
+
+module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid, sendLoginDetailsUpdated, sendIssueCreated, sendIssueReplyToUser, sendIssueReplyToAdmin, sendPaymentCollectedAdmin, sendInstallmentEditedStaff, sendIssueEscalatedTutor };

@@ -129,28 +129,36 @@ exports.getIssueDetail = async (req, res) => {
     const userId = req.user.id;
 
     const [issues] = await db.query(
-      `SELECT i.*, o.order_code, u.username AS user_name, u.email AS user_email
+      `SELECT i.*, o.order_code, u.username AS user_name, u.email AS user_email,
+              et.name AS escalated_tutor_name
        FROM issues i
        LEFT JOIN orders o ON i.order_id = o.id
        JOIN users u ON i.user_id = u.id
+       LEFT JOIN tutors et ON i.escalated_tutor_id = et.id
        WHERE i.id = ?`,
       [id]
     );
     if (issues.length === 0) return res.status(404).json({ error: 'Issue not found' });
     const issue = issues[0];
 
-    // Access: owner OR admin/sales
-    if (!isStaff(role) && issue.user_id !== userId) return res.status(403).json({ error: 'Access denied' });
+    // Access: owner, admin/sales, or the escalated tutor
+    if (role === 'tutor') {
+      if (issue.escalated_tutor_id !== userId) return res.status(403).json({ error: 'Access denied' });
+    } else if (!isStaff(role) && issue.user_id !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     const [messages] = await db.query(
       `SELECT m.*,
         CASE m.sender_role
           WHEN 'user'  THEN u.username
           WHEN 'admin' THEN 'Admin'
+          WHEN 'tutor' THEN COALESCE(tut.name, 'Tutor')
           ELSE COALESCE(su.name, 'Sales')
         END AS sender_name
        FROM issue_messages m
        LEFT JOIN users u ON m.sender_id = u.id AND m.sender_role = 'user'
+       LEFT JOIN tutors tut ON m.sender_id = tut.id AND m.sender_role = 'tutor'
        LEFT JOIN sales_users su ON m.sender_id = su.id AND m.sender_role IN ('sales_lead','sales_executive')
        WHERE m.issue_id = ?
        ORDER BY m.created_at ASC`,
@@ -160,6 +168,8 @@ exports.getIssueDetail = async (req, res) => {
     // Bump the appropriate read cursor so the sidebar badge clears for that role
     if (role === 'user') {
       await db.query('UPDATE issues SET user_seen_at = NOW() WHERE id = ?', [id]);
+    } else if (role === 'tutor') {
+      await db.query('UPDATE issues SET tutor_seen_at = NOW() WHERE id = ?', [id]);
     } else {
       await db.query('UPDATE issues SET staff_seen_at = NOW() WHERE id = ?', [id]);
     }
@@ -187,6 +197,15 @@ exports.unreadCount = async (req, res) => {
          WHERE user_id = ?
            AND last_message_role <> 'user'
            AND (user_seen_at IS NULL OR last_message_at > user_seen_at)`,
+        [userId]
+      );
+      count = rows[0].n;
+    } else if (role === 'tutor') {
+      const [rows] = await db.query(
+        `SELECT COUNT(*) AS n FROM issues
+         WHERE escalated_tutor_id = ?
+           AND last_message_role <> 'tutor'
+           AND (tutor_seen_at IS NULL OR last_message_at > tutor_seen_at)`,
         [userId]
       );
       count = rows[0].n;
@@ -222,8 +241,13 @@ exports.addMessage = async (req, res) => {
     if (issues.length === 0) return res.status(404).json({ error: 'Issue not found' });
     const issue = issues[0];
 
-    if (!isStaff(role) && issue.user_id !== senderId) return res.status(403).json({ error: 'Access denied' });
-    if (issue.status === 'closed') return res.status(400).json({ error: 'This issue is closed. Ask support to reopen it.' });
+    // Access: owner, staff, or the escalated tutor
+    if (role === 'tutor') {
+      if (issue.escalated_tutor_id !== senderId) return res.status(403).json({ error: 'Access denied' });
+    } else if (!isStaff(role) && issue.user_id !== senderId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    if (issue.status === 'closed') return res.status(400).json({ error: 'This ticket is closed. Ask support to reopen it.' });
 
     await db.query(
       'INSERT INTO issue_messages (issue_id, sender_id, sender_role, message) VALUES (?, ?, ?, ?)',
@@ -234,34 +258,41 @@ exports.addMessage = async (req, res) => {
       [role, id]
     );
 
-    // Notify the OTHER side
-    if (role === 'user') {
-      const io = req.app.get('io');
-      const { notifyStaff } = require('../services/notifyUser');
-      await notifyStaff(io, {
-        type: 'issue_reply',
-        message: `${issue.user_name || 'User'} replied on issue #${id} — ${issue.subject}`,
-        referenceId: Number(id),
-        referenceType: 'issue',
-      }).catch(e => console.error('issue_reply staff notify failed:', e.message));
-      // Sidebar badge bump
-      if (io) io.to('admin_monitor').emit('issueNotification', { issue_id: Number(id), kind: 'reply' });
-      const recipients = await getAdminAndSalesRecipients();
-      sendIssueReplyToAdmin({ issueId: id, subject: issue.subject, body: message.trim(), userName: issue.user_name, recipients })
-        .catch(e => console.error('Issue reply admin email error:', e));
-    } else {
-      // Admin/sales replying
+    // ── 3-way fan-out: notify every party except the sender ──
+    const io = req.app.get('io');
+    const { notifyUser, notifyStaff, notifyTutor } = require('../services/notifyUser');
+    const senderName = role === 'user' ? (issue.user_name || 'Student') : role === 'tutor' ? 'Tutor' : 'Support';
+
+    // Student
+    if (role !== 'user') {
+      await notifyUser(io, issue.user_id, {
+        type: 'issue_reply', message: `New reply on escalation #${id}`, referenceId: Number(id), referenceType: 'issue',
+      }).catch(e => console.error('issue reply user notify failed:', e.message));
       if (issue.user_email) {
-        sendIssueReplyToUser({ issueId: id, subject: issue.subject, body: message.trim(), userName: issue.user_name, to: issue.user_email })
+        sendIssueReplyToUser({ issueId: id, subject: issue.subject, body: message.trim(), userName: senderName, to: issue.user_email })
           .catch(e => console.error('Issue reply user email error:', e));
       }
-      const { notifyUser } = require('../services/notifyUser');
-      await notifyUser(req.app.get('io'), issue.user_id, {
-        type: 'issue_reply',
-        message: `Support replied on issue #${id}`,
-        referenceId: Number(id),
-        referenceType: 'issue',
-      });
+    }
+    // Admin + sales
+    if (!isStaff(role)) {
+      await notifyStaff(io, {
+        type: 'issue_reply', message: `${senderName} replied on escalation #${id} — ${issue.subject}`, referenceId: Number(id), referenceType: 'issue',
+      }).catch(e => console.error('issue_reply staff notify failed:', e.message));
+      if (io) io.to('admin_monitor').emit('issueNotification', { issue_id: Number(id), kind: 'reply' });
+      const recipients = await getAdminAndSalesRecipients();
+      sendIssueReplyToAdmin({ issueId: id, subject: issue.subject, body: message.trim(), userName: senderName, recipients })
+        .catch(e => console.error('Issue reply admin email error:', e));
+    }
+    // Escalated tutor
+    if (issue.escalated_tutor_id && role !== 'tutor') {
+      await notifyTutor(io, issue.escalated_tutor_id, {
+        type: 'issue_reply', message: `New reply on escalation #${id} — ${issue.subject}`, referenceId: Number(id), referenceType: 'issue',
+      }).catch(e => console.error('issue reply tutor notify failed:', e.message));
+      const [[tut]] = await db.query('SELECT email FROM tutors WHERE id = ?', [issue.escalated_tutor_id]);
+      if (tut?.email) {
+        sendIssueReplyToUser({ issueId: id, subject: issue.subject, body: message.trim(), userName: senderName, to: tut.email })
+          .catch(e => console.error('Issue reply tutor email error:', e));
+      }
     }
 
     res.status(201).json({ message: 'Reply added' });
@@ -343,6 +374,69 @@ exports.reopenIssue = async (req, res) => {
     res.json({ message: 'Issue reopened' });
   } catch (err) {
     console.error('reopenIssue error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Staff escalate a ticket to a tutor (the tutor joins the thread).
+exports.escalateToTutor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tutor_id } = req.body;
+    const [[tutor]] = await db.query("SELECT id, name, email FROM tutors WHERE id = ? AND status = 'active'", [tutor_id]);
+    if (!tutor) return res.status(400).json({ error: 'Tutor not found or inactive' });
+    const [[issue]] = await db.query('SELECT * FROM issues WHERE id = ?', [id]);
+    if (!issue) return res.status(404).json({ error: 'Issue not found' });
+
+    await db.query('UPDATE issues SET escalated_tutor_id = ?, escalated_at = NOW() WHERE id = ?', [tutor_id, id]);
+
+    // Post a visible system note (as the escalating staff) so all parties see it.
+    const note = `🔺 Escalated to tutor ${tutor.name}.`;
+    await db.query('INSERT INTO issue_messages (issue_id, sender_id, sender_role, message) VALUES (?, ?, ?, ?)', [id, req.user.id, req.user.role, note]);
+    await db.query('UPDATE issues SET last_message_at = NOW(), last_message_role = ? WHERE id = ?', [req.user.role, id]);
+
+    const io = req.app.get('io');
+    const { notifyTutor, notifyUser } = require('../services/notifyUser');
+    await notifyTutor(io, tutor_id, {
+      type: 'issue_escalated', message: `New escalation assigned — #${id}: ${issue.subject}`,
+      referenceId: Number(id), referenceType: 'issue',
+    }).catch(e => console.error('escalation tutor notify failed:', e.message));
+    if (tutor.email) {
+      const { sendIssueEscalatedTutor } = require('../services/emailService');
+      sendIssueEscalatedTutor({ issueId: id, subject: issue.subject, tutorName: tutor.name, to: tutor.email })
+        .catch(e => console.error('escalation tutor email failed:', e.message));
+    }
+    await notifyUser(io, issue.user_id, {
+      type: 'issue_reply', message: `Your escalation #${id} was assigned to a tutor`,
+      referenceId: Number(id), referenceType: 'issue',
+    }).catch(() => {});
+
+    res.json({ message: 'Escalated to tutor', tutor: { id: tutor.id, name: tutor.name } });
+  } catch (err) {
+    console.error('escalateToTutor error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+};
+
+// Tickets escalated to the calling tutor.
+exports.listTutorEscalations = async (req, res) => {
+  try {
+    const tutorId = req.user.id;
+    const { status } = req.query;
+    let q = `SELECT i.*, o.order_code, u.username AS user_name,
+              (SELECT message FROM issue_messages WHERE issue_id = i.id ORDER BY created_at DESC LIMIT 1) AS last_message,
+              (i.last_message_role <> 'tutor' AND (i.tutor_seen_at IS NULL OR i.last_message_at > i.tutor_seen_at)) AS unread
+             FROM issues i
+             JOIN users u ON i.user_id = u.id
+             LEFT JOIN orders o ON i.order_id = o.id
+             WHERE i.escalated_tutor_id = ?`;
+    const p = [tutorId];
+    if (status === 'open' || status === 'closed') { q += ' AND i.status = ?'; p.push(status); }
+    q += ' ORDER BY i.last_message_at DESC, i.created_at DESC';
+    const [rows] = await db.query(q, p);
+    res.json({ issues: rows });
+  } catch (err) {
+    console.error('listTutorEscalations error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 };

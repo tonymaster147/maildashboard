@@ -45,5 +45,10 @@ export const markAllFeedNotificationsRead = () => api.put('/tutor/notifications-
 export const getUnreadCount = () => api.get('/chat/unread');
 export const markAllRead = () => api.post('/chat/mark-all-read');
 export const getUnreadPerOrder = () => api.get('/chat/unread-per-order');
+// Escalations (support tickets escalated to this tutor)
+export const getEscalations = (params = {}) => api.get('/tutor/escalations', { params });
+export const getEscalationsUnread = () => api.get('/tutor/escalations/unread-count');
+export const getEscalation = (id) => api.get(`/tutor/escalations/${id}`);
+export const addEscalationMessage = (id, data) => api.post(`/tutor/escalations/${id}/messages`, data);
 
 export default api;

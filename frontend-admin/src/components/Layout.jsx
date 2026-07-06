@@ -12,7 +12,7 @@ const MENU_ITEMS = [
   { to: '/tutors', key: 'tutors', icon: FiUserCheck, label: 'Tutors' },
   { to: '/orders', key: 'orders', icon: FiShoppingBag, label: 'Orders', hasBadge: true },
   { to: '/chats', key: 'chats', icon: FiMessageCircle, label: 'Chat Monitor', hasFlaggedBadge: true },
-  { to: '/issues', key: 'issues', icon: FiAlertCircle, label: 'Issues', hasIssuesBadge: true },
+  { to: '/issues', key: 'issues', icon: FiAlertCircle, label: 'Escalation', hasIssuesBadge: true },
   { to: '/reports', key: 'reports', icon: FiPieChart, label: 'Reports' },
   { to: '/settings', key: 'settings', icon: FiSettings, label: 'Settings' },
 ];

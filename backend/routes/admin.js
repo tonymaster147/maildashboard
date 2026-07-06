@@ -33,6 +33,7 @@ router.post(
 
 // Order management
 router.get('/orders', adminController.getAllOrders);
+router.get('/orders/filter-options', adminController.getOrderFilterOptions);
 router.put('/orders/:id/status', adminController.updateOrderStatus);
 router.post('/orders/:order_id/mark-remaining-paid', paymentController.markRemainingPaid);
 
@@ -116,6 +117,7 @@ router.get('/issues/unread-count', issuesController.unreadCount);
 router.get('/issues',              issuesController.listAllIssues);
 router.get('/issues/:id',          issuesController.getIssueDetail);
 router.post('/issues/:id/messages', issuesController.addMessage);
+router.post('/issues/:id/escalate', issuesController.escalateToTutor);
 router.patch('/issues/:id/close',  issuesController.closeIssue);
 router.patch('/issues/:id/reopen', issuesController.reopenIssue);
 

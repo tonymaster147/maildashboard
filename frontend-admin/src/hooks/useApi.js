@@ -18,6 +18,7 @@ export function useApi() {
       updateTutor: salesApi.updateTutor,
       deleteTutor: salesApi.deleteTutor,
       getAllOrders: salesApi.getOrders,
+      getOrderFilterOptions: salesApi.getOrderFilterOptions,
       updateOrderStatus: salesApi.updateOrderStatus,
       assignTutors: salesApi.assignTutors,
       reopenChat: salesApi.reopenChat,
@@ -60,6 +61,7 @@ export function useApi() {
       getIssuesUnreadCount: salesApi.getIssuesUnreadCount,
       getIssue: salesApi.getIssue,
       addIssueMessage: salesApi.addIssueMessage,
+      escalateIssue: salesApi.escalateIssue,
       closeIssue: salesApi.closeIssue,
       reopenIssue: salesApi.reopenIssue,
     };
@@ -78,6 +80,7 @@ export function useApi() {
     markFeedNotificationRead: adminApi.markFeedNotificationRead,
     markAllFeedNotificationsRead: adminApi.markAllFeedNotificationsRead,
     getAllOrders: adminApi.getAllOrders,
+    getOrderFilterOptions: adminApi.getOrderFilterOptions,
     updateOrderStatus: adminApi.updateOrderStatus,
     assignTutors: adminApi.assignTutors,
     reopenChat: adminApi.reopenChat,
@@ -116,6 +119,7 @@ export function useApi() {
     getIssuesUnreadCount: adminApi.getIssuesUnreadCount,
     getIssue: adminApi.getIssue,
     addIssueMessage: adminApi.addIssueMessage,
+    escalateIssue: adminApi.escalateIssue,
     closeIssue: adminApi.closeIssue,
     reopenIssue: adminApi.reopenIssue,
   };

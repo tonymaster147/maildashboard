@@ -288,7 +288,7 @@ export default function Layout() {
           <NavItem to="/new-order" icon={FiPlusCircle} label="New Order" />
           <NavItem to="/orders" icon={FiList} label="My Orders" />
           <NavItem to="/chats" icon={FiMessageSquare} label="Chat" badge={unreadChat} />
-          <NavItem to="/issues" icon={FiAlertCircle} label="Issues" badge={unreadIssues} />
+          <NavItem to="/issues" icon={FiAlertCircle} label="Escalation" badge={unreadIssues} />
           <NavItem to="/payments" icon={FiCreditCard} label="Payments" />
           <NavItem to="/profile" icon={FiUser} label="Profile" />
 

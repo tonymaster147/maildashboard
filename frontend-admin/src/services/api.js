@@ -57,6 +57,7 @@ export const uploadTutorPhoto = (file) => {
 
 // Orders
 export const getAllOrders = (params) => api.get('/admin/orders', { params });
+export const getOrderFilterOptions = () => api.get('/admin/orders/filter-options');
 export const updateOrderStatus = (id, data) => api.put(`/admin/orders/${id}/status`, data);
 export const assignTutors = (id, data) => api.put(`/admin/orders/${id}/assign`, data);
 export const reopenChat = (id) => api.put(`/admin/orders/${id}/reopen-chat`);
@@ -133,6 +134,7 @@ export const getIssuesUnreadCount = () => api.get('/admin/issues/unread-count');
 export const getAllIssues = (params) => api.get('/admin/issues', { params });
 export const getIssue = (id) => api.get(`/admin/issues/${id}`);
 export const addIssueMessage = (id, data) => api.post(`/admin/issues/${id}/messages`, data);
+export const escalateIssue = (id, data) => api.post(`/admin/issues/${id}/escalate`, data);
 export const closeIssue = (id) => api.patch(`/admin/issues/${id}/close`);
 export const reopenIssue = (id) => api.patch(`/admin/issues/${id}/reopen`);
 
@@ -161,6 +163,7 @@ export const salesApi = {
   updateTutor: (id, data) => api.put(`/sales/tutors/${id}`, data),
   deleteTutor: (id) => api.delete(`/sales/tutors/${id}`),
   getOrders: (params) => api.get('/sales/orders', { params }),
+  getOrderFilterOptions: () => api.get('/sales/orders/filter-options'),
   updateOrderStatus: (id, data) => api.put(`/sales/orders/${id}/status`, data),
   assignTutors: (id, data) => api.put(`/sales/orders/${id}/assign`, data),
   reopenChat: (id) => api.put(`/sales/orders/${id}/reopen-chat`),
@@ -177,6 +180,7 @@ export const salesApi = {
   getAllIssues: (params) => api.get('/sales/issues', { params }),
   getIssue: (id) => api.get(`/sales/issues/${id}`),
   addIssueMessage: (id, data) => api.post(`/sales/issues/${id}/messages`, data),
+  escalateIssue: (id, data) => api.post(`/sales/issues/${id}/escalate`, data),
   closeIssue: (id) => api.patch(`/sales/issues/${id}/close`),
   reopenIssue: (id) => api.patch(`/sales/issues/${id}/reopen`),
   getReports: (params) => api.get('/sales/reports', { params }),

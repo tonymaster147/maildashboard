@@ -6,6 +6,8 @@ import Tasks from './pages/Tasks';
 import TaskDetail from './pages/TaskDetail';
 import Chats from './pages/Chats';
 import Chat from './pages/Chat';
+import Escalations from './pages/Escalations';
+import EscalationDetail from './pages/EscalationDetail';
 import './index.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -23,6 +25,8 @@ function AppRoutes() {
         <Route path="tasks/:id" element={<TaskDetail />} />
         <Route path="chats" element={<Chats />} />
         <Route path="chat/:orderId" element={<Chat />} />
+        <Route path="escalations" element={<Escalations />} />
+        <Route path="escalations/:id" element={<EscalationDetail />} />
       </Route>
     </Routes>
   );
