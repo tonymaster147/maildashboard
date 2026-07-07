@@ -1,22 +1,28 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiSearch, FiEye, FiMessageSquare } from 'react-icons/fi';
+import { FiSearch, FiEye, FiMessageSquare, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+
+const PER_PAGE = 100;
 
 export default function Issues() {
   const { getAllIssues } = useApi();
   const [issues, setIssues] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
-  const load = () => {
+  const load = (p = page) => {
     setLoading(true);
-    getAllIssues({ status: status || undefined, search: search || undefined })
-      .then(r => { setIssues(r.data.issues || []); setLoading(false); })
+    getAllIssues({ status: status || undefined, search: search || undefined, page: p, limit: PER_PAGE })
+      .then(r => { setIssues(r.data.issues || []); setTotal(r.data.total || 0); setLoading(false); })
       .catch(() => setLoading(false));
   };
-  useEffect(() => { load(); }, [status]);
+  useEffect(() => { load(); }, [status, page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   return (
     <div>
@@ -27,13 +33,13 @@ export default function Issues() {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {[['', 'All'], ['open', 'Open'], ['closed', 'Closed']].map(([v, label]) => (
-          <button key={v || 'all'} className={`btn btn-sm ${status === v ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStatus(v)}>{label}</button>
+          <button key={v || 'all'} className={`btn btn-sm ${status === v ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setStatus(v); setPage(1); }}>{label}</button>
         ))}
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-        <input className="form-input" placeholder="Search issues..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && load()} style={{ maxWidth: 300 }} />
-        <button className="btn btn-secondary" onClick={load}><FiSearch size={16} /></button>
+        <input className="form-input" placeholder="Search issues..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && (page === 1 ? load(1) : setPage(1))} style={{ maxWidth: 300 }} />
+        <button className="btn btn-secondary" onClick={() => (page === 1 ? load(1) : setPage(1))}><FiSearch size={16} /></button>
       </div>
 
       {loading ? (
@@ -76,6 +82,13 @@ export default function Issues() {
               })}
             </tbody>
           </table>
+          {total > PER_PAGE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, padding: '14px 4px 2px' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Page {page} of {pages} · {total} tickets</span>
+              <button className="btn btn-sm btn-secondary" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}><FiChevronLeft size={16} /></button>
+              <button className="btn btn-sm btn-secondary" disabled={page >= pages} onClick={() => setPage(p => Math.min(pages, p + 1))}><FiChevronRight size={16} /></button>
+            </div>
+          )}
         </div>
       )}
     </div>

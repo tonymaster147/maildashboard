@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { useApi } from '../hooks/useApi';
-import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown, FiGlobe, FiAlertCircle, FiBell } from 'react-icons/fi';
+import { FiGrid, FiUsers, FiUserCheck, FiShoppingBag, FiMessageCircle, FiSettings, FiLogOut, FiShield, FiPieChart, FiUserPlus, FiDollarSign, FiChevronDown, FiGlobe, FiAlertCircle, FiBell, FiActivity } from 'react-icons/fi';
 import NotificationPanel from './NotificationPanel';
 
 const MENU_ITEMS = [
@@ -200,6 +200,8 @@ export default function Layout() {
     const QUIET_TYPES = ['chat_message', 'issue_created', 'issue_reply', 'new_order', 'flagged_message'];
     const handleStaffNotif = (n) => {
       if (n.role !== myRole) return;
+      // Targeted sales rows carry a sales_user_id; keep only if it's ours.
+      if (n.sales_user_id != null && n.sales_user_id !== user?.id) return;
       if (!n.is_update) setUnreadNotifs(prev => prev + 1);
       setNotifications(prev => [n, ...prev.filter(x => x.id !== n.id)]);
       if (!QUIET_TYPES.includes(n.type)) playNotificationSound();
@@ -323,6 +325,11 @@ export default function Layout() {
               {item.key === 'tutors' && isAdmin && (
                 <NavLink to="/sales-team" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                   <FiUserPlus size={18} /> Sales Team
+                </NavLink>
+              )}
+              {item.key === 'tutors' && isAdmin && (
+                <NavLink to="/sales-activity" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                  <FiActivity size={18} /> Sales Activity
                 </NavLink>
               )}
               {item.key === 'settings' && isAdmin && (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { getChatMessages, getUnreadPerOrder, markAllRead, uploadChatAttachment } from '../services/api';
@@ -31,6 +31,8 @@ export default function SalesChat() {
   const [orders, setOrders] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [pendingFile, setPendingFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -40,7 +42,13 @@ export default function SalesChat() {
   const [search, setSearch] = useState('');
   const [unreadMap, setUnreadMap] = useState({});
   const bottomRef = useRef(null);
+  const scrollRef = useRef(null);
+  const restoreDistRef = useRef(null);
+  const loadingOlderRef = useRef(false);
   const selectedOrderRef = useRef(null);
+  const [visibleOrders, setVisibleOrders] = useState(100);
+  const orderListRef = useRef(null);
+  const orderSentinelRef = useRef(null);
   const playSound = useNotificationSound();
 
   // Keep ref in sync so socket listener always has current value
@@ -119,8 +127,8 @@ export default function SalesChat() {
     // Clear unread for this order
     setUnreadMap(prev => { const next = { ...prev }; delete next[selectedOrder.id]; return next; });
 
-    getChatMessages(selectedOrder.id)
-      .then(res => { setMessages(res.data); setChatLoading(false); })
+    getChatMessages(selectedOrder.id, { limit: 100 })
+      .then(res => { setMessages(res.data.messages || []); setHasMore(!!res.data.hasMore); setChatLoading(false); })
       .catch(() => setChatLoading(false));
 
     return () => {
@@ -128,7 +136,44 @@ export default function SalesChat() {
     };
   }, [selectedOrder]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (restoreDistRef.current != null) {
+      el.scrollTop = el.scrollHeight - restoreDistRef.current;
+      restoreDistRef.current = null;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
+
+  const loadOlder = async () => {
+    if (loadingOlderRef.current || !hasMore || messages.length === 0 || !selectedOrder) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const el = scrollRef.current;
+    restoreDistRef.current = el ? el.scrollHeight - el.scrollTop : null;
+    try {
+      const res = await getChatMessages(selectedOrder.id, { before: messages[0].id, limit: 100 });
+      const older = res.data.messages || [];
+      setHasMore(!!res.data.hasMore);
+      if (older.length === 0) restoreDistRef.current = null;
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.id));
+        return [...older.filter(m => !seen.has(m.id)), ...prev];
+      });
+    } catch {
+      restoreDistRef.current = null;
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  };
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (el && el.scrollTop <= 60) loadOlder();
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -169,6 +214,21 @@ export default function SalesChat() {
     !search || `#${o.id} ${o.order_code || ''} ${o.title || ''} ${o.user_email || ''} ${o.username || ''}`.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Reset the visible window whenever the filtered set changes (e.g. searching).
+  useEffect(() => { setVisibleOrders(100); }, [search]);
+
+  // Infinite scroll (conversation list) — reveal 100 more as the sentinel nears.
+  useEffect(() => {
+    const el = orderSentinelRef.current;
+    const root = orderListRef.current;
+    if (!el || !root) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) setVisibleOrders(v => v + 100);
+    }, { root, rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loading, filteredOrders.length, visibleOrders]);
+
   const isMySentMessage = (msg) => {
     return (msg.sender_role === 'admin' || msg.sender_role === 'sales_lead' || msg.sender_role === 'sales_executive') && msg.sender_id === user.id;
   };
@@ -197,11 +257,11 @@ export default function SalesChat() {
               />
             </div>
           </div>
-          <div style={{ flex: 1, overflow: 'auto' }}>
+          <div style={{ flex: 1, overflow: 'auto' }} ref={orderListRef}>
             {filteredOrders.length === 0 && (
               <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No orders with chat enabled</div>
             )}
-            {filteredOrders.map(order => (
+            {filteredOrders.slice(0, visibleOrders).map(order => (
               <div
                 key={order.id}
                 onClick={() => setSelectedOrder(order)}
@@ -229,6 +289,7 @@ export default function SalesChat() {
                 </div>
               </div>
             ))}
+            {visibleOrders < filteredOrders.length && <div ref={orderSentinelRef} style={{ height: 1 }} />}
           </div>
         </div>
 
@@ -245,7 +306,8 @@ export default function SalesChat() {
                 <div style={{ fontWeight: 600 }}>Order {selectedOrder.order_code || `#${selectedOrder.id}`} — {selectedOrder.title || selectedOrder.subject || 'Chat'}</div>
                 {typing && <p style={{ color: 'var(--accent)', fontSize: 12, margin: 0 }}>{typing} is typing...</p>}
               </div>
-              <div className="chat-messages" style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+              <div className="chat-messages" style={{ flex: 1, overflow: 'auto', padding: 16 }} ref={scrollRef} onScroll={handleScroll}>
+                {loadingOlder && <div style={{ textAlign: 'center', padding: '6px 0 10px' }}><div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2, display: 'inline-block' }} /></div>}
                 {chatLoading ? (
                   <div className="flex-center" style={{ padding: 40 }}><div className="loading-spinner"></div></div>
                 ) : messages.length === 0 ? (

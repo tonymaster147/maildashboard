@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FiMessageCircle, FiAlertTriangle, FiEye } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
@@ -6,12 +6,20 @@ import { useAuth } from '../context/AuthContext';
 import { connectSocket } from '../services/socket';
 import { getUnreadPerOrder } from '../services/api';
 
+const PER_PAGE = 100;
+
 export default function ChatMonitor() {
   const [chats, setChats] = useState([]);
   const [flagged, setFlagged] = useState([]);
   const [unreadMap, setUnreadMap] = useState({});
   const [tab, setTab] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const pageRef = useRef(1);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(false);
+  const sentinelRef = useRef(null);
   const { getAllChats, getFlaggedMessages } = useApi();
   const { token } = useAuth();
 
@@ -34,17 +42,55 @@ export default function ChatMonitor() {
 
   useEffect(() => {
     Promise.all([
-      getAllChats(),
+      getAllChats({ page: 1, limit: PER_PAGE }),
       getFlaggedMessages(),
       getUnreadPerOrder().catch(() => ({ data: {} }))
     ]).then(([c, f, u]) => {
-      // Orders with unread student messages first (stable sort)
+      // Orders with unread student messages first (stable sort). Only the first
+      // page is float-sorted; later pages append in server order (newest-first)
+      // so rows don't jump around as you scroll.
       const umap = u.data || {};
-      const sorted = [...c.data].sort((a, b) => ((umap[b.order_id] || 0) > 0 ? 1 : 0) - ((umap[a.order_id] || 0) > 0 ? 1 : 0));
+      const first = c.data.chats || [];
+      const sorted = [...first].sort((a, b) => ((umap[b.order_id] || 0) > 0 ? 1 : 0) - ((umap[a.order_id] || 0) > 0 ? 1 : 0));
       setChats(sorted); setFlagged(f.data); setUnreadMap(umap);
+      pageRef.current = 1;
+      hasMoreRef.current = !!c.data.hasMore;
+      setHasMore(!!c.data.hasMore);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadMore = useCallback(() => {
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    const next = pageRef.current + 1;
+    getAllChats({ page: next, limit: PER_PAGE })
+      .then(c => {
+        const rows = c.data.chats || [];
+        setChats(prev => {
+          const seen = new Set(prev.map(x => x.order_id));
+          return [...prev, ...rows.filter(x => !seen.has(x.order_id))];
+        });
+        pageRef.current = next;
+        hasMoreRef.current = !!c.data.hasMore;
+        setHasMore(!!c.data.hasMore);
+      })
+      .catch(() => {})
+      .finally(() => { loadingMoreRef.current = false; setLoadingMore(false); });
+  }, [getAllChats]);
+
+  // Infinite scroll down — observe a sentinel below the table.
+  useEffect(() => {
+    if (tab !== 'all') return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) loadMore();
+    }, { rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [tab, loadMore]);
 
   // Live notifications: flagged messages + new chat messages
   useEffect(() => {
@@ -74,7 +120,7 @@ export default function ChatMonitor() {
     <div>
       <div className="page-header"><h2>Chat Monitor</h2><p>View all conversations and flagged messages</p></div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        <button className={`btn btn-sm ${tab === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTab('all')}><FiMessageCircle size={14} /> All Chats ({chats.length})</button>
+        <button className={`btn btn-sm ${tab === 'all' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTab('all')}><FiMessageCircle size={14} /> All Chats ({chats.length}{hasMore ? '+' : ''})</button>
         <button className={`btn btn-sm ${tab === 'flagged' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setTab('flagged')}><FiAlertTriangle size={14} /> Flagged ({flagged.length})</button>
       </div>
 
@@ -108,6 +154,15 @@ export default function ChatMonitor() {
               })}
             </tbody>
           </table>
+          <div ref={sentinelRef} style={{ height: 1 }} />
+          {loadingMore && (
+            <div style={{ textAlign: 'center', padding: 16 }}>
+              <div className="loading-spinner" style={{ width: 20, height: 20, borderWidth: 2, display: 'inline-block' }} />
+            </div>
+          )}
+          {!hasMore && chats.length > 0 && (
+            <div style={{ textAlign: 'center', padding: 12, color: 'var(--text-muted)', fontSize: 12 }}>End of conversations</div>
+          )}
         </div>
       )}
 

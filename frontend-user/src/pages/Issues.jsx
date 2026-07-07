@@ -3,14 +3,18 @@
 
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FiPlus, FiAlertCircle, FiMessageSquare, FiX } from 'react-icons/fi';
+import { FiPlus, FiAlertCircle, FiMessageSquare, FiX, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { getMyIssues, createIssue, getIssueCategories, getUserOrders } from '../services/api';
 import Notice from '../components/Notice';
 import { C } from '../theme/tokens';
 import { Card, Pill } from '../components/ui';
 
+const PER_PAGE = 100;
+
 export default function Issues() {
   const [issues, setIssues] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [categories, setCategories] = useState([]);
@@ -21,13 +25,15 @@ export default function Issues() {
 
   const load = () => {
     setLoading(true);
-    getMyIssues()
-      .then(r => { setIssues(r.data.issues || []); setLoading(false); })
+    getMyIssues({ page, limit: PER_PAGE })
+      .then(r => { setIssues(r.data.issues || []); setTotal(r.data.total || 0); setLoading(false); })
       .catch(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { getIssueCategories().then(r => setCategories(r.data.categories || [])).catch(() => {}); }, []);
   useEffect(() => { getUserOrders().then(r => setOrders(r.data || [])).catch(() => {}); }, []);
+
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   const submit = async (e) => {
     e.preventDefault();
@@ -200,6 +206,25 @@ export default function Issues() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {issues.map(i => <IssueRow key={i.id} issue={i} />)}
+          {total > PER_PAGE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 10 }}>
+              <button
+                type="button" disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, background: page <= 1 ? '#eef2f7' : C.surface, border: `1px solid ${C.border}`, color: page <= 1 ? C.textMuted : C.textPrimary, cursor: page <= 1 ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700 }}
+              >
+                <FiChevronLeft size={14} /> Prev
+              </button>
+              <span style={{ fontSize: 13, color: C.textSecondary, fontWeight: 600 }}>
+                Page {page} of {pages} <span style={{ color: C.textMuted, fontWeight: 500 }}>({total})</span>
+              </span>
+              <button
+                type="button" disabled={page >= pages} onClick={() => setPage(p => p + 1)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, background: page >= pages ? '#eef2f7' : C.surface, border: `1px solid ${C.border}`, color: page >= pages ? C.textMuted : C.textPrimary, cursor: page >= pages ? 'not-allowed' : 'pointer', fontSize: 12, fontWeight: 700 }}
+              >
+                Next <FiChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

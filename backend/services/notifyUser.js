@@ -118,6 +118,28 @@ async function notifyStaff(io, { type, message, referenceId = null, referenceTyp
   }
 }
 
+// Targeted staff notification — ONE specific sales person (not the role
+// broadcast). Rides the same admin_monitor socket; the client keeps it only
+// when sales_user_id matches theirs (or is null = broadcast).
+async function notifySalesUser(io, salesUserId, role, { type, message, referenceId = null, referenceType = null }) {
+  const [result] = await db.query(
+    'INSERT INTO notifications (role, sales_user_id, type, message, reference_id, reference_type) VALUES (?, ?, ?, ?, ?, ?)',
+    [role, salesUserId, type, message, referenceId, referenceType]
+  );
+  if (io) {
+    try {
+      io.to('admin_monitor').emit('staffNotification', {
+        id: result.insertId, role, sales_user_id: salesUserId, type, message,
+        is_read: 0, reference_id: referenceId, reference_type: referenceType,
+        created_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error('notifySalesUser emit failed:', e.message);
+    }
+  }
+  return result.insertId;
+}
+
 // Deduped chat row per role+order: while unread, new user messages just
 // refresh the row (is_update tells clients not to double-count the badge).
 async function notifyStaffChat(io, { orderId, senderName, orderRef, roles = STAFF_ROLES }) {
@@ -214,4 +236,4 @@ async function notifyTutorChat(io, tutorId, { orderId, senderName, orderRef }) {
   }
 }
 
-module.exports = { notifyUser, notifyUserChat, notifyStaff, notifyStaffChat, notifyTutor, notifyTutorChat };
+module.exports = { notifyUser, notifyUserChat, notifyStaff, notifySalesUser, notifyStaffChat, notifyTutor, notifyTutorChat };

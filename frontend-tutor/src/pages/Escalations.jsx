@@ -1,21 +1,27 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { FiAlertCircle } from 'react-icons/fi';
+import { FiAlertCircle, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { getEscalations } from '../services/api';
+
+const PER_PAGE = 100;
 
 // Support tickets escalated to this tutor. Shared 3-way thread with the
 // student and admin/sales; the tutor can view and reply.
 export default function Escalations() {
   const [issues, setIssues] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     setLoading(true);
-    getEscalations({ status: status || undefined })
-      .then(r => { setIssues(r.data.issues || []); setLoading(false); })
+    getEscalations({ status: status || undefined, page, limit: PER_PAGE })
+      .then(r => { setIssues(r.data.issues || []); setTotal(r.data.total || 0); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [status]);
+  }, [status, page]);
+
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   return (
     <div>
@@ -26,7 +32,7 @@ export default function Escalations() {
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {['', 'open', 'closed'].map(s => (
-          <button key={s || 'all'} className={`btn btn-sm ${status === s ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStatus(s)}>
+          <button key={s || 'all'} className={`btn btn-sm ${status === s ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setStatus(s); setPage(1); }}>
             {s === '' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
           </button>
         ))}
@@ -60,6 +66,19 @@ export default function Escalations() {
               </div>
             </Link>
           ))}
+          {total > PER_PAGE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8 }}>
+              <button className="btn btn-sm btn-secondary" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <FiChevronLeft size={14} /> Prev
+              </button>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                Page {page} of {pages} <span style={{ color: 'var(--text-muted)' }}>({total})</span>
+              </span>
+              <button className="btn btn-sm btn-secondary" disabled={page >= pages} onClick={() => setPage(p => p + 1)}>
+                Next <FiChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -14,8 +14,15 @@ function scopeFor(req) {
   if (role === 'tutor') {
     return { where: "role = 'tutor' AND tutor_id = ?", params: [req.user.id] };
   }
-  // Staff broadcast rows have no user/tutor binding.
-  return { where: 'role = ? AND user_id IS NULL AND tutor_id IS NULL', params: [role] };
+  if (role === 'admin') {
+    // Admin sees role-broadcast admin rows only (never a targeted sales row).
+    return { where: "role = 'admin' AND user_id IS NULL AND tutor_id IS NULL AND sales_user_id IS NULL", params: [] };
+  }
+  // Sales: role-broadcast rows (sales_user_id NULL) PLUS rows targeted at them.
+  return {
+    where: 'role = ? AND user_id IS NULL AND tutor_id IS NULL AND (sales_user_id IS NULL OR sales_user_id = ?)',
+    params: [role, req.user.id],
+  };
 }
 
 exports.list = async (req, res) => {

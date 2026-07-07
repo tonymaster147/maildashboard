@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getChatMessages, uploadChatAttachment, getOrderCode } from '../services/api';
@@ -10,6 +10,8 @@ export default function Chat() {
   const { orderId } = useParams();
   const { user, token } = useAuth();
   const [messages, setMessages] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [pendingFile, setPendingFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -17,11 +19,16 @@ export default function Chat() {
   const [typing, setTyping] = useState(null);
   const [orderCode, setOrderCode] = useState(null);
   const bottomRef = useRef(null);
+  const scrollRef = useRef(null);
+  const restoreDistRef = useRef(null);
+  const loadingOlderRef = useRef(false);
 
   useEffect(() => { getOrderCode(orderId).then(r => setOrderCode(r.data.order_code)).catch(() => {}); }, [orderId]);
 
   useEffect(() => {
-    getChatMessages(orderId).then(res => { setMessages(res.data); setLoading(false); }).catch(() => setLoading(false));
+    getChatMessages(orderId, { limit: 100 })
+      .then(res => { setMessages(res.data.messages || []); setHasMore(!!res.data.hasMore); setLoading(false); })
+      .catch(() => setLoading(false));
     const socket = connectSocket(token);
     socket.emit('joinRoom', parseInt(orderId));
     socket.on('newMessage', (msg) => {
@@ -38,7 +45,44 @@ export default function Chat() {
     return () => { socket.emit('leaveRoom', parseInt(orderId)); socket.off('newMessage'); socket.off('userTyping'); socket.off('userStopTyping'); };
   }, [orderId, token, user.id]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (restoreDistRef.current != null) {
+      el.scrollTop = el.scrollHeight - restoreDistRef.current;
+      restoreDistRef.current = null;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
+
+  const loadOlder = async () => {
+    if (loadingOlderRef.current || !hasMore || messages.length === 0) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const el = scrollRef.current;
+    restoreDistRef.current = el ? el.scrollHeight - el.scrollTop : null;
+    try {
+      const res = await getChatMessages(orderId, { before: messages[0].id, limit: 100 });
+      const older = res.data.messages || [];
+      setHasMore(!!res.data.hasMore);
+      if (older.length === 0) restoreDistRef.current = null;
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.id));
+        return [...older.filter(m => !seen.has(m.id)), ...prev];
+      });
+    } catch {
+      restoreDistRef.current = null;
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  };
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (el && el.scrollTop <= 60) loadOlder();
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -84,7 +128,8 @@ export default function Chat() {
           {typing && <p style={{ color: 'var(--accent)', fontSize: 12 }}>{typing} is typing...</p>}
         </div>
       </div>
-      <div className="chat-messages">
+      <div className="chat-messages" ref={scrollRef} onScroll={handleScroll}>
+        {loadingOlder && <div style={{ textAlign: 'center', padding: '6px 0 10px' }}><div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2, display: 'inline-block' }} /></div>}
         {messages.length === 0 && <div className="text-center" style={{ padding: 40, color: 'var(--text-muted)' }}><p>No messages yet</p></div>}
         {messages.map(msg => {
           const isOwn = msg.sender_role === 'tutor' && msg.sender_id === user.id;

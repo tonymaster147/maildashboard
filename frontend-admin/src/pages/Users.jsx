@@ -1,30 +1,39 @@
 import { useState, useEffect } from 'react';
 import { toggleUserStatus } from '../services/api';
-import { FiSearch, FiToggleLeft, FiToggleRight, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiSearch, FiToggleLeft, FiToggleRight, FiEye, FiEyeOff, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useApi } from '../hooks/useApi';
+
+const PER_PAGE = 100;
 
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [applied, setApplied] = useState('');   // the applied search term
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const { getAllUsers } = useApi();
 
-  const fetchUsers = (s = '') => {
+  useEffect(() => {
     setLoading(true);
-    getAllUsers({ search: s }).then(res => { setUsers(res.data.users); setLoading(false); }).catch(() => setLoading(false));
-  };
-
-  useEffect(() => { fetchUsers(); }, []);
+    getAllUsers({ search: applied || undefined, page, limit: PER_PAGE })
+      .then(res => { setUsers(res.data.users); setTotal(res.data.total || 0); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [applied, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchUsers(search);
+    setPage(1);
+    setApplied(search);
   };
 
   const handleToggle = async (id, currentStatus) => {
     await toggleUserStatus(id, { is_active: !currentStatus });
-    fetchUsers(search);
+    getAllUsers({ search: applied || undefined, page, limit: PER_PAGE })
+      .then(res => { setUsers(res.data.users); setTotal(res.data.total || 0); }).catch(() => {});
   };
+
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
 
   return (
     <div>
@@ -58,6 +67,19 @@ export default function Users() {
               ))}
             </tbody>
           </table>
+          {total > PER_PAGE && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, padding: '14px 4px 2px' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                Page {page} of {pages} · {total} users
+              </span>
+              <button className="btn btn-sm btn-secondary" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                <FiChevronLeft size={16} />
+              </button>
+              <button className="btn btn-sm btn-secondary" disabled={page >= pages} onClick={() => setPage(p => Math.min(pages, p + 1))}>
+                <FiChevronRight size={16} />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

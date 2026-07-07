@@ -68,6 +68,18 @@ const requirePermission = (menuKey) => {
 // Dashboard (if permitted)
 router.get('/dashboard', requirePermission('dashboard'), adminController.getDashboardStats);
 
+// Sales dashboard — payment-reminder calendar, to-dos, needs-attention, recent orders
+const salesDash = require('../controllers/salesDashboardController');
+router.get('/dashboard-summary', requirePermission('dashboard'), salesDash.getSummary);
+router.get('/tasks',             requirePermission('dashboard'), salesDash.getCalendar);
+router.post('/tasks',            requirePermission('dashboard'), salesDash.createTask);
+router.post('/tasks/status',     requirePermission('dashboard'), salesDash.setStatus);
+router.post('/tasks/collect-payment', requirePermission('dashboard'), salesDash.collectPayment);
+router.post('/tasks/comment',    requirePermission('dashboard'), salesDash.addComment);
+router.post('/tasks/snooze',     requirePermission('dashboard'), salesDash.snooze);
+router.delete('/tasks/:id',      requirePermission('dashboard'), salesDash.deleteTask);
+router.get('/recent-orders',     requirePermission('dashboard'), salesDash.getRecentOrders);
+
 // Users (if permitted)
 router.get('/users', requirePermission('users'), adminController.getAllUsers);
 

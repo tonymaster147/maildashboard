@@ -162,7 +162,21 @@ exports.getUserOrders = async (req, res) => {
     const userId = req.user.id;
     const { status } = req.query;
 
-    let query = `
+    // Shared filter clause so the page query and the count agree.
+    let filter = ' WHERE o.user_id = ?';
+    const filterParams = [userId];
+
+    // Accept either legacy `status` (back-compat) or new `admin_status_code` filter
+    const { admin_status_code } = req.query;
+    if (admin_status_code) {
+      filter += ' AND astat.code = ?';
+      filterParams.push(admin_status_code);
+    } else if (status) {
+      filter += ' AND o.status = ?';
+      filterParams.push(status);
+    }
+
+    const query = `
       SELECT o.*,
         ot.name as order_type_name,
         s.name as subject_name,
@@ -182,23 +196,26 @@ exports.getUserOrders = async (req, res) => {
       LEFT JOIN tutors t ON otr.tutor_id = t.id
       LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
       LEFT JOIN tutor_statuses tstat ON o.tutor_status_id = tstat.id
-      WHERE o.user_id = ?
-    `;
-    const params = [userId];
+      ${filter}
+      GROUP BY o.id ORDER BY o.created_at DESC`;
 
-    // Accept either legacy `status` (back-compat) or new `admin_status_code` filter
-    const { admin_status_code } = req.query;
-    if (admin_status_code) {
-      query += ' AND astat.code = ?';
-      params.push(admin_status_code);
-    } else if (status) {
-      query += ' AND o.status = ?';
-      params.push(status);
+    // Pagination is opt-in: only when the client asks with ?page= (My Orders
+    // page). Other consumers (dashboard stats, chat list, escalation order
+    // picker) call without it and still get the full array.
+    if (req.query.page !== undefined) {
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+      const offset = (page - 1) * limit;
+      const [[{ total }]] = await db.query(
+        `SELECT COUNT(DISTINCT o.id) as total
+         FROM orders o
+         LEFT JOIN admin_statuses astat ON o.admin_status_id = astat.id
+         ${filter}`, filterParams);
+      const [orders] = await db.query(`${query} LIMIT ? OFFSET ?`, [...filterParams, limit, offset]);
+      return res.json({ orders, total, page, limit });
     }
 
-    query += ' GROUP BY o.id ORDER BY o.created_at DESC';
-
-    const [orders] = await db.query(query, params);
+    const [orders] = await db.query(query, filterParams);
     res.json(orders);
   } catch (error) {
     console.error('Get user orders error:', error);

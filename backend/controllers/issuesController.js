@@ -42,16 +42,21 @@ async function buildSubject(category, orderId) {
 exports.listMyIssues = async (req, res) => {
   try {
     const userId = req.user.id;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+    const offset = (page - 1) * limit;
+    const [[{ total }]] = await db.query('SELECT COUNT(*) AS total FROM issues WHERE user_id = ?', [userId]);
     const [rows] = await db.query(
       `SELECT i.*, o.order_code,
         (SELECT message FROM issue_messages WHERE issue_id = i.id ORDER BY created_at DESC LIMIT 1) AS last_message
        FROM issues i
        LEFT JOIN orders o ON i.order_id = o.id
        WHERE i.user_id = ?
-       ORDER BY i.last_message_at DESC, i.created_at DESC`,
-      [userId]
+       ORDER BY i.last_message_at DESC, i.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [userId, limit, offset]
     );
-    res.json({ issues: rows });
+    res.json({ issues: rows, total, page, limit });
   } catch (err) {
     console.error('listMyIssues error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -307,22 +312,31 @@ exports.addMessage = async (req, res) => {
 exports.listAllIssues = async (req, res) => {
   try {
     const { status, search } = req.query;
-    let q = `SELECT i.*, o.order_code, u.username AS user_name, u.email AS user_email,
-              (SELECT message FROM issue_messages WHERE issue_id = i.id ORDER BY created_at DESC LIMIT 1) AS last_message
-             FROM issues i
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+    const offset = (page - 1) * limit;
+
+    // Shared FROM + WHERE so the count and the page use identical filters.
+    let fromWhere = `FROM issues i
              JOIN users u ON i.user_id = u.id
              LEFT JOIN orders o ON i.order_id = o.id
              WHERE 1=1`;
     const params = [];
-    if (status === 'open' || status === 'closed') { q += ' AND i.status = ?'; params.push(status); }
+    if (status === 'open' || status === 'closed') { fromWhere += ' AND i.status = ?'; params.push(status); }
     if (search) {
-      q += ' AND (i.subject LIKE ? OR i.category LIKE ? OR u.username LIKE ?)';
+      fromWhere += ' AND (i.subject LIKE ? OR i.category LIKE ? OR u.username LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
-    if (req.salesCutoff) { q += ' AND i.created_at >= ?'; params.push(req.salesCutoff); }
-    q += ' ORDER BY i.last_message_at DESC, i.created_at DESC';
-    const [rows] = await db.query(q, params);
-    res.json({ issues: rows });
+    if (req.salesCutoff) { fromWhere += ' AND i.created_at >= ?'; params.push(req.salesCutoff); }
+
+    const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total ${fromWhere}`, params);
+    const q = `SELECT i.*, o.order_code, u.username AS user_name, u.email AS user_email,
+              (SELECT message FROM issue_messages WHERE issue_id = i.id ORDER BY created_at DESC LIMIT 1) AS last_message
+             ${fromWhere}
+             ORDER BY i.last_message_at DESC, i.created_at DESC
+             LIMIT ? OFFSET ?`;
+    const [rows] = await db.query(q, [...params, limit, offset]);
+    res.json({ issues: rows, total, page, limit });
   } catch (err) {
     console.error('listAllIssues error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -423,18 +437,26 @@ exports.listTutorEscalations = async (req, res) => {
   try {
     const tutorId = req.user.id;
     const { status } = req.query;
-    let q = `SELECT i.*, o.order_code, u.username AS user_name,
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+    const offset = (page - 1) * limit;
+
+    let where = ' WHERE i.escalated_tutor_id = ?';
+    const p = [tutorId];
+    if (status === 'open' || status === 'closed') { where += ' AND i.status = ?'; p.push(status); }
+
+    const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM issues i${where}`, p);
+    const q = `SELECT i.*, o.order_code, u.username AS user_name,
               (SELECT message FROM issue_messages WHERE issue_id = i.id ORDER BY created_at DESC LIMIT 1) AS last_message,
               (i.last_message_role <> 'tutor' AND (i.tutor_seen_at IS NULL OR i.last_message_at > i.tutor_seen_at)) AS unread
              FROM issues i
              JOIN users u ON i.user_id = u.id
              LEFT JOIN orders o ON i.order_id = o.id
-             WHERE i.escalated_tutor_id = ?`;
-    const p = [tutorId];
-    if (status === 'open' || status === 'closed') { q += ' AND i.status = ?'; p.push(status); }
-    q += ' ORDER BY i.last_message_at DESC, i.created_at DESC';
-    const [rows] = await db.query(q, p);
-    res.json({ issues: rows });
+             ${where}
+             ORDER BY i.last_message_at DESC, i.created_at DESC
+             LIMIT ? OFFSET ?`;
+    const [rows] = await db.query(q, [...p, limit, offset]);
+    res.json({ issues: rows, total, page, limit });
   } catch (err) {
     console.error('listTutorEscalations error:', err);
     res.status(500).json({ error: 'Server error' });

@@ -10,13 +10,12 @@ exports.getTasks = async (req, res) => {
   try {
     const tutorId = req.user.id;
     const { status } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+    const offset = (page - 1) * limit;
 
-    let query = `
-      SELECT o.id, o.order_code, o.course_name, o.status, o.start_date, o.end_date, o.num_weeks, o.chat_enabled, o.created_at,
-        ot.name as order_type_name, s.name as subject_name, el.name as education_level_name,
-        p.name as plan_name, u.username,
-        astat.code as admin_status_code, astat.name as admin_status_name,
-        tstat.code as tutor_status_code, tstat.name as tutor_status_name
+    // Shared FROM + WHERE so the count and the page use identical filters.
+    let fromWhere = `
       FROM orders o
       JOIN order_tutors otr ON o.id = otr.order_id
       JOIN order_types ot ON o.order_type_id = ot.id
@@ -32,17 +31,27 @@ exports.getTasks = async (req, res) => {
 
     const { tutor_status_code } = req.query;
     if (tutor_status_code) {
-      query += ' AND tstat.code = ?';
+      fromWhere += ' AND tstat.code = ?';
       params.push(tutor_status_code);
     } else if (status) {
-      query += ' AND o.status = ?';
+      fromWhere += ' AND o.status = ?';
       params.push(status);
     }
 
-    query += ' ORDER BY o.created_at DESC';
-    const [tasks] = await db.query(query, params);
+    const [[{ total }]] = await db.query(`SELECT COUNT(*) as total ${fromWhere}`, params);
 
-    res.json(tasks);
+    const query = `
+      SELECT o.id, o.order_code, o.course_name, o.status, o.start_date, o.end_date, o.num_weeks, o.chat_enabled, o.created_at,
+        ot.name as order_type_name, s.name as subject_name, el.name as education_level_name,
+        p.name as plan_name, u.username,
+        astat.code as admin_status_code, astat.name as admin_status_name,
+        tstat.code as tutor_status_code, tstat.name as tutor_status_name
+      ${fromWhere}
+      ORDER BY o.created_at DESC
+      LIMIT ? OFFSET ?`;
+    const [tasks] = await db.query(query, [...params, limit, offset]);
+
+    res.json({ tasks, total, page, limit });
   } catch (error) {
     console.error('Get tasks error:', error);
     res.status(500).json({ error: 'Server error' });

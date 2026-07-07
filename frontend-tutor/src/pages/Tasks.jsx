@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { getTasks, getPublicStatuses } from '../services/api';
 import { FiEye, FiMessageSquare, FiClock, FiCheckCircle, FiTrendingUp, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
-const PER_PAGE = 25;
+const PER_PAGE = 100;
 
 const TUTOR_BADGE_STYLE = (code) => ({
   padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 600,
@@ -14,6 +14,7 @@ const TUTOR_BADGE_STYLE = (code) => ({
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');           // tutor_status_code
   const [tutorStatuses, setTutorStatuses] = useState([]);
@@ -21,15 +22,19 @@ export default function Tasks() {
 
   useEffect(() => {
     setLoading(true);
-    getTasks(filter ? { tutor_status_code: filter } : {}).then(res => { setTasks(res.data); setLoading(false); }).catch(() => setLoading(false));
-  }, [filter]);
+    const params = { page, limit: PER_PAGE };
+    if (filter) params.tutor_status_code = filter;
+    getTasks(params)
+      .then(res => { setTasks(res.data.tasks || []); setTotal(res.data.total || 0); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [filter, page]);
   useEffect(() => { getPublicStatuses('tutor').then(res => setTutorStatuses((res.data.statuses || []).filter(s => s.is_active))).catch(() => {}); }, []);
 
   const active = tasks.filter(t => t.tutor_status_code === 'in_progress').length;
   const completed = tasks.filter(t => t.tutor_status_code === 'completed').length;
 
-  const totalPages = Math.ceil(tasks.length / PER_PAGE);
-  const paged = tasks.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const paged = tasks;
 
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
 
@@ -40,7 +45,7 @@ export default function Tasks() {
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="stat-card">
           <div className="stat-icon" style={{ background: 'rgba(59,130,246,0.15)', color: 'var(--info)' }}><FiTrendingUp /></div>
-          <div className="stat-value">{tasks.length}</div>
+          <div className="stat-value">{total}</div>
           <div className="stat-label">Total Tasks</div>
         </div>
         <div className="stat-card">
@@ -100,7 +105,7 @@ export default function Tasks() {
                 <FiChevronLeft size={14} /> Prev
               </button>
               <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
-                Page {page} of {totalPages} <span style={{ color: 'var(--text-muted)' }}>({tasks.length} tasks)</span>
+                Page {page} of {totalPages} <span style={{ color: 'var(--text-muted)' }}>({total} tasks)</span>
               </span>
               <button className="btn btn-sm btn-secondary" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
                 Next <FiChevronRight size={14} />

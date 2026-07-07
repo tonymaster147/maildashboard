@@ -15,6 +15,14 @@ router.use(verifyToken, requireRole('admin'));
 // Dashboard
 router.get('/dashboard', adminController.getDashboardStats);
 
+// Sales Activity monitor — read-only view of each sales person's calendar/tasks
+const salesActivity = require('../controllers/adminSalesActivityController');
+router.get('/sales-activity/people', salesActivity.getPeople);
+router.post('/sales-activity/assign', salesActivity.assignReminder);
+router.post('/sales-activity/task', salesActivity.createTask);
+router.get('/sales-activity/:id/summary', salesActivity.getPersonSummary);
+router.get('/sales-activity/:id/tasks', salesActivity.getPersonTasks);
+
 // User management
 router.get('/users', adminController.getAllUsers);
 router.put('/users/:id/toggle-status', adminController.toggleUserStatus);

@@ -3,7 +3,7 @@
 // visual chrome changed: bubbles now use the shared <ChatBubble>, and the
 // container layout uses v2 classes (.v2-chat-*).
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getChatMessages, uploadChatAttachment, getOrderCode, getOrderDetail } from '../services/api';
@@ -22,6 +22,8 @@ export default function Chat() {
   const { orderId, channel } = useParams(); // channel = 'tutor' or 'support'
   const { user, token } = useAuth();
   const [messages, setMessages] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [pendingFile, setPendingFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -44,15 +46,19 @@ export default function Chat() {
   }, [orderId, channel]);
 
   const messagesEndRef = useRef(null);
+  const scrollRef = useRef(null);       // .v2-chat-messages scroll container
+  const restoreDistRef = useRef(null);  // set while prepending older history
+  const loadingOlderRef = useRef(false);
   const channelRef = useRef(channel);
   useEffect(() => { channelRef.current = channel; }, [channel]);
 
   const meta = CHANNEL_META[channel] || CHANNEL_META.support;
 
   useEffect(() => {
-    // Load existing messages filtered by channel
-    getChatMessages(orderId, channel).then(res => {
-      setMessages(res.data);
+    // Load the newest 100 messages for this channel (older load on scroll-up).
+    getChatMessages(orderId, { channel, limit: 100 }).then(res => {
+      setMessages(res.data.messages || []);
+      setHasMore(!!res.data.hasMore);
       setLoading(false);
     }).catch(() => setLoading(false));
 
@@ -85,9 +91,47 @@ export default function Chat() {
     };
   }, [orderId, channel, token, user.id]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Keep the viewport anchored: on a normal append (new/initial message) stick
+  // to the bottom; while prepending older history, preserve the reading spot.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (restoreDistRef.current != null) {
+      el.scrollTop = el.scrollHeight - restoreDistRef.current;
+      restoreDistRef.current = null;
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages]);
+
+  // Scroll-up (older) infinite load — YouTube-style, 100 at a time.
+  const loadOlder = async () => {
+    if (loadingOlderRef.current || !hasMore || messages.length === 0) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    const el = scrollRef.current;
+    restoreDistRef.current = el ? el.scrollHeight - el.scrollTop : null;
+    try {
+      const res = await getChatMessages(orderId, { channel, before: messages[0].id, limit: 100 });
+      const older = res.data.messages || [];
+      setHasMore(!!res.data.hasMore);
+      if (older.length === 0) { restoreDistRef.current = null; }
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.id));
+        return [...older.filter(m => !seen.has(m.id)), ...prev];
+      });
+    } catch {
+      restoreDistRef.current = null;
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  };
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (el && el.scrollTop <= 60) loadOlder();
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -224,7 +268,12 @@ export default function Chat() {
       </div>
 
       {/* ── Messages ── */}
-      <div className="v2-chat-messages">
+      <div className="v2-chat-messages" ref={scrollRef} onScroll={handleScroll}>
+        {loadingOlder && (
+          <div style={{ textAlign: 'center', padding: '6px 0 10px' }}>
+            <div className="loading-spinner" style={{ width: 18, height: 18, borderWidth: 2, display: 'inline-block' }} />
+          </div>
+        )}
         {messages.length === 0 && (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',

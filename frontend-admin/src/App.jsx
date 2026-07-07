@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import SalesDashboard from './pages/SalesDashboard';
 import Users from './pages/Users';
 import Tutors from './pages/Tutors';
 import Orders from './pages/Orders';
@@ -12,6 +13,7 @@ import ChatView from './pages/ChatView';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import SalesTeam from './pages/SalesTeam';
+import AdminSalesActivity from './pages/AdminSalesActivity';
 import SalesChat from './pages/SalesChat';
 import PricingGeneral from './pages/PricingGeneral';
 import ServicePricing from './pages/ServicePricing';
@@ -41,6 +43,13 @@ const PermissionRoute = ({ menuKey, children }) => {
   return <Navigate to="/" />;
 };
 
+// Sales roles get their own dashboard (payment calendar + tasks); admins keep
+// the business/revenue dashboard.
+const DashboardHome = () => {
+  const { isSalesUser } = useAuth();
+  return isSalesUser ? <SalesDashboard /> : <Dashboard />;
+};
+
 const AdminOnlyRoute = ({ children }) => {
   const { isAdmin, loading } = useAuth();
   if (loading) return <div className="loading-page"><div className="loading-spinner"></div></div>;
@@ -68,7 +77,7 @@ function AppRoutes() {
       <Route path="/admin-demo-design" element={<AdminDemoDesign />} />
       <Route path="/admin-demo-design-two" element={<AdminDemoDesignTwo />} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route index element={<PermissionRoute menuKey="dashboard"><Dashboard /></PermissionRoute>} />
+        <Route index element={<PermissionRoute menuKey="dashboard"><DashboardHome /></PermissionRoute>} />
         <Route path="users" element={<PermissionRoute menuKey="users"><Users /></PermissionRoute>} />
         <Route path="tutors" element={<PermissionRoute menuKey="tutors"><Tutors /></PermissionRoute>} />
         <Route path="orders" element={<PermissionRoute menuKey="orders"><Orders /></PermissionRoute>} />
@@ -83,6 +92,7 @@ function AppRoutes() {
         <Route path="settings" element={<PermissionRoute menuKey="settings"><Settings /></PermissionRoute>} />
         <Route path="sites" element={<AdminOnlyRoute><Sites /></AdminOnlyRoute>} />
         <Route path="sales-team" element={<AdminOnlyRoute><SalesTeam /></AdminOnlyRoute>} />
+        <Route path="sales-activity" element={<AdminOnlyRoute><AdminSalesActivity /></AdminOnlyRoute>} />
         <Route path="sales-chat" element={<ChatRoute><SalesChat /></ChatRoute>} />
       </Route>
     </Routes>

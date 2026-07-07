@@ -45,7 +45,25 @@ exports.getMessages = async (req, res) => {
     const channelFilter = channel ? `AND c.channel = ?` : '';
     const channelParams = channel ? [channel] : [];
 
-    const [messages] = await db.query(
+    // Infinite scroll (newest-first window). `before` is a message id — when
+    // present we return the 100 messages immediately OLDER than it (scroll-up
+    // for history). `after` is a message id — when present we return messages
+    // strictly NEWER than it (live polling). Default (neither): newest 100.
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+    const before = parseInt(req.query.before) || null;
+    const after = parseInt(req.query.after) || null;
+
+    let cursorFilter = '';
+    const cursorParams = [];
+    if (after) { cursorFilter = 'AND c.id > ?'; cursorParams.push(after); }
+    else if (before) { cursorFilter = 'AND c.id < ?'; cursorParams.push(before); }
+
+    // For `after` (live tail) fetch oldest-first so we return every new message
+    // in order; otherwise fetch newest-first and reverse for display.
+    const orderDir = after ? 'ASC' : 'DESC';
+    const fetchLimit = after ? limit : limit + 1; // +1 to detect hasMore on history
+
+    const [rows] = await db.query(
       `SELECT c.*,
         CASE
           WHEN c.sender_role = 'user' THEN u.username
@@ -57,20 +75,33 @@ exports.getMessages = async (req, res) => {
        LEFT JOIN users u ON c.sender_id = u.id AND c.sender_role = 'user'
        LEFT JOIN tutors t ON c.sender_id = t.id AND c.sender_role = 'tutor'
        LEFT JOIN sales_users su ON c.sender_id = su.id AND c.sender_role IN ('sales_lead', 'sales_executive')
-       WHERE c.order_id = ? ${channelFilter}
-       ORDER BY c.created_at ASC`,
-      [orderId, ...channelParams]
+       WHERE c.order_id = ? ${channelFilter} ${cursorFilter}
+       ORDER BY c.id ${orderDir}
+       LIMIT ?`,
+      [orderId, ...channelParams, ...cursorParams, fetchLimit]
     );
 
-    // Update read cursor
-    await db.query(
-      `INSERT INTO chat_read_cursors (order_id, user_id, role, last_read_at)
-       VALUES (?, ?, ?, NOW(3))
-       ON DUPLICATE KEY UPDATE last_read_at = NOW(3)`,
-      [orderId, userId, role]
-    );
+    let messages;
+    let hasMore = false;
+    if (after) {
+      messages = rows; // already ASC
+    } else {
+      hasMore = rows.length > limit;       // there was at least one older row
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      messages = page.reverse();           // newest-first window → ASC for display
+    }
 
-    res.json(messages);
+    // Update read cursor (skip when merely paging older history)
+    if (!before) {
+      await db.query(
+        `INSERT INTO chat_read_cursors (order_id, user_id, role, last_read_at)
+         VALUES (?, ?, ?, NOW(3))
+         ON DUPLICATE KEY UPDATE last_read_at = NOW(3)`,
+        [orderId, userId, role]
+      );
+    }
+
+    res.json({ messages, hasMore });
   } catch (error) {
     console.error('Get messages error:', error);
     res.status(500).json({ error: 'Server error' });

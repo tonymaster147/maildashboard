@@ -1,20 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { getTasks, getUnreadPerOrder, markAllRead } from '../services/api';
 import { getSocket } from '../services/socket';
 import { FiMessageSquare } from 'react-icons/fi';
 
+const PER_PAGE = 100;
+
 export default function Chats() {
   const [tasks, setTasks] = useState([]);
   const [unreadMap, setUnreadMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const [visible, setVisible] = useState(PER_PAGE);
+  const sentinelRef = useRef(null);
 
   useEffect(() => {
     Promise.all([
-      getTasks(),
+      getTasks({ limit: 200 }),
       getUnreadPerOrder()
     ]).then(([tasksRes, unreadRes]) => {
-      const chatTasks = tasksRes.data.filter(t => t.status === 'active' || t.status === 'in_progress');
+      const chatTasks = (tasksRes.data.tasks || []).filter(t => t.status === 'active' || t.status === 'in_progress');
       // Unread conversations first so nothing gets missed (stable sort keeps
       // the normal order within each group).
       const umap = unreadRes.data || {};
@@ -38,6 +42,17 @@ export default function Chats() {
     return () => socket.off('chatNotification', handler);
   }, []);
 
+  // Infinite scroll — reveal 100 more conversations as the sentinel appears.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) setVisible(v => v + PER_PAGE);
+    }, { rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loading]);
+
   if (loading) return <div className="flex-center" style={{ height: '50vh' }}><div className="loading-spinner"></div></div>;
 
   return (
@@ -54,7 +69,7 @@ export default function Chats() {
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
-          {tasks.map(task => {
+          {tasks.slice(0, visible).map(task => {
             const unread = unreadMap[task.id] || 0;
             const hasUnread = unread > 0;
 
@@ -101,6 +116,7 @@ export default function Chats() {
               </Link>
             );
           })}
+          {visible < tasks.length && <div ref={sentinelRef} style={{ height: 1 }} />}
         </div>
       )}
     </div>

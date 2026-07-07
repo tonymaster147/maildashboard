@@ -71,7 +71,7 @@ export const markNotificationRead = (id) => api.put(`/notifications/${id}/read`)
 export const markAllNotificationsRead = () => api.put('/notifications/read-all');
 
 export const getIssueCategories = () => api.get('/issues/categories');
-export const getMyIssues = () => api.get('/issues');
+export const getMyIssues = (params = {}) => api.get('/issues', { params });
 export const getIssuesUnreadCount = () => api.get('/issues/unread-count');
 export const createIssue = (data) => api.post('/issues', data);
 export const getIssue = (id) => api.get(`/issues/${id}`);
@@ -101,7 +101,9 @@ export const uploadFiles = (formData) => api.post('/files/upload', formData, {
 export const getOrderFiles = (orderId) => api.get(`/files/order/${orderId}`);
 
 // Chat
-export const getChatMessages = (orderId, channel) => api.get(`/chat/messages/${orderId}${channel ? `?channel=${channel}` : ''}`);
+// params: { channel, before, after, limit } — returns { messages, hasMore }
+export const getChatMessages = (orderId, params = {}) =>
+  api.get(`/chat/messages/${orderId}`, { params: typeof params === 'string' ? { channel: params } : params });
 export const sendMessage = (data) => api.post('/chat/send', data);
 export const getUnreadCount = () => api.get('/chat/unread');
 export const markAllRead = () => api.post('/chat/mark-all-read');

@@ -694,6 +694,18 @@ exports.getAllChats = async (req, res) => {
     const chatParams = [];
     if (req.salesCutoff) { chatQuery += ' AND o.created_at >= ?'; chatParams.push(req.salesCutoff); }
     chatQuery += ' ORDER BY last_message_at DESC';
+
+    // Infinite scroll is opt-in via ?page= (Chat Monitor). Fetch one extra row
+    // to tell the client whether another page exists.
+    if (req.query.page !== undefined) {
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+      const offset = (page - 1) * limit;
+      const [rows] = await db.query(`${chatQuery} LIMIT ? OFFSET ?`, [...chatParams, limit + 1, offset]);
+      const hasMore = rows.length > limit;
+      return res.json({ chats: hasMore ? rows.slice(0, limit) : rows, hasMore, page, limit });
+    }
+
     const [chats] = await db.query(chatQuery, chatParams);
     res.json(chats);
   } catch (error) {

@@ -4,10 +4,11 @@ import { getUserOrders, getPublicStatuses } from '../services/api';
 import { C } from '../theme/tokens';
 import { Card, ActiveOrderCard } from '../components/ui';
 
-const PER_PAGE = 25;
+const PER_PAGE = 100;
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');           // admin_status_code
   const [adminStatuses, setAdminStatuses] = useState([]);
@@ -15,11 +16,13 @@ export default function Orders() {
 
   useEffect(() => {
     setLoading(true);
-    getUserOrders(filter ? { admin_status_code: filter } : {})
-      .then(res => setOrders(res.data || []))
-      .catch(() => setOrders([]))
+    const params = { page, limit: PER_PAGE };
+    if (filter) params.admin_status_code = filter;
+    getUserOrders(params)
+      .then(res => { setOrders(res.data.orders || []); setTotal(res.data.total || 0); })
+      .catch(() => { setOrders([]); setTotal(0); })
       .finally(() => setLoading(false));
-  }, [filter]);
+  }, [filter, page]);
 
   useEffect(() => {
     getPublicStatuses('admin')
@@ -27,8 +30,8 @@ export default function Orders() {
       .catch(() => {});
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(orders.length / PER_PAGE));
-  const paged = orders.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const paged = orders;
 
   return (
     <div>
@@ -95,7 +98,7 @@ export default function Orders() {
               </PagerBtn>
               <span style={{ fontSize: 13, color: C.textSecondary, fontWeight: 600 }}>
                 Page {page} of {totalPages}
-                <span style={{ color: C.textMuted, fontWeight: 500 }}> ({orders.length} orders)</span>
+                <span style={{ color: C.textMuted, fontWeight: 500 }}> ({total} orders)</span>
               </span>
               <PagerBtn disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} iconRight={FiChevronRight}>
                 Next

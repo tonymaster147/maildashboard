@@ -29,6 +29,13 @@ export const getDashboardStats = () => api.get('/admin/dashboard');
 
 // Users
 export const getAllUsers = (params) => api.get('/admin/users', { params });
+
+// Sales Activity monitor (admin-only)
+export const getSalesActivityPeople = () => api.get('/admin/sales-activity/people');
+export const getSalesActivitySummary = (id) => api.get(`/admin/sales-activity/${id}/summary`);
+export const getSalesActivityTasks = (id, params) => api.get(`/admin/sales-activity/${id}/tasks`, { params });
+export const assignSalesReminder = (data) => api.post('/admin/sales-activity/assign', data);
+export const createSalesActivityTask = (data) => api.post('/admin/sales-activity/task', data);
 export const toggleUserStatus = (id, data) => api.put(`/admin/users/${id}/toggle-status`, data);
 
 // Tutors
@@ -70,7 +77,7 @@ export const markInstallmentPaid = (installmentId, data) => api.post(`/admin/ins
 export const markAllInstallmentsPaid = (orderId, data) => api.post(`/admin/orders/${orderId}/installments/mark-all-paid`, data);
 
 // Chat
-export const getAllChats = () => api.get('/admin/chats');
+export const getAllChats = (params = {}) => api.get('/admin/chats', { params });
 export const getFlaggedMessages = () => api.get('/admin/chats/flagged');
 export const getChatMessages = (orderId, params) => api.get(`/chat/messages/${orderId}`, { params });
 export const getUnreadCount = () => api.get('/chat/unread');
@@ -157,6 +164,16 @@ export const salesLogin = (data) => api.post('/auth/sales/login', data);
 // Sales user accessing admin features (uses /api/sales/ prefix)
 export const salesApi = {
   getDashboard: () => api.get('/sales/dashboard'),
+  // Sales dashboard — payment calendar, to-dos, needs-attention, recent orders
+  getSalesSummary: () => api.get('/sales/dashboard-summary'),
+  getSalesTasks: (params) => api.get('/sales/tasks', { params }),
+  createSalesTask: (data) => api.post('/sales/tasks', data),
+  setSalesTaskStatus: (data) => api.post('/sales/tasks/status', data),
+  addSalesTaskComment: (data) => api.post('/sales/tasks/comment', data),
+  snoozeSalesTask: (data) => api.post('/sales/tasks/snooze', data),
+  collectSalesTaskPayment: (data) => api.post('/sales/tasks/collect-payment', data),
+  deleteSalesTask: (id) => api.delete(`/sales/tasks/${id}`),
+  getSalesRecentOrders: () => api.get('/sales/recent-orders'),
   getUsers: (params) => api.get('/sales/users', { params }),
   getTutors: () => api.get('/sales/tutors'),
   createTutor: (data) => api.post('/sales/tutors', data),
@@ -174,7 +191,7 @@ export const salesApi = {
   deleteInstallmentPlan: (orderId) => api.delete(`/sales/orders/${orderId}/installments`),
   markInstallmentPaid: (installmentId, data) => api.post(`/sales/installments/${installmentId}/mark-paid`, data),
   markAllInstallmentsPaid: (orderId, data) => api.post(`/sales/orders/${orderId}/installments/mark-all-paid`, data),
-  getChats: () => api.get('/sales/chats'),
+  getChats: (params = {}) => api.get('/sales/chats', { params }),
   getFlaggedMessages: () => api.get('/sales/chats/flagged'),
   getIssuesUnreadCount: () => api.get('/sales/issues/unread-count'),
   getAllIssues: (params) => api.get('/sales/issues', { params }),

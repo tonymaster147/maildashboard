@@ -1,14 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { FiUser, FiHeadphones, FiMessageSquare } from 'react-icons/fi';
 import { getUserOrders, getUnreadPerOrder, markAllRead } from '../services/api';
 import { C } from '../theme/tokens';
 import { Card, Pill } from '../components/ui';
 
+const PER_PAGE = 100;
+
 export default function Chats() {
   const [orders, setOrders] = useState([]);
   const [unreadMap, setUnreadMap] = useState({});
   const [loading, setLoading] = useState(true);
+  const [visible, setVisible] = useState(PER_PAGE);
+  const sentinelRef = useRef(null);
 
   useEffect(() => {
     Promise.all([getUserOrders(), getUnreadPerOrder()])
@@ -26,6 +30,17 @@ export default function Chats() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  // Infinite scroll — reveal 100 more conversations as the sentinel appears.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) setVisible(v => v + PER_PAGE);
+    }, { rootMargin: '200px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [loading]);
 
   if (loading) {
     return (
@@ -64,7 +79,7 @@ export default function Chats() {
         </Card>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
-          {orders.map(order => {
+          {orders.slice(0, visible).map(order => {
             const unread = unreadMap[order.id] || {};
             const tutorUnread = unread.tutor || 0;
             const supportUnread = unread.support || 0;
@@ -114,6 +129,7 @@ export default function Chats() {
               </Card>
             );
           })}
+          {visible < orders.length && <div ref={sentinelRef} style={{ height: 1 }} />}
         </div>
       )}
     </div>

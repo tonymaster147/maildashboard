@@ -627,4 +627,39 @@ async function sendIssueEscalatedTutor({ issueId, subject, tutorName, to }) {
   if (ok) console.log(`✅ Escalation email sent to tutor for issue #${issueId}`);
 }
 
-module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid, sendLoginDetailsUpdated, sendIssueCreated, sendIssueReplyToUser, sendIssueReplyToAdmin, sendPaymentCollectedAdmin, sendInstallmentEditedStaff, sendIssueEscalatedTutor };
+// ───────────────────── sales-task emails ─────────────────────
+// Generic staff/sales task notification email. `to` may be a string or array.
+async function staffTaskEmail(to, subject, title, introHtml, rows) {
+  const list = Array.isArray(to) ? to.filter(Boolean) : (to ? [to] : []);
+  if (!list.length) return;
+  const ctx = masterContext();
+  const rowsHtml = (rows || []).filter(Boolean)
+    .map(r => `<p style="margin:5px 0;color:#334155;"><strong>${r.label}:</strong> ${r.value}</p>`).join('');
+  const html = `
+    ${header(ctx.brand, title)}
+      <p style="color:#334155;font-size:15px;margin-bottom:16px;">${introHtml}</p>
+      <div style="background:#f0f9ff;padding:18px;border-radius:8px;border-left:4px solid #84C225;margin-bottom:16px;">${rowsHtml}</div>
+      <p style="color:#64748b;font-size:13px;">Open your panel → <strong>Dashboard</strong> to view it.</p>
+    ${footer(ctx.brand)}
+  `;
+  await sendViaContext(ctx, { to: list.join(','), subject, html });
+}
+
+async function sendSalesTaskAssigned({ to, title, dueDate, orderRef, amount, byName }) {
+  await staffTaskEmail(to, 'A task was assigned to you', 'New task assigned',
+    `${byName || 'An admin'} assigned you a task on the sales dashboard.`,
+    [{ label: 'Task', value: title }, dueDate && { label: 'Due', value: dueDate },
+     orderRef && { label: 'Order', value: orderRef }, amount != null && { label: 'Amount', value: '$' + Number(amount).toFixed(2) }]);
+}
+async function sendSalesTaskGeneral({ to, title, dueDate, byName }) {
+  await staffTaskEmail(to, 'New team task created', 'New team task',
+    `${byName || 'An admin'} created a task for the whole sales team.`,
+    [{ label: 'Task', value: title }, dueDate && { label: 'Due', value: dueDate }]);
+}
+async function sendSalesTaskCompleted({ to, title, byName, orderRef, category }) {
+  await staffTaskEmail(to, 'A sales task was completed', 'Sales task completed',
+    `${byName || 'A sales person'} marked a task as completed.`,
+    [{ label: 'Task', value: title }, category && { label: 'Type', value: category }, orderRef && { label: 'Order', value: orderRef }]);
+}
+
+module.exports = { sendAccessCode, sendForgotAccessCode, sendEmailChangeCode, sendNewOrderAdmin, sendOrderConfirmationUser, sendTutorTaskEmail, sendTutorWelcomeEmail, sendSalesWelcomeEmail, sendOrderStatusChangeEmail, sendInstallmentPlanCreated, sendInstallmentReminder, sendInstallmentPaid, sendLoginDetailsUpdated, sendIssueCreated, sendIssueReplyToUser, sendIssueReplyToAdmin, sendPaymentCollectedAdmin, sendInstallmentEditedStaff, sendIssueEscalatedTutor, sendSalesTaskAssigned, sendSalesTaskGeneral, sendSalesTaskCompleted };
