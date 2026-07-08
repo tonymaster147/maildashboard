@@ -27,8 +27,12 @@ function todayISO() {
 //            order_code, category, title, student_name, amount, due_date,
 //            status, overdue, comments:[] }
 async function getCalendarItems(userId, cutoff, from, to) {
-  const cutSql = cutoff ? ' AND o.created_at >= ?' : '';
-  const cutP = cutoff ? [fmtDateTime(cutoff)] : [];
+  // A sales-executive's window applies to the CALENDAR DATE (the reminder's
+  // effective due date), NOT the order's age — so they still see UPCOMING
+  // payments on older orders, and only reminders whose calendar date is older
+  // than their window are hidden. (Leads/admins have no cutoff.)
+  const p2 = n => String(n).padStart(2, '0');
+  const dueCut = cutoff ? `${cutoff.getFullYear()}-${p2(cutoff.getMonth() + 1)}-${p2(cutoff.getDate())}` : null;
   const T = todayISO();
 
   // 1) Live installment reminders (unpaid) in range, with this user's task state.
@@ -42,8 +46,8 @@ async function getCalendarItems(userId, cutoff, from, to) {
        JOIN users u ON o.user_id = u.id
        LEFT JOIN sales_tasks st ON st.ref_type='installment' AND st.ref_id=i.id AND st.sales_user_id=?
       WHERE i.status <> 'paid' AND COALESCE(st.due_date, i.due_date) BETWEEN ? AND ?
-        AND NOT EXISTS (SELECT 1 FROM sales_tasks a WHERE a.ref_type='installment' AND a.ref_id=i.id AND a.is_assigned=1 AND a.sales_user_id <> ?)${cutSql}`,
-    [userId, from, to, userId, ...cutP]
+        AND NOT EXISTS (SELECT 1 FROM sales_tasks a WHERE a.ref_type='installment' AND a.ref_id=i.id AND a.is_assigned=1 AND a.sales_user_id <> ?)${dueCut ? ' AND COALESCE(st.due_date, i.due_date) >= ?' : ''}`,
+    [userId, from, to, userId, ...(dueCut ? [dueCut] : [])]
   );
 
   // 2) Order-level payment follow-ups — unpaid / partial orders WITHOUT an
@@ -63,8 +67,8 @@ async function getCalendarItems(userId, cutoff, from, to) {
       WHERE ast.code IN ('unpaid','paid_partial_unassigned','paid_partial_assigned')
         AND o.has_installments = 0 AND o.status <> 'cancelled'
         AND COALESCE(st.due_date, DATE(o.created_at)) BETWEEN ? AND ?
-        AND NOT EXISTS (SELECT 1 FROM sales_tasks a WHERE a.ref_type='order' AND a.ref_id=o.id AND a.is_assigned=1 AND a.sales_user_id <> ?)${cutSql}`,
-    [userId, from, to, userId, ...cutP]
+        AND NOT EXISTS (SELECT 1 FROM sales_tasks a WHERE a.ref_type='order' AND a.ref_id=o.id AND a.is_assigned=1 AND a.sales_user_id <> ?)${dueCut ? ' AND COALESCE(st.due_date, DATE(o.created_at)) >= ?' : ''}`,
+    [userId, from, to, userId, ...(dueCut ? [dueCut] : [])]
   );
 
   // 3) Manual tasks — this user's own PLUS general team tasks (visible to all).

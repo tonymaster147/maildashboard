@@ -137,15 +137,18 @@ exports.assignReminder = async (req, res) => {
       title = `${category === 'unpaid' ? 'Unpaid' : 'Collect balance'} — ${o.order_code || '#' + o.id}`;
     }
 
-    // Respect the executive's data-access window: they can only see orders from
-    // the last N days, so an out-of-window order would be invisible even if
-    // assigned. Block it with a clear reason.
+    // Respect the executive's data-access window, which applies to the reminder's
+    // calendar (due) date: if the item's date is older than their window they
+    // wouldn't see it even when assigned. Upcoming installments on older orders
+    // are fine. Block only when the calendar date is out of window.
     if (su.role === 'sales_executive') {
       const [[w]] = await db.query('SELECT data_window_days FROM sales_users WHERE id=?', [su.id]);
       const days = w?.data_window_days || 60;
       const cutoff = new Date(Date.now() - days * 86400000);
-      if (createdAt && new Date(createdAt) < cutoff) {
-        return res.status(400).json({ error: `Order ${orderCode || '#' + orderId} is outside ${su.name}'s ${days}-day access window, so they wouldn't see it. Assign it to a Sales Lead, or widen their window.` });
+      const p2 = n => String(n).padStart(2, '0');
+      const cutoffStr = `${cutoff.getFullYear()}-${p2(cutoff.getMonth() + 1)}-${p2(cutoff.getDate())}`;
+      if (dueDate && dueDate < cutoffStr) {
+        return res.status(400).json({ error: `This reminder's date (${dueDate}) is older than ${su.name}'s ${days}-day window, so they wouldn't see it. Assign it to a Sales Lead, or widen their window.` });
       }
     }
 
