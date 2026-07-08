@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   getOrderDetail, uploadFiles, createPaymentIntent, createRemainingPaymentIntent,
-  getOrderInstallments, payInstallment, payAllInstallments,
+  getOrderInstallments, payInstallment, payAllInstallments, checkPartialEligibility,
 } from '../services/api';
 import EmbeddedCheckout from '../components/EmbeddedCheckout';
 import {
@@ -47,11 +47,20 @@ export default function OrderDetail() {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [checkout, setCheckout] = useState(null);
   const [installments, setInstallments] = useState([]);
+  // Partial-payment option for an unpaid Online-Class order (same rule as new-order).
+  const [partialElig, setPartialElig] = useState(null); // { eligible, partial_amount }
+  const [payChoice, setPayChoice] = useState('full');    // 'full' | 'partial'
 
   const fetchOrder = () => {
     getOrderDetail(id).then(res => {
       setOrder(res.data);
       setLoading(false);
+      // If it's still unpaid, check whether it qualifies for a partial payment.
+      if (res.data && res.data.status === 'incomplete' && parseFloat(res.data.total_price) > 0 && !res.data.has_installments) {
+        checkPartialEligibility(id).then(r => setPartialElig(r.data)).catch(() => setPartialElig(null));
+      } else {
+        setPartialElig(null);
+      }
       if (res.data?.has_installments) {
         getOrderInstallments(id).then(r => setInstallments(r.data || [])).catch(() => setInstallments([]));
       } else {
@@ -103,8 +112,9 @@ export default function OrderDetail() {
   const handleCompletePayment = async () => {
     setPaymentLoading(true);
     try {
-      const res = await createPaymentIntent({ order_id: order.id, payment_type: 'full' });
-      setCheckout({ clientSecret: res.data.client_secret, amount: res.data.amount, isPartial: false, fullTotal: res.data.full_total });
+      const type = partialElig?.eligible ? payChoice : 'full';
+      const res = await createPaymentIntent({ order_id: order.id, payment_type: type });
+      setCheckout({ clientSecret: res.data.client_secret, amount: res.data.amount, isPartial: res.data.is_partial, fullTotal: res.data.full_total });
     } catch (err) {
       alert(err.response?.data?.error || 'Payment setup failed');
     }
@@ -277,9 +287,27 @@ export default function OrderDetail() {
           </div>
 
           {/* Conditional payment CTAs — same logic as legacy page */}
+          {order.status === 'incomplete' && parseFloat(order.total_price) > 0 && partialElig?.eligible && (
+            <div style={{ marginTop: 14, padding: 14, background: C.accentSoft, border: `1px solid ${C.accentSoft}`, borderRadius: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, marginBottom: 10, color: C.accent, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                Payment Option
+              </div>
+              <PayChoiceRow
+                checked={payChoice === 'full'} onChange={() => setPayChoice('full')}
+                title="Pay Full Now" sub={`$${parseFloat(order.total_price).toFixed(2)}`}
+              />
+              <PayChoiceRow
+                checked={payChoice === 'partial'} onChange={() => setPayChoice('partial')}
+                title="Pay Partial"
+                sub={`$${Number(partialElig.partial_amount).toFixed(2)} now · $${(parseFloat(order.total_price) - Number(partialElig.partial_amount)).toFixed(2)} later`}
+              />
+            </div>
+          )}
           {order.status === 'incomplete' && parseFloat(order.total_price) > 0 && (
             <PrimaryButton onClick={handleCompletePayment} disabled={paymentLoading} icon={FiCreditCard}>
-              Complete Payment
+              {partialElig?.eligible && payChoice === 'partial'
+                ? `Pay $${Number(partialElig.partial_amount).toFixed(2)} Now`
+                : 'Complete Payment'}
             </PrimaryButton>
           )}
           {order.payment_type === 'partial' && parseFloat(order.amount_remaining) > 0 && order.status !== 'incomplete' && !order.has_installments && (
@@ -488,6 +516,31 @@ function PrimaryButton({ onClick, disabled, icon: Icon, gradient, children }) {
         ? <div className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
         : <>{Icon && <Icon size={16} />} {children}</>}
     </button>
+  );
+}
+
+// Full/Partial radio row for the unpaid-order payment option (mirrors new order).
+function PayChoiceRow({ checked, onChange, title, sub }) {
+  return (
+    <label style={{
+      display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer',
+      padding: '10px 12px', borderRadius: 9, marginBottom: 6,
+      background: checked ? '#fff' : 'transparent',
+      border: `1px solid ${checked ? C.accent : C.border}`,
+    }}>
+      <span style={{
+        width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
+        border: `2px solid ${checked ? C.accent : C.borderStrong || C.border}`,
+        display: 'grid', placeItems: 'center',
+      }}>
+        {checked && <span style={{ width: 9, height: 9, borderRadius: '50%', background: C.accent }} />}
+      </span>
+      <input type="radio" checked={checked} onChange={onChange} style={{ display: 'none' }} />
+      <span style={{ flex: 1 }}>
+        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, color: C.textPrimary }}>{title}</span>
+        <span style={{ display: 'block', fontSize: 12, color: C.textSecondary, marginTop: 1 }}>{sub}</span>
+      </span>
+    </label>
   );
 }
 

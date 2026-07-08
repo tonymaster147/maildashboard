@@ -85,6 +85,7 @@ export const updateDraftOrder = (id, data) => api.put(`/orders/draft/${id}`, dat
 // Payments
 export const createPaymentSession = (data) => api.post('/payments/create-session', data);
 export const createPaymentIntent = (data) => api.post('/payments/create-intent', data);
+export const checkPartialEligibility = (orderId) => api.get('/payments/partial-eligibility', { params: { order_id: orderId } });
 export const createRemainingPaymentIntent = (data) => api.post('/payments/create-remaining-intent', data);
 export const fulfillPaymentIntent = (data) => api.post('/payments/fulfill-intent', data);
 export const getOrderInstallments = (orderId) => api.get(`/orders/${orderId}/installments`);
