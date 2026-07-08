@@ -305,7 +305,20 @@ export default function Layout() {
           <div className="logo-icon" style={{ background: panelGradient }}>
             <FiShield size={18} />
           </div>
-          <h1 style={{ background: panelGradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: isSalesUser ? 16 : undefined }}>{panelLabel}</h1>
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ background: panelGradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: isSalesUser ? 16 : undefined, margin: 0 }}>{panelLabel}</h1>
+            {isSalesUser && user?.name && (
+              <div
+                title={user.name}
+                style={{
+                  fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)',
+                  marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150,
+                }}
+              >
+                {user.name}
+              </div>
+            )}
+          </div>
         </div>
         <nav className="sidebar-nav">
           {visibleMenuItems.map(item => (
