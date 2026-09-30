@@ -31,9 +31,10 @@ export default function Layout() {
   const [localBrand, setLocalBrand] = useState(null);
   const brand = localBrand || ctxBrand;
 
-  // Defensive direct-fetch if the context didn't resolve in time
+  // Defensive direct-fetch, only once the context has finished and come back
+  // without a site. Firing while it is still loading just doubles the request.
   useEffect(() => {
-    if (!ctxBrand.resolved) {
+    if (!ctxBrand.resolved && !ctxBrand.loading) {
       getPublicSite().then(res => {
         const s = res.data?.site;
         if (s) {
@@ -46,7 +47,7 @@ export default function Layout() {
         }
       }).catch(() => {});
     }
-  }, [ctxBrand.resolved]);
+  }, [ctxBrand.resolved, ctxBrand.loading]);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -271,7 +272,9 @@ export default function Layout() {
 
         {/* Brand / logo at the top */}
         <div className="v2-sidebar-brand">
-          {brand.logoUrl ? (
+          {brand.loading ? (
+            <div style={{ height: 36 }} aria-hidden="true" />
+          ) : brand.logoUrl ? (
             <img src={brand.logoUrl} alt={brand.name} style={{ maxHeight: 36, maxWidth: 180, objectFit: 'contain' }} />
           ) : (
             <>

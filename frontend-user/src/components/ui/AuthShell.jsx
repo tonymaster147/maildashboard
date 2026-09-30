@@ -37,7 +37,12 @@ export default function AuthShell({
               the gradient. The icon-fallback brand uses a translucent
               backdrop instead since its color is white. */}
           <div style={{ marginBottom: 56 }}>
-            {brand.logoUrl ? (
+            {brand.loading ? (
+              /* Branding not known yet. Reserve the logo's footprint and paint
+                 nothing — rendering the default brand here is what made the
+                 wrong logo flash before the real one arrived. */
+              <div style={{ height: 60 }} aria-hidden="true" />
+            ) : brand.logoUrl ? (
               <div style={{
                 display: 'inline-flex', alignItems: 'center',
                 background: '#ffffff',
@@ -77,7 +82,7 @@ export default function AuthShell({
 
         {/* Copyright pinned to the bottom of the hero */}
         <div className="v2-auth-copyright">
-          © {year} {brand.name}. All rights reserved.
+          {brand.loading ? ' ' : `© ${year} ${brand.name}. All rights reserved.`}
         </div>
       </div>
 
@@ -86,7 +91,9 @@ export default function AuthShell({
         <div className="v2-auth-form-card">
           {/* Mobile-only brand (since hero is hidden ≤768px) */}
           <div className="v2-auth-form-brand">
-            {brand.logoUrl ? (
+            {brand.loading ? (
+              <div style={{ height: 44 }} aria-hidden="true" />
+            ) : brand.logoUrl ? (
               <img
                 src={brand.logoUrl} alt={brand.name}
                 style={{ maxHeight: 44, maxWidth: 180, objectFit: 'contain' }}
