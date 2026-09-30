@@ -98,6 +98,13 @@
     font-size: 15px !important;   /* prevents iOS Safari zoom-on-focus */
     padding: 11px 12px !important;
   }
+
+  /* The shorthand above is !important, so it also wipes the padding that makes
+     room for a leading icon or a trailing control — that is what let the
+     placeholder text render on top of the icon on phones. Restate both, scoped
+     to the icon wrapper so plain inputs keep the tighter mobile padding. */
+  .v2-input-icon-wrap .form-input { padding-left: 42px !important; }
+  .v2-input-icon-wrap .form-input.v2-input-has-trailing { padding-right: 44px !important; }
 }
 
 /* ── Sidebar drawer: keep nav content scrollable on short screens ── */

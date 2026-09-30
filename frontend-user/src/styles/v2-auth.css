@@ -136,6 +136,9 @@
   pointer-events: none;
 }
 .v2-input-icon-wrap .form-input { padding-left: 42px; }
+/* Inputs carrying a trailing control, e.g. the access-code eye toggle. As a
+   class rather than an inline style so the mobile override can restate it. */
+.v2-input-icon-wrap .form-input.v2-input-has-trailing { padding-right: 44px; }
 
 /* Mobile-only brand block above the form card */
 .v2-auth-form-brand {

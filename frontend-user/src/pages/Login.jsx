@@ -63,10 +63,10 @@ export default function Login() {
           <div className="v2-input-icon-wrap">
             <span className="v2-input-lead"><FiKey size={16} /></span>
             <input
-              type={showCode ? 'text' : 'password'} className="form-input"
+              type={showCode ? 'text' : 'password'} className="form-input v2-input-has-trailing"
               placeholder="Enter your access code"
               value={accessCode} onChange={e => setAccessCode(e.target.value)}
-              required style={{ paddingRight: 44 }}
+              required
               autoComplete="current-password"
             />
             <button
